@@ -1,0 +1,35 @@
+{
+  "name": "step",
+  "version": "1.0.0",
+  "description": "STEP (Sphere Triangular Earth Project) aims to create a highly reliable, minimalist web application developed through a rigorous, AI-assisted, Test-Driven Development (TDD) process.",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/moldovancsaba/step.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/moldovancsaba/step/issues"
+  },
+  "homepage": "https://github.com/moldovancsaba/step#readme",
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.6.3",
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.15.17",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.3.2",
+    "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "@types/three": "^0.176.0",
+    "three": "^0.176.0"
+  }
+}
