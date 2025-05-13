@@ -1,5 +1,75 @@
 # Release Notes - Done Is Better
 
+## v0.9.1 - WorldMap Stability Improvements - 2025-05-13
+
+### Fixes
+
+* **WorldMap Component:**
+  - Fixed undefined color property error
+  - Improved state initialization order
+  - Added proper type guards and null checks
+  - Enhanced cleanup and resource management
+
+### Technical Implementation Details
+
+* **Core Component:**
+  - `ThreeWorldMap.tsx`: Improved stability and error handling
+
+* **Key Improvements:**
+  - State initialization order
+  - Resource cleanup
+  - Type safety
+  - Error handling
+
+### Validation
+
+* Client-side error resolved
+* Component stability verified
+* Resource cleanup confirmed
+
+### Deployment
+
+* **Commit:** `a8dbe72`
+* **Platform:** Vercel
+* **URL:** `https://step-c063hxt9v-narimato.vercel.app`
+* **Deployment Date:** 2025-05-13T23:55:00+02:00
+
+---
+
+## v0.7.0 - Next.js Application Structure - 2025-05-13
+
+### Features
+
+* **Application Structure Implementation:**
+  - Next.js 14 App Router setup
+  - Basic component hierarchy
+  - Client/Server component separation
+  - Production deployment configuration
+
+### Technical Implementation Details
+
+* **Core Components:**
+  - `src/app/layout.tsx`: Root layout with metadata
+  - `src/app/page.tsx`: Main page component
+  - `src/app/components/WorldMap/WorldMap.tsx`: Map component skeleton
+  - `vercel.json`: Deployment configuration
+
+* **Key Features:**
+  - Modern Next.js architecture
+  - Type-safe implementation
+  - Optimized production build
+  - Vercel deployment pipeline
+
+### Deployment
+
+* **Commit:** `9ef9633`
+* **Tag:** `v0.7.0`
+* **Platform:** Vercel
+* **URL:** `https://step-co3eydd68-narimato.vercel.app`
+* **Deployment Date:** 2025-05-13T23:45:00+02:00
+
+---
+
 ## v0.6.0 - Click Interaction Implementation - 2025-05-14
 
 ### Features

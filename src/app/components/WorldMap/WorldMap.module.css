@@ -34,3 +34,26 @@
   display: block;
 }
 
+.error {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  color: #ff4444;
+  background: rgba(0, 0, 0, 0.8);
+  padding: 2rem;
+  border-radius: 8px;
+  backdrop-filter: blur(4px);
+}
+
+.error h3 {
+  margin: 0 0 1rem;
+  font-size: 1.2rem;
+}
+
+.error p {
+  margin: 0;
+  font-size: 0.9rem;
+  opacity: 0.8;
+}
