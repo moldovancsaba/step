@@ -14,12 +14,17 @@ function hasNewTriangles(result: ClickResult): result is ClickResult & { newTria
 
 export function ThreeWorldMap() {
   const containerRef = useRef<HTMLDivElement>(null);
+  const sceneRef = useRef<THREE.Scene | null>(null);
+  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
+  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+  const controlsRef = useRef<OrbitControls | null>(null);
+  const [isInitialized, setIsInitialized] = useState(false);
   const [triangleStates, setTriangleStates] = useState<TriangleState[]>([]);
 
+  // Step 1: Initialize state data
   useEffect(() => {
-    if (!containerRef.current || typeof window === 'undefined') return;
-
-    // Initialize base geometry
+    if (typeof window === 'undefined') return;
+    
     const vertices = generateIcosahedronVertices();
     const faces = generateIcosahedronFaces(vertices);
 
@@ -31,10 +36,18 @@ export function ThreeWorldMap() {
       level: 0,
       color: '#ffffff'
     }));
+    
     setTriangleStates(initialStates);
+    setIsInitialized(true);
+  }, []);
+
+  // Step 2: Set up Three.js scene after state is initialized
+  useEffect(() => {
+    if (!containerRef.current || !isInitialized || typeof window === 'undefined' || triangleStates.length === 0) return;
 
     // Setup Three.js
     const scene = new THREE.Scene();
+    sceneRef.current = scene;
     scene.background = new THREE.Color('#000000');
 
     const camera = new THREE.PerspectiveCamera(
@@ -43,32 +56,35 @@ export function ThreeWorldMap() {
       0.1,
       1000
     );
+    cameraRef.current = camera;
     camera.position.z = 2;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
+    rendererRef.current = renderer;
     renderer.setSize(containerRef.current.clientWidth, containerRef.current.clientHeight);
     containerRef.current.appendChild(renderer.domElement);
 
     // Add orbit controls
     const controls = new OrbitControls(camera, renderer.domElement);
+    controlsRef.current = controls;
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
     controls.enableZoom = true;
     controls.enablePan = false;
 
-    // Create faces
-    faces.forEach((face, index) => {
+    // Create triangles from state
+    triangleStates.forEach((state, index) => {
       const triangleGeometry = new THREE.BufferGeometry();
       const triangleVertices = new Float32Array([
-        vertices[face.a].x, vertices[face.a].y, vertices[face.a].z,
-        vertices[face.b].x, vertices[face.b].y, vertices[face.b].z,
-        vertices[face.c].x, vertices[face.c].y, vertices[face.c].z
+        state.vertices[0].x, state.vertices[0].y, state.vertices[0].z,
+        state.vertices[1].x, state.vertices[1].y, state.vertices[1].z,
+        state.vertices[2].x, state.vertices[2].y, state.vertices[2].z
       ]);
       triangleGeometry.setAttribute('position', new THREE.BufferAttribute(triangleVertices, 3));
       triangleGeometry.computeVertexNormals();
       
       const material = new THREE.MeshPhongMaterial({
-        color: triangleStates[index].color,
+        color: state.color,
         side: THREE.DoubleSide,
         wireframe: false,
         transparent: true,
@@ -90,7 +106,7 @@ export function ThreeWorldMap() {
 
     // Handle window resize
     const handleResize = () => {
-      if (!containerRef.current) return;
+      if (!containerRef.current || !renderer || !camera) return;
       const width = containerRef.current.clientWidth;
       const height = containerRef.current.clientHeight;
       camera.aspect = width / height;
@@ -101,6 +117,8 @@ export function ThreeWorldMap() {
 
     // Handle clicks
     const handleClick = (event: MouseEvent) => {
+      if (!scene || !camera) return;
+      
       const rect = renderer.domElement.getBoundingClientRect();
       const x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
       const y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
@@ -111,10 +129,11 @@ export function ThreeWorldMap() {
       const intersects = raycaster.intersectObjects(scene.children);
       if (intersects.length > 0) {
         const mesh = intersects[0].object as THREE.Mesh;
-        if (!mesh.userData.faceIndex && mesh.userData.faceIndex !== 0) return;
+        if (mesh.userData.faceIndex === undefined) return;
 
         const faceIndex = mesh.userData.faceIndex;
         const state = triangleStates[faceIndex];
+        if (!state) return;
         
         const result = handleTriangleClick(state);
         if (hasNewTriangles(result)) {
@@ -141,7 +160,7 @@ export function ThreeWorldMap() {
             });
             
             const newMesh = new THREE.Mesh(newGeometry, newMaterial);
-            newMesh.userData.faceIndex = triangleStates.length + i;
+            newMesh.userData.faceIndex = faceIndex + i;
             scene.add(newMesh);
           });
 
@@ -152,7 +171,8 @@ export function ThreeWorldMap() {
           });
         } else {
           // Just update color
-          (mesh.material as THREE.MeshPhongMaterial).color.set(result.color);
+          const material = mesh.material as THREE.MeshPhongMaterial;
+          material.color.set(result.color);
           setTriangleStates(prev => {
             const next = [...prev];
             next[faceIndex] = { ...state, color: result.color, clickCount: result.clickCount };
@@ -164,8 +184,9 @@ export function ThreeWorldMap() {
     renderer.domElement.addEventListener('click', handleClick);
 
     // Animation loop
+    let animationFrameId: number;
     const animate = () => {
-      requestAnimationFrame(animate);
+      animationFrameId = requestAnimationFrame(animate);
       controls.update();
       renderer.render(scene, camera);
     };
@@ -173,6 +194,7 @@ export function ThreeWorldMap() {
 
     // Cleanup
     return () => {
+      cancelAnimationFrame(animationFrameId);
       window.removeEventListener('resize', handleResize);
       renderer.domElement.removeEventListener('click', handleClick);
       renderer.dispose();
@@ -181,8 +203,16 @@ export function ThreeWorldMap() {
       if (containerRef.current?.contains(renderer.domElement)) {
         containerRef.current.removeChild(renderer.domElement);
       }
+      sceneRef.current = null;
+      rendererRef.current = null;
+      cameraRef.current = null;
+      controlsRef.current = null;
     };
-  }, []);
+  }, [isInitialized, triangleStates]);
+
+  if (!isInitialized) {
+    return <div className={styles.loading}>Initializing 3D visualization...</div>;
+  }
 
   return <div ref={containerRef} className={styles.container} />;
 }
