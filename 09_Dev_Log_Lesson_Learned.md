@@ -95,6 +95,14 @@ This log tracks the detailed progress, decisions, and verification steps for eac
     * Commit Hash: 6901cfe
     * `# EXECUTED: git tag -a v0.2.0-docs -m "Documentation update for STEP project"`
     * `# VERIFIED: Initial repository setup complete`
+4.  **Version Control & Deployment:**
+    * `# EXECUTED: git remote set-url origin https://{TOKEN}@github.com/moldovancsaba/step.git`
+    * `# EXECUTED: git push -u origin main --tags`
+    * `# VERIFIED: Successfully pushed to GitHub repository`
+    * `# EXECUTED: vercel --prod`
+    * `# VERIFIED: Deployment successful`
+    * Production URL: https://step-34d0arp08-narimato.vercel.app
+    * Deployment Time: 2025-05-13T22:54:10+02:00
 
 ### Key Decisions:
 
