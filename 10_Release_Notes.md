@@ -1,5 +1,45 @@
 # Release Notes - Done Is Better
 
+## v0.3.0 - Icosahedron Geometry Implementation - 2025-05-13
+
+### Features
+
+* **Core Geometry Implementation:** Implemented foundational icosahedron geometry system. (Task: TSK-001)
+  - Vertex generation with golden ratio for optimal distribution
+  - Face generation with proper connectivity
+  - Spherical coordinate conversion
+  - Area calculation for regular icosahedron faces
+
+### Technical Implementation Details
+
+* **Core Components:**
+  - `src/lib/geometry/icosahedron.ts`: Core geometry implementation
+  - `src/lib/geometry/icosahedron.test.ts`: Comprehensive test suite
+
+* **Project Setup:**
+  - Configured TypeScript with strict mode
+  - Set up Jest testing environment
+  - Added Three.js for 3D geometry support
+
+### Validation
+
+* All automated tests pass (6 tests total):
+  - Vertex generation
+  - Unit sphere validation
+  - Pole positioning
+  - Face generation and connectivity
+  - Area equality verification
+
+### Deployment
+
+* **Commit:** `d81d66a`
+* **Tag:** `v0.3.0`
+* **Platform:** Vercel
+* **URL:** `https://step-5iyf15tdi-narimato.vercel.app`
+* **Deployment Date:** 2025-05-13T23:10:00+02:00
+
+---
+
 ## v0.2.0-docs - Initial Documentation Setup - 2025-05-13
 
 ### Documentation
