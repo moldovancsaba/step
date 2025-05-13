@@ -1,88 +1,178 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { generateIcosahedronVertices, generateIcosahedronFaces } from '../../../lib/geometry/icosahedron';
-import { TriangleState, handleTriangleClick } from '../../../lib/interaction/clickHandler';
+import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+import { generateIcosahedronVertices, generateIcosahedronFaces } from '@/lib/geometry/icosahedron';
+import { handleTriangleClick, TriangleState } from '@/lib/interaction/clickHandler';
+import styles from './WorldMap.module.css';
 
 export function WorldMap() {
-  const canvasRef = useRef<HTMLDivElement>(null);
-  const [message, setMessage] = useState('Initializing world map...');
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [triangleStates, setTriangleStates] = useState<TriangleState[]>([]);
 
   useEffect(() => {
-    if (!canvasRef.current) return;
+    if (!containerRef.current) return;
+
+    // Initialize base geometry
+    const vertices = generateIcosahedronVertices();
+    const faces = generateIcosahedronFaces(vertices);
+
+    // Initialize triangle states
+    const initialStates = faces.map((face, index) => ({
+      face,
+      vertices: [vertices[face.a], vertices[face.b], vertices[face.c]],
+      clickCount: 0,
+      level: 0,
+      color: '#ffffff'
+    }));
+    setTriangleStates(initialStates);
+
+    // Setup Three.js
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(
+      75,
+      containerRef.current.clientWidth / containerRef.current.clientHeight,
+      0.1,
+      1000
+    );
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
     
-    try {
-      // Initialize our world
-      setMessage('Generating icosahedron geometry...');
+    renderer.setSize(containerRef.current.clientWidth, containerRef.current.clientHeight);
+    containerRef.current.appendChild(renderer.domElement);
+
+    // Setup camera position
+    camera.position.z = 2;
+
+    // Add orbit controls
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+
+    // Create icosahedron geometry
+    const geometry = new THREE.BufferGeometry();
+    const positions = new Float32Array(vertices.length * 3);
+    vertices.forEach((vertex, i) => {
+      positions[i * 3] = vertex.x;
+      positions[i * 3 + 1] = vertex.y;
+      positions[i * 3 + 2] = vertex.z;
+    });
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+    // Create faces
+    faces.forEach((face, index) => {
+      const triangleGeometry = new THREE.BufferGeometry();
+      const triangleVertices = new Float32Array([
+        vertices[face.a].x, vertices[face.a].y, vertices[face.a].z,
+        vertices[face.b].x, vertices[face.b].y, vertices[face.b].z,
+        vertices[face.c].x, vertices[face.c].y, vertices[face.c].z
+      ]);
+      triangleGeometry.setAttribute('position', new THREE.BufferAttribute(triangleVertices, 3));
       
-      // Generate icosahedron geometry
-      const vertices = generateIcosahedronVertices();
-      const faces = generateIcosahedronFaces(vertices);
+      const material = new THREE.MeshBasicMaterial({
+        color: triangleStates[index].color,
+        side: THREE.DoubleSide,
+        wireframe: true
+      });
       
-      // Create initial triangle states
-      const triangleStates: TriangleState[] = faces.map((face, index) => ({
-        face,
-        vertices: [vertices[face.a], vertices[face.b], vertices[face.c]],
-        clickCount: 0,
-        level: 0,
-        color: '#ffffff'
-      }));
-      
-      setMessage(`Created ${triangleStates.length} triangles`);
-      
-      // In a full implementation, we would:
-      // 1. Render the triangles on a map/canvas
-      // 2. Set up click handlers for triangle interaction
-      // 3. Implement the triangle subdivision UI
-      
-      // Simulate a triangle click for demonstration
-      const simulatedClickResult = handleTriangleClick(triangleStates[0]);
-      
-      setMessage(`World map initialized. Click on triangles to interact.`);
-    } catch (error) {
-      console.error('Error initializing world map:', error);
-      setMessage(`Error initializing world map: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
+      const mesh = new THREE.Mesh(triangleGeometry, material);
+      mesh.userData.faceIndex = index;
+      scene.add(mesh);
+    });
+
+    // Handle window resize
+    const handleResize = () => {
+      if (!containerRef.current) return;
+      const width = containerRef.current.clientWidth;
+      const height = containerRef.current.clientHeight;
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+      renderer.setSize(width, height);
+    };
+    window.addEventListener('resize', handleResize);
+
+    // Handle clicks
+    const handleClick = (event: MouseEvent) => {
+      const rect = renderer.domElement.getBoundingClientRect();
+      const x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      const y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+      const raycaster = new THREE.Raycaster();
+      raycaster.setFromCamera(new THREE.Vector2(x, y), camera);
+
+      const intersects = raycaster.intersectObjects(scene.children);
+      if (intersects.length > 0) {
+        const mesh = intersects[0].object as THREE.Mesh;
+        const faceIndex = mesh.userData.faceIndex;
+        const state = triangleStates[faceIndex];
+        
+        const result = handleTriangleClick(state);
+        if (result.subdivided && result.newTriangles) {
+          // Remove old triangle
+          scene.remove(mesh);
+          
+          // Add new subdivided triangles
+          result.newTriangles.forEach((newState, i) => {
+            const newGeometry = new THREE.BufferGeometry();
+            const newVertices = new Float32Array([
+              newState.vertices[0].x, newState.vertices[0].y, newState.vertices[0].z,
+              newState.vertices[1].x, newState.vertices[1].y, newState.vertices[1].z,
+              newState.vertices[2].x, newState.vertices[2].y, newState.vertices[2].z
+            ]);
+            newGeometry.setAttribute('position', new THREE.BufferAttribute(newVertices, 3));
+            
+            const newMaterial = new THREE.MeshBasicMaterial({
+              color: newState.color,
+              side: THREE.DoubleSide,
+              wireframe: true
+            });
+            
+            const newMesh = new THREE.Mesh(newGeometry, newMaterial);
+            newMesh.userData.faceIndex = faceIndex + i;
+            scene.add(newMesh);
+          });
+
+          setTriangleStates(prev => {
+            const next = [...prev];
+            next.splice(faceIndex, 1, ...result.newTriangles);
+            return next;
+          });
+        } else {
+          // Just update color
+          (mesh.material as THREE.MeshBasicMaterial).color.set(result.color);
+          setTriangleStates(prev => {
+            const next = [...prev];
+            next[faceIndex] = { ...state, color: result.color, clickCount: result.clickCount };
+            return next;
+          });
+        }
+      }
+    };
+    renderer.domElement.addEventListener('click', handleClick);
+
+    // Animation loop
+    const animate = () => {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    };
+    animate();
+
+    // Cleanup
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      renderer.domElement.removeEventListener('click', handleClick);
+      renderer.dispose();
+      controls.dispose();
+      if (containerRef.current?.contains(renderer.domElement)) {
+        containerRef.current.removeChild(renderer.domElement);
+      }
+    };
   }, []);
 
   return (
-    <div className="world-map-container">
-      <div ref={canvasRef} className="canvas-container">
-        {/* In a full implementation, this would contain a canvas or map library */}
-        <div className="placeholder">
-          <p>{message}</p>
-          <p>Map visualization placeholder</p>
-        </div>
-      </div>
-      
-      <style jsx>{`
-        .world-map-container {
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          background-color: #f5f5f5;
-          border-radius: 8px;
-          overflow: hidden;
-          position: relative;
-        }
-        
-        .canvas-container {
-          width: 100%;
-          height: 100%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        
-        .placeholder {
-          text-align: center;
-          padding: 2rem;
-          background-color: rgba(200, 200, 200, 0.3);
-          border-radius: 8px;
-        }
-      `}</style>
+    <div ref={containerRef} className={styles.worldMap}>
+      <div className={styles.loading}>Loading...</div>
     </div>
   );
 }
