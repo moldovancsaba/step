@@ -1,37 +1,76 @@
+/* Tailwind CSS directives */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 :root {
   --foreground-rgb: 0, 0, 0;
   --background-start-rgb: 255, 255, 255;
   --background-end-rgb: 240, 240, 240;
 }
 
-* {
-  box-sizing: border-box;
-  padding: 0;
-  margin: 0;
+@layer base {
+  * {
+    @apply box-border p-0 m-0;
+  }
+
+  html,
+  body {
+    @apply max-w-full overflow-x-hidden h-full;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    color: rgb(var(--foreground-rgb));
+    background: linear-gradient(
+        to bottom,
+        transparent,
+        rgb(var(--background-end-rgb))
+      )
+      rgb(var(--background-start-rgb));
+    @apply h-full antialiased;
+  }
 }
 
-html,
-body {
-  max-width: 100vw;
-  overflow-x: hidden;
-  height: 100%;
+@layer components {
+  .main-container {
+    @apply h-screen w-screen flex flex-col;
+  }
+  
+  .globe-container {
+    @apply relative w-full h-full;
+  }
+  
+  .globe-canvas {
+    @apply absolute inset-0 w-full h-full;
+    touch-action: none; /* Prevents scroll/pinch on mobile while interacting with the globe */
+  }
+  
+  .controls-container {
+    @apply absolute bottom-4 right-4 flex flex-col gap-2 z-10;
+  }
+  
+  .info-panel {
+    @apply absolute top-4 left-4 p-4 bg-white/80 dark:bg-gray-900/80 
+           rounded-lg shadow-lg backdrop-blur-sm z-10
+           max-w-xs transition-all duration-300;
+  }
+
+  .loading-indicator {
+    @apply absolute inset-0 flex items-center justify-center bg-white/50 dark:bg-gray-900/50 z-20;
+  }
 }
 
-body {
-  color: rgb(var(--foreground-rgb));
-  background: linear-gradient(
-      to bottom,
-      transparent,
-      rgb(var(--background-end-rgb))
-    )
-    rgb(var(--background-start-rgb));
-  height: 100%;
+@layer utilities {
+  .rotate-globe {
+    @apply animate-globe-rotate;
+  }
+  
+  .pause-animation {
+    animation-play-state: paused;
+  }
 }
 
 main {
-  height: 100vh;
-  width: 100vw;
-  display: flex;
-  flex-direction: column;
+  @apply h-screen w-screen flex flex-col;
 }
-

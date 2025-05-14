@@ -4,6 +4,10 @@
   "description": "STEP (Sphere Triangular Earth Project) aims to create a highly reliable, minimalist web application developed through a rigorous, AI-assisted, Test-Driven Development (TDD) process.",
   "main": "index.js",
   "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage"
@@ -21,19 +25,45 @@
   },
   "homepage": "https://github.com/moldovancsaba/step#readme",
   "devDependencies": {
+    "@swc/core": "^1.11.24",
+    "@swc/jest": "^0.2.38",
+    "@tailwindcss/forms": "^0.5.10",
+    "@tailwindcss/typography": "^0.5.16",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^6.6.3",
     "@types/jest": "^29.5.14",
     "@types/leaflet": "^1.9.17",
     "@types/node": "^22.15.17",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
+    "autoprefixer": "^10.4.21",
+    "eslint": "^8.57.1",
+    "eslint-config-airbnb": "^19.0.4",
+    "eslint-config-airbnb-typescript": "^18.0.0",
+    "eslint-config-prettier": "^10.1.5",
+    "eslint-plugin-import": "^2.31.0",
+    "eslint-plugin-jsx-a11y": "^6.10.2",
+    "eslint-plugin-prettier": "^5.4.0",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "identity-obj-proxy": "^3.0.0",
     "jest": "^29.7.0",
     "jest-environment-jsdom": "^29.7.0",
     "leaflet": "^1.9.4",
+    "postcss": "^8.4.35",
+    "prettier": "^3.5.3",
+    "tailwindcss": "^3.4.1",
     "ts-jest": "^29.3.2",
     "typescript": "^5.8.3"
   },
   "dependencies": {
+    "@types/react": "^18.2.64",
+    "@types/react-dom": "^18.2.22",
     "@types/three": "^0.176.0",
-    "three": "^0.176.0"
+    "next": "^14.1.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "three": "^0.176.0",
+    "zustand": "^4.5.2"
   }
 }
