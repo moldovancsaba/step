@@ -1,0 +1,72 @@
+# STEP Project - Warp.dev Team Settings
+# Configuration for team collaboration and workspace settings
+
+# Team workspace settings
+workspace:
+  name: "STEP Project"
+  description: "Sphere Triangular Earth Project - TDD-driven development"
+  
+  # Project structure references
+  paths:
+    source: "/Users/moldovan/Projects/step/src"
+    tests: "/Users/moldovan/Projects/step/src"
+    docs: "/Users/moldovan/Projects/step"
+  
+  # Team collaboration settings
+  collaboration:
+    enabled: true
+    share_workflows: true
+    share_notebooks: true
+    
+    # Automatic synchronization of workflow files
+    sync:
+      workflows: true
+      notebooks: true
+      
+    # Team notification settings (if applicable)
+    notifications:
+      test_failures: true
+      deployment_success: true
+      deployment_failure: true
+      
+  # Project-specific editor settings
+  editor:
+    theme: "dark"
+    font_size: 14
+    tab_size: 2
+    insert_spaces: true
+    
+  # Terminal settings
+  terminal:
+    default_directory: "/Users/moldovan/Projects/step"
+    startup_commands:
+      - "echo 'STEP Project shell initialized'"
+      - "echo 'TDD Protocol active - run \"npm test\" to verify tests'"
+      
+  # Keyboard shortcuts for common TDD operations
+  shortcuts:
+    tdd_run_tests: "ctrl+shift+t"
+    tdd_view_coverage: "ctrl+shift+c"
+    deploy_production: "ctrl+shift+d"
+    update_docs: "ctrl+shift+u"
+    
+  # AI assistant preferences
+  ai_assistant:
+    enabled: true
+    context_aware: true
+    load_project_docs: true
+    # List of documents to include in AI context
+    context_documents:
+      - "README.md"
+      - "01_roadmap.md"
+      - "02_Technology_Stack.md"
+      - "04_TDD_Protocol.md"
+      - "05_Definition_of_Done.md"
+      - "06_Sequential_Development_Rule.md"
+      
+  # Session recording for TDD verification
+  recording:
+    enabled: true
+    store_test_results: true
+    capture_commands: true
+

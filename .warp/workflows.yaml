@@ -1,0 +1,81 @@
+# STEP Project - Team Workflow Templates
+# This file contains shared workflows for the STEP project team
+
+workflows:
+  # TDD Workflow Templates
+  tdd:
+    name: "TDD Workflow"
+    description: "Commands for Test-Driven Development cycle"
+    templates:
+      - name: "Start TDD Cycle"
+        command: "cd /Users/moldovan/Projects/step && echo '# TDD Cycle Started: $(date)' >> .warp/tdd_session.log"
+        
+      - name: "Run Tests"
+        command: "npm test"
+        
+      - name: "Run Tests with Watch"
+        command: "npm run test:watch"
+        
+      - name: "Run Tests with Coverage"
+        command: "npm run test:coverage"
+        
+      - name: "Check Test Status"
+        command: "grep -r 'describe\\|it\\|test\\|expect' --include='*.test.ts' --include='*.test.tsx' src/"
+        
+      - name: "Check Implementation Status"
+        command: "git diff --stat"
+        
+  # Deployment Workflow Templates
+  deployment:
+    name: "Deployment Commands"
+    description: "Commands for deploying to Vercel and version management"
+    templates:
+      - name: "Deploy to Production"
+        command: "vercel --prod"
+        
+      - name: "Create Version Tag"
+        command: "git tag -a v$(node -p \"require('./package.json').version\") -m \"Release v$(node -p \"require('./package.json').version\")\""
+        
+      - name: "Push Tags"
+        command: "git push && git push --tags"
+        
+      - name: "Version Bump (patch)"
+        command: "npm version patch"
+        
+      - name: "Version Bump (minor)"
+        command: "npm version minor"
+        
+      - name: "Version Bump (major)"
+        command: "npm version major"
+        
+  # Documentation Workflow Templates
+  documentation:
+    name: "Documentation Updates"
+    description: "Commands for updating project documentation"
+    templates:
+      - name: "Update Release Notes"
+        command: "echo '## v'$(node -p \"require('./package.json').version\")' ($(date +%Y-%m-%d))' >> 10_Release_Notes.md"
+        
+      - name: "Update Dev Log"
+        command: "echo '## $(date +%Y-%m-%d) - Task Completion' >> 09_Dev_Log_Lessons.md"
+        
+      - name: "Document Test Coverage"
+        command: "npm run test:coverage && echo '## Test Coverage Report ($(date +%Y-%m-%d))' >> 09_Dev_Log_Lessons.md"
+        
+  # Geometry-related commands for STEP project
+  geometry:
+    name: "Geometry Operations"
+    description: "Commands for working with STEP geometry components"
+    templates:
+      - name: "Run Icosahedron Tests"
+        command: "npx jest src/lib/geometry/icosahedron.test.ts"
+        
+      - name: "Run Triangle Division Tests"
+        command: "npx jest src/lib/geometry/triangleDivision.test.ts"
+        
+      - name: "Run Map Integration Tests"
+        command: "npx jest src/app/components/WorldMap/WorldMap.test.tsx"
+        
+      - name: "Run Color Progression Tests"
+        command: "npx jest src/lib/utils/colorGradient.test.ts"
+
