@@ -1,5 +1,43 @@
 # Release Notes - Done Is Better
 
+## v0.9.5 - Test Infrastructure and Dependency Management Stabilization - 2025-05-14
+
+### Fixes & Improvements
+
+* **Dependency Conflict Resolution:** Resolved compatibility issues between eslint-plugin-react-hooks and eslint-config-airbnb
+* **Package Management:** Updated .gitignore to stop ignoring package-lock.json for better dependency version tracking
+* **Test Infrastructure Setup:** Completed comprehensive test environment configuration (Task: TSK-002)
+
+### Technical Implementation Details
+
+* **Testing Framework Enhancements:**
+  - Configured Jest with @swc/jest for faster TSX/JSX transforms
+  - Added proper mocks for matchMedia and IntersectionObserver
+  - Created Jest mock files for CSS modules and static assets
+  - Set up TypeScript configuration for react-dom testing
+  - Added example Button component with corresponding tests
+
+* **Dependency Management:**
+  - Downgraded eslint-plugin-react-hooks to v4.6.0 to resolve conflicts with eslint-config-airbnb
+  - Added missing Tailwind plugins for project requirements
+  - Installed identity-obj-proxy for CSS module mocking
+
+### Validation
+
+* All build errors resolved successfully
+* Local build verified with no errors or warnings
+* Jest test configuration confirmed working with example component tests
+
+### Deployment
+
+* **Commit:** `4a16a0e`
+* **Tag:** `v0.9.5`
+* **Platform:** Vercel
+* **URL:** `https://step-git-main-narimato.vercel.app`
+* **Deployment Date:** 2025-05-14T19:14:00+02:00
+
+---
+
 ## v0.6.0 - Click Interaction Implementation - 2025-05-14
 
 ### Features
