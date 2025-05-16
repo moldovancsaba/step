@@ -4,6 +4,11 @@
  */
 
 /**
+ * Types definitions for the triangle mesh geometry system
+ * Focused on 2D mapping for OpenStreetMap overlay
+ */
+
+/**
  * Geographic coordinates (latitude, longitude)
  */
 export interface GeoCoordinate {

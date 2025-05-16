@@ -1,26 +1,50 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import MapComponent from './components/Map';
+import { useMeshStore } from './store/meshStore';
 
 export default function Home() {
+  const [center, setCenter] = useState<[number, number]>([0, 0]);
+  const [zoom, setZoom] = useState(2);
+  
+  const {
+    initializeMesh,
+    clickFace,
+    hoverFace,
+    stats
+  } = useMeshStore();
+
+  useEffect(() => {
+    initializeMesh();
+  }, [initializeMesh]);
+
+  const handleViewportChange = (newCenter: [number, number], newZoom: number) => {
+    setCenter(newCenter);
+    setZoom(newZoom);
+  };
+
   return (
     <div className="min-h-screen flex flex-col">
       <header className="p-4 bg-white shadow-md z-10">
         <h1 className="text-2xl font-bold">STEP - Triangle Mesh Project</h1>
         <p className="text-gray-600">OpenStreetMap with triangle mesh visualization</p>
+        {stats && (
+          <div className="mt-2 text-sm text-gray-500">
+            Faces: {stats.totalFaces} | Level: {stats.maxLevel} | Clicks: {stats.totalClicks}
+          </div>
+        )}
       </header>
 
-      <main className="flex-1 p-4">
-        <div className="max-w-4xl mx-auto">
-          <h2 className="text-xl font-semibold mb-4">Welcome to STEP</h2>
-          <p className="text-gray-700 mb-4">
-            Interactive triangle mesh visualization for OpenStreetMap with geographic subdivision capabilities.
-          </p>
-          <div className="p-4 bg-blue-50 rounded-lg">
-            <p className="text-sm text-blue-800">
-              Initial version - Triangle mesh visualization coming soon.
-            </p>
-          </div>
+      <main className="flex-1">
+        <div className="w-full h-full" style={{ height: 'calc(100vh - 140px)' }}>
+          <MapComponent
+            center={center}
+            zoom={zoom}
+            onViewportChange={handleViewportChange}
+            onFaceClick={clickFace}
+            onFaceHover={hoverFace}
+          />
         </div>
       </main>
 
