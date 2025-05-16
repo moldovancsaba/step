@@ -7,15 +7,12 @@ const nextConfig = {
   // Ensure we output source maps in production
   productionBrowserSourceMaps: true,
   
-  // Configure environment variables
+  // Configure environment variables - only expose what's needed to the client
   env: {
     // Making the MongoDB URI available to the client (only public parts)
     MONGODB_HOST: process.env.MONGODB_URI 
       ? new URL(process.env.MONGODB_URI).hostname 
       : 'mongodb-server',
-    
-    // App environment
-    NODE_ENV: process.env.NODE_ENV || 'development',
   },
   
   // Configure webpack
@@ -37,15 +34,29 @@ const nextConfig = {
   // Handle transpilation for TypeScript
   typescript: {
     // !! WARN !!
-    // Dangerously allow production builds to successfully complete even if
-    // your project has type errors - use only for testing
+    // Dangerously allow production builds to complete even with type errors
+    // This helps with CI/CD but should be avoided in general
     // !! WARN !!
-    ignoreBuildErrors: process.env.NODE_ENV === 'development',
+    ignoreBuildErrors: false, // Set to true only if needed for deployment
   },
   
-  // Images configuration
+  // Images configuration - add OpenStreetMap domains
   images: {
-    domains: ['images.unsplash.com'],
+    domains: [
+      'images.unsplash.com',
+      'a.tile.openstreetmap.org',
+      'b.tile.openstreetmap.org',
+      'c.tile.openstreetmap.org',
+      'tile.openstreetmap.org',
+      'www.openstreetmap.org'
+    ],
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: '*.openstreetmap.org',
+        pathname: '**',
+      }
+    ],
   },
   
   // Use SWC minification
@@ -80,6 +91,17 @@ const nextConfig = {
         ],
       },
     ];
+  },
+  
+  // Optimize build output
+  output: 'standalone',
+  
+  // Optimize for production
+  compiler: {
+    // Remove console.log in production
+    removeConsole: process.env.NODE_ENV === 'production' ? {
+      exclude: ['error', 'warn'],
+    } : false,
   },
 };
 
