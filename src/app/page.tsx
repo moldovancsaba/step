@@ -1,103 +1,198 @@
-import Image from "next/image";
+'use client';
+
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { useTriangleMesh } from './hooks/useTriangleMesh';
+import Triangle from './components/Triangle';
+import { ScreenCoordinate, MapProjection } from './types/geometry';
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const { 
+    mesh, 
+    meshStats, 
+    selectedFace,
+    selectedFaceId,
+    hoveredFace,
+    hoveredFaceId,
+    mapProjection,
+    historyStatus,
+    
+    initializeMesh,
+    resetMesh,
+    selectFace,
+    hoverFace,
+    clickFace,
+    subdivideFace,
+    canSubdivideFace,
+    
+    zoomIn,
+    zoomOut,
+    panMap,
+    updateMapSize,
+    centerMapOn,
+    setZoom,
+    
+    undo,
+    redo,
+    
+    getFacesByLevel
+  } = useTriangleMesh();
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  // Ref for the map container
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  
+  // State for handling map interactions
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState<ScreenCoordinate | null>(null);
+  const [showControls, setShowControls] = useState(true);
+  const [showStats, setShowStats] = useState(false);
+
+  // Update map size on window resize
+  useEffect(() => {
+    const handleResize = () => {
+      if (mapContainerRef.current) {
+        updateMapSize(
+          mapContainerRef.current.clientWidth,
+          mapContainerRef.current.clientHeight
+        );
+      }
+    };
+    
+    // Set initial size
+    handleResize();
+    
+    // Listen for resize events
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [updateMapSize]);
+  
+  // Handle mouse down for map dragging
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    setIsDragging(true);
+    setDragStart({ x: e.clientX, y: e.clientY });
+  }, []);
+  
+  // Handle mouse move for map dragging
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (isDragging && dragStart) {
+      const dx = e.clientX - dragStart.x;
+      const dy = e.clientY - dragStart.y;
+      
+      // Convert pixel movement to geographic coordinates
+      // The factor adjusts sensitivity based on zoom level
+      const factor = 0.01 / Math.pow(2, mapProjection.zoom - 1);
+      
+      panMap(-dy * factor, dx * factor);
+      setDragStart({ x: e.clientX, y: e.clientY });
+    }
+  }, [isDragging, dragStart, panMap, mapProjection.zoom]);
+  
+  // Handle mouse up to end dragging
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false);
+    setDragStart(null);
+  }, []);
+  
+  // Handle mouse wheel for zooming
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    if (e.deltaY < 0) {
+      zoomIn();
+    } else {
+      zoomOut();
+    }
+    e.preventDefault();
+  }, [zoomIn, zoomOut]);
+  
+  // Handle triangle click
+  const handleTriangleClick = useCallback((faceId: string, event: React.MouseEvent) => {
+    clickFace(faceId, event);
+  }, [clickFace]);
+  
+  // Show loading state if mesh is not yet available
+  if (!mesh) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold mb-4">Loading Triangle Mesh...</h2>
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-gray-900 mx-auto"></div>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen flex flex-col">
+      <header className="p-4 bg-white shadow-md z-10">
+        <h1 className="text-2xl font-bold">STEP - Triangle Mesh Triangular Earth Project</h1>
+        <p className="text-gray-600">OpenStreetMap overlay with interactive triangle subdivision</p>
+      </header>
+
+      <div className="flex flex-1 relative">
+        {/* OpenStreetMap Container */}
+        <div 
+          ref={mapContainerRef}
+          className="w-full h-full relative overflow-hidden"
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseUp}
+          onWheel={handleWheel}
         >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
+          {/* Map Layer - Using an iframe for OpenStreetMap */}
+          <iframe 
+            src={`https://www.openstreetmap.org/export/embed.html?bbox=${mapProjection.center.longitude - 10},${mapProjection.center.latitude - 10},${mapProjection.center.longitude + 10},${mapProjection.center.latitude + 10}&layer=mapnik&marker=${mapProjection.center.latitude},${mapProjection.center.longitude}`}
+            className="absolute inset-0 w-full h-full"
+            style={{ pointerEvents: 'none' }} // Prevent iframe from capturing events
           />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
-  );
-}
+          
+          {/* SVG Overlay for Triangles */}
+          <svg 
+            className="absolute inset-0 w-full h-full"
+            viewBox={`0 0 ${mapProjection.width} ${mapProjection.height}`}
+            preserveAspectRatio="xMidYMid meet"
+          >
+            {/* Render all triangles */}
+            {mesh.faces.map(face => (
+              <Triangle
+                key={face.id}
+                face={face}
+                mesh={mesh}
+                projection={mapProjection}
+                isSelected={face.id === selectedFaceId}
+                canSubdivide={canSubdivideFace(face.id)}
+                onTriangleClick={handleTriangleClick}
+                onTriangleHover={hoverFace}
+                onSubdivide={subdivideFace}
+              />
+            ))}
+          </svg>
+          
+          {/* Map Controls */}
+          {showControls && (
+            <div className="absolute top-4 right-4 bg-white p-2 rounded-md shadow-md space-y-2">
+              <button 
+                onClick={zoomIn}
+                className="w-10 h-10 bg-gray-100 hover:bg-gray-200 flex items-center justify-center rounded-md"
+                title="Zoom In"
+              >
+                <span className="text-xl">+</span>
+              </button>
+              <button 
+                onClick={zoomOut}
+                className="w-10 h-10 bg-gray-100 hover:bg-gray-200 flex items-center justify-center rounded-md"
+                title="Zoom Out"
+              >
+                <span className="text-xl">-</span>
+              </button>
+              <button 
+                onClick={() => centerMapOn({ latitude: 0, longitude: 0 })}
+                className="w-10 h-10 bg-gray-100 hover:bg-gray-200 flex items-center justify-center rounded-md"
+                title="Reset View"
+              >
+                <span className="text-sm">🌎</span>
+              </button>
+            </div>
+          )}
+          
+          {/* Info Panel */}
+          <div className="absolute bottom-4 left-4 bg-white p-4 rounded-md shadow-md max-w-xs">
+            <h3 className="font-bold text-
