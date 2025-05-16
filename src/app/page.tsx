@@ -1,8 +1,24 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import MapComponent from './components/Map/DynamicMap';
+import dynamic from 'next/dynamic';
 import { useMeshStore } from './store/meshStore';
+
+// Dynamically import MapComponent with no SSR
+const MapComponent = dynamic(
+  () => import('./components/Map'),
+  { 
+    ssr: false,
+    loading: () => (
+      <div className="w-full h-full flex items-center justify-center bg-gray-100">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-gray-900 mb-4"></div>
+          <p>Loading map...</p>
+        </div>
+      </div>
+    )
+  }
+);
 
 export default function Home() {
   const [center, setCenter] = useState<[number, number]>([0, 0]);
