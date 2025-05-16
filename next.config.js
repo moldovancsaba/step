@@ -4,6 +4,9 @@ const nextConfig = {
   // Configure your Next.js settings
   reactStrictMode: true,
   
+  // Add transpilation for react-leaflet packages
+  transpilePackages: ['react-leaflet', '@react-leaflet/core'],
+  
   // Ensure we output source maps in production
   productionBrowserSourceMaps: true,
   
