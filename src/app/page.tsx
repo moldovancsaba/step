@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import MapComponent from './components/Map';
+import MapComponent from './components/Map/DynamicMap';
 import { useMeshStore } from './store/meshStore';
 
 export default function Home() {

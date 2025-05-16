@@ -5,14 +5,7 @@ import { MapContainer, TileLayer, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useMeshStore } from '@/app/store/meshStore';
 import TriangleMeshOverlay from '../TriangleMeshOverlay';
-
-interface MapComponentProps {
-  center: [number, number];
-  zoom: number;
-  onViewportChange?: (center: [number, number], zoom: number) => void;
-  onFaceClick?: (faceId: string) => void;
-  onFaceHover?: (faceId: string | null) => void;
-}
+import { MapComponentProps } from './types';
 
 // Map event handler component
 const MapEventHandler: React.FC<{ onViewportChange?: MapComponentProps['onViewportChange'] }> = ({ onViewportChange }) => {
