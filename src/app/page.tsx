@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, Suspense } from 'react';
 import { useTriangleMesh } from './hooks/useTriangleMesh';
 import Triangle from './components/Triangle';
 import { ScreenCoordinate, MapProjection } from './types/geometry';
+import { connectToDatabase, isDatabaseConnected } from './lib/db';
 
 export default function Home() {
   const { 
@@ -40,12 +41,42 @@ export default function Home() {
   // Ref for the map container
   const mapContainerRef = useRef<HTMLDivElement>(null);
   
-  // State for handling map interactions
+  // State for handling map interactions and app state
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState<ScreenCoordinate | null>(null);
   const [showControls, setShowControls] = useState(true);
   const [showStats, setShowStats] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [dbConnected, setDbConnected] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+  const [isMounted, setIsMounted] = useState(false);
 
+  // Check for client-side mounting and initialize application
+  useEffect(() => {
+    setIsMounted(true);
+    
+    const initApp = async () => {
+      try {
+        setIsLoading(true);
+        
+        // Check database connection
+        await connectToDatabase();
+        setDbConnected(true);
+        
+        // Initialize triangle mesh
+        await initializeMesh();
+        
+        setIsLoading(false);
+      } catch (err) {
+        console.error('Failed to initialize application:', err);
+        setError(err instanceof Error ? err : new Error(String(err)));
+        setIsLoading(false);
+      }
+    };
+    
+    initApp();
+  }, [initializeMesh]);
+  
   // Update map size on window resize
   useEffect(() => {
     const handleResize = () => {
@@ -103,17 +134,48 @@ export default function Home() {
   }, [zoomIn, zoomOut]);
   
   // Handle triangle click
-  const handleTriangleClick = useCallback((faceId: string, event: React.MouseEvent) => {
+  const handleTriangleClick = useCallback((faceId: string, event?: React.MouseEvent) => {
+    // Pass both faceId and event (which might be undefined) to clickFace
     clickFace(faceId, event);
   }, [clickFace]);
   
-  // Show loading state if mesh is not yet available
-  if (!mesh) {
+  // Show error state if there was a problem initializing
+  if (error) {
+    return <ErrorFallback error={error} />;
+  }
+  
+  // Show loading state while initializing app or if mesh is not yet available
+  if (isLoading || !mesh || !isMounted) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <div className="text-center p-8 bg-white rounded-lg shadow-lg">
           <h2 className="text-2xl font-bold mb-4">Loading Triangle Mesh...</h2>
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-gray-900 mx-auto"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <div className="space-y-2">
+            <p className="text-gray-600">Initializing application components</p>
+            <div className="flex items-center justify-center space-x-2">
+              <span className="text-sm font-medium">Database Connection:</span>
+              <span className={`text-sm ${dbConnected ? 'text-green-500' : 'text-gray-400'}`}>
+                {dbConnected ? 'Connected ✓' : 'Connecting...'}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  
+  // If not mounted (SSR), return a placeholder that matches the expected layout
+  if (!isMounted) {
+    return (
+      <div className="min-h-screen flex flex-col">
+        <header className="p-4 bg-white shadow-md">
+          <h1 className="text-2xl font-bold">STEP - Triangle Mesh Triangular Earth Project</h1>
+        </header>
+        <div className="flex-1 bg-gray-100 flex items-center justify-center">
+          <div className="text-center p-8">
+            <h2 className="text-xl">Loading application...</h2>
+          </div>
         </div>
       </div>
     );
@@ -327,13 +389,27 @@ function ErrorFallback({ error }: { error: Error }) {
         <p className="mb-4 text-gray-700">An error occurred while rendering the application:</p>
         <div className="bg-red-50 p-4 rounded-md mb-4 overflow-auto max-h-60">
           <p className="text-red-700 font-mono text-sm">{error.message}</p>
+          {error.stack && (
+            <details className="mt-2">
+              <summary className="cursor-pointer text-red-700 font-medium text-xs">Show stack trace</summary>
+              <pre className="mt-2 text-red-700 font-mono text-xs whitespace-pre-wrap">{error.stack}</pre>
+            </details>
+          )}
         </div>
-        <button
-          onClick={() => window.location.reload()}
-          className="w-full py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md transition-colors"
-        >
-          Reload Application
-        </button>
+        <div className="flex flex-col space-y-2">
+          <button
+            onClick={() => window.location.reload()}
+            className="w-full py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md transition-colors"
+          >
+            Reload Application
+          </button>
+          <a 
+            href="/"
+            className="w-full py-2 bg-gray-200 hover:bg-gray-300 text-center text-gray-800 rounded-md transition-colors"
+          >
+            Return to Homepage
+          </a>
+        </div>
       </div>
     </div>
   );

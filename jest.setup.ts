@@ -1,3 +1,27 @@
+// Type declarations for global test utilities and custom matchers
+interface CustomMatchers<R = unknown> {
+  toBeWithinRange(floor: number, ceiling: number): R;
+}
+
+// Augment Jest's expect with our custom matchers
+declare global {
+  namespace jest {
+    interface Expect extends CustomMatchers {}
+    interface Matchers<R> extends CustomMatchers<R> {}
+    interface InverseAsymmetricMatchers extends CustomMatchers {}
+  }
+  
+  // Define our test utilities type
+  interface TestUtils {
+    wait: (ms: number) => Promise<void>;
+    isConnectedToDB: () => boolean;
+    randomString: (length?: number) => string;
+  }
+  
+  // Add testUtils to the global namespace
+  var testUtils: TestUtils;
+}
+
 // Import jest-dom for DOM testing utilities
 import '@testing-library/jest-dom';
 import mongoose from 'mongoose';
@@ -39,6 +63,9 @@ async function disconnectFromTestDB() {
 
 // Setup and teardown for MongoDB
 beforeAll(async () => {
+  // Check if we're in test environment (don't directly assign to NODE_ENV)
+  const isTestEnvironment = process.env.NODE_ENV === 'test';
+  
   // Only connect if MONGODB_URI is valid
   if (process.env.MONGODB_URI && 
      (process.env.MONGODB_URI.startsWith('mongodb://') || 
@@ -57,10 +84,14 @@ afterAll(async () => {
   await disconnectFromTestDB();
 });
 
-// Environment variable mocking
+// Environment variable mocking (avoiding direct assignment to NODE_ENV)
 // Ensure test environment variables are set
-process.env.NODE_ENV = 'test';
 process.env.NEXT_PUBLIC_API_URL = 'http://localhost:3000/api';
+
+// Set up MongoDB URI for tests if not already set
+if (!process.env.MONGODB_URI) {
+  process.env.MONGODB_URI = 'mongodb+srv://moldovancsaba:bYnmuz-5gaqqa-riqriw@cluster-step.crnvmcs.mongodb.net/?retryWrites=true&w=majority&appName=Cluster-Step';
+}
 
 // Mock window.matchMedia
 Object.defineProperty(window, 'matchMedia', {
@@ -69,8 +100,8 @@ Object.defineProperty(window, 'matchMedia', {
     matches: false,
     media: query,
     onchange: null,
-    addListener: jest.fn(),
-    removeListener: jest.fn(),
+    addListener: jest.fn(), // Deprecated
+    removeListener: jest.fn(), // Deprecated
     addEventListener: jest.fn(),
     removeEventListener: jest.fn(),
     dispatchEvent: jest.fn(),
@@ -153,48 +184,5 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
-// Import jest-dom for DOM testing utilities
-import '@testing-library/jest-dom';
-
-// Mock next/navigation
-jest.mock('next/navigation', () => ({
-  useRouter: () => ({
-    push: jest.fn(),
-    replace: jest.fn(),
-    back: jest.fn(),
-    forward: jest.fn(),
-    refresh: jest.fn(),
-    prefetch: jest.fn(),
-    pathname: '/',
-    query: {},
-  }),
-  usePathname: jest.fn(() => '/'),
-  useSearchParams: jest.fn(() => ({ get: jest.fn() })),
-}));
-
-// Mock window.matchMedia for testing responsive components
-Object.defineProperty(window, 'matchMedia', {
-  writable: true,
-  value: jest.fn().mockImplementation(query => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addListener: jest.fn(), // Deprecated
-    removeListener: jest.fn(), // Deprecated
-    addEventListener: jest.fn(),
-    removeEventListener: jest.fn(),
-    dispatchEvent: jest.fn(),
-  })),
-});
-
-// Set up environment variables needed for tests
-process.env.MONGODB_URI = process.env.MONGODB_URI || 
-  'mongodb+srv://moldovancsaba:bYnmuz-5gaqqa-riqriw@cluster-step.crnvmcs.mongodb.net/?retryWrites=true&w=majority&appName=Cluster-Step';
-process.env.NODE_ENV = 'test';
-
-// Increase MaxListenersExceededWarning for event emitters in tests
-require('events').EventEmitter.defaultMaxListeners = 20;
-
 // Suppress console errors during tests (optional)
 // jest.spyOn(console, 'error').mockImplementation(() => {});
-

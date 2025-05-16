@@ -9,6 +9,8 @@ interface TriangleMeshVisualizerProps {
   selectedFaceId: string | null;
   onFaceClick: (faceId: string) => void;
   onFaceSelect: (faceId: string | null) => void;
+  onFaceHover?: (faceId: string | null) => void;
+  onFaceSubdivide?: (faceId: string) => void;
 }
 
 // Mock map control - for actual implementation, use a map library like Leaflet or Mapbox
@@ -27,6 +29,8 @@ const TriangleMeshVisualizer: React.FC<TriangleMeshVisualizerProps> = ({
   selectedFaceId,
   onFaceClick,
   onFaceSelect,
+  onFaceHover,
+  onFaceSubdivide,
 }) => {
   const [filterLevel, setFilterLevel] = useState<number | null>(null);
   const [viewMode, setViewMode] = useState<'all' | 'level' | 'selected'>('all');
@@ -263,10 +267,19 @@ const TriangleMeshVisualizer: React.FC<TriangleMeshVisualizerProps> = ({
             >
               <Triangle
                 face={face}
-                vertices={mesh.vertices}
-                onClick={onFaceClick}
+                mesh={mesh}
+                projection={{
+                  zoom: mapControl.zoom,
+                  center: mapControl.center,
+                  width: mapDimensions.width,
+                  height: mapDimensions.height,
+                  rotation: mapControl.bearing
+                }}
                 isSelected={face.id === selectedFaceId}
-                mapProjection={projectToScreen}
+                canSubdivide={face.clickCount >= 10 && face.level < 19}
+                onTriangleClick={onFaceClick}
+                onTriangleHover={onFaceHover}
+                onSubdivide={onFaceSubdivide}
               />
             </div>
           ))}

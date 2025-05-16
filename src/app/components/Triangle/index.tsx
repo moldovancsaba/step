@@ -22,7 +22,7 @@ interface TriangleProps {
   projection: MapProjection;
   isSelected?: boolean;
   canSubdivide?: boolean;
-  onTriangleClick?: (faceId: string, event: React.MouseEvent) => void;
+  onTriangleClick?: (faceId: string, event?: React.MouseEvent) => void;
   onTriangleHover?: (faceId: string | null) => void;
   onSubdivide?: (faceId: string) => void;
 }
@@ -100,6 +100,7 @@ const Triangle: React.FC<TriangleProps> = ({
   
   const handleClick = useCallback((event: React.MouseEvent) => {
     if (onTriangleClick) {
+      // Always pass both faceId and event
       onTriangleClick(face.id, event);
     }
   }, [face.id, onTriangleClick]);

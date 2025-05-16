@@ -1,4 +1,4 @@
-import { GeoCoordinate, TriangleFace, Vertex } from './geometry';
+import { GeoCoordinate, TriangleFace } from './geometry';
 
 /**
  * Types for MongoDB models
@@ -7,8 +7,7 @@ import { GeoCoordinate, TriangleFace, Vertex } from './geometry';
 // MongoDB model for storing triangle mesh data
 export interface TriangleMeshDocument {
   _id?: string;
-  vertices: Vertex[];
-  geoCoordinates: GeoCoordinate[];
+  vertices: GeoCoordinate[]; // Using GeoCoordinate for vertices
   faces: TriangleFace[];
   createdAt: Date;
   updatedAt: Date;

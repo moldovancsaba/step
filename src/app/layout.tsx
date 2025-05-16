@@ -1,16 +1,25 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import type { Metadata, Viewport } from "next";
+import { Inter, Roboto_Mono } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
+  display: "swap",
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const robotoMono = Roboto_Mono({
+  variable: "--font-roboto-mono",
   subsets: ["latin"],
+  display: "swap",
 });
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+};
 
 export const metadata: Metadata = {
   title: "STEP - Triangle Mesh Visualization System",
@@ -20,6 +29,7 @@ export const metadata: Metadata = {
   creator: "STEP Project",
   publisher: "Vercel",
   robots: "index, follow",
+  metadataBase: new URL("https://step-project.vercel.app"),
   
   // OpenGraph metadata for social sharing
   openGraph: {
@@ -29,7 +39,7 @@ export const metadata: Metadata = {
     siteName: "STEP Project",
     images: [
       {
-        url: "https://step-project.vercel.app/og-image.png",
+        url: "/og-image.png",
         width: 1200,
         height: 630,
         alt: "STEP Triangle Mesh Visualization",
@@ -44,15 +54,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "STEP - Triangle Mesh Visualization System",
     description: "Interactive triangle mesh visualization for OpenStreetMap",
-    images: ["https://step-project.vercel.app/og-image.png"],
-  },
-  
-  // Viewport settings
-  viewport: {
-    width: "device-width",
-    initialScale: 1,
-    maximumScale: 1,
-    userScalable: false,
+    images: ["/og-image.png"],
   },
   
   // Icons
@@ -82,7 +84,7 @@ export default function RootLayout({
         <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha512-Zcn6fTEZJLuBnXKNlYvJlOPutjGHQBaVLnQsmC/J8wKmEeKcIiHAagwiyYVSwdRnJ7d4r+2P8d5+lXLQ2TuYQ==" crossOrigin="" />
       </head>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${inter.variable} ${robotoMono.variable} antialiased`}
       >
         {children}
       </body>

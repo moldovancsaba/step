@@ -1,3 +1,5 @@
+'use client';
+
 import { create } from 'zustand';
 import { 
   TriangleMesh, 
@@ -45,6 +47,9 @@ interface TriangleMeshState {
   undo: () => void;
   redo: () => void;
   resetMesh: () => void;
+  
+  // Private actions (internal use only)
+  _saveToHistory: (state: TriangleMeshState) => TriangleMeshState;
 }
 
 /**
@@ -96,7 +101,7 @@ export const useTriangleMeshStore = create<TriangleMeshState>((set, get) => ({
    * Save the current state to history
    * @private
    */
-  _saveToHistory: (state: TriangleMeshState) => {
+  _saveToHistory: (state: TriangleMeshState): TriangleMeshState => {
     const { mesh, history } = state;
     return {
       ...state,
@@ -353,240 +358,4 @@ export function useCanSubdivide(faceId: string | null) {
     return face.clickCount >= 10 && face.level < OSM_CONSTANTS.MAX_ZOOM;
   });
 }
-
-'use client';
-
-import { create } from 'zustand';
-import { 
-  GeoCoordinate, 
-  INITIAL_FACES, 
-  INITIAL_VERTICES, 
-  TriangleFace, 
-  TriangleMesh, 
-  geoMidpoint,
-  getColorForClickCount
-} from '../types/geometry';
-
-interface TriangleMeshState {
-  // State
-  mesh: TriangleMesh | null;
-  loading: boolean;
-  error: string | null;
-  selectedFaceId: string | null;
-  
-  // Actions
-  initializeMesh: () => Promise<void>;
-  clickTriangle: (faceId: string) => void;
-  selectFace: (faceId: string | null) => void;
-  resetMesh: () => void;
-}
-
-/**
- * Creates the initial triangle mesh
- */
-function createInitialMesh(): TriangleMesh {
-  // Create the initial faces with level 0 and 0 clicks
-  const faces: TriangleFace[] = INITIAL_FACES.map((vertexIndices, index) => ({
-    id: `face-${index}`,
-    vertices: vertexIndices as [number, number, number],
-    level: 0,
-    clickCount: 0,
-    color: 'white', // Initial color is white
-  }));
-  
-  return {
-    vertices: [...INITIAL_VERTICES],
-    faces,
-  };
-}
-
-/**
- * Subdivides a triangle face into four smaller triangles
- */
-function subdivideTriangle(mesh: TriangleMesh, faceId: string): TriangleMesh {
-  // Find the face to subdivide
-  const faceIndex = mesh.faces.findIndex(face => face.id === faceId);
-  if (faceIndex === -1) return mesh;
-  
-  const face = mesh.faces[faceIndex];
-  
-  // Only subdivide if the face has been clicked 10 times and is below level 19
-  if (face.clickCount < 10 || face.level >= 19) return mesh;
-  
-  // Get the vertices of the face
-  const [v1Index, v2Index, v3Index] = face.vertices;
-  const v1 = mesh.vertices[v1Index];
-  const v2 = mesh.vertices[v2Index];
-  const v3 = mesh.vertices[v3Index];
-  
-  // Calculate midpoints of the sides
-  const m1 = geoMidpoint(v1, v2);
-  const m2 = geoMidpoint(v2, v3);
-  const m3 = geoMidpoint(v3, v1);
-  
-  // Add new vertices to the mesh
-  const newVertices = [...mesh.vertices, m1, m2, m3];
-  
-  // Get the indices of the new vertices
-  const m1Index = mesh.vertices.length;
-  const m2Index = mesh.vertices.length + 1;
-  const m3Index = mesh.vertices.length + 2;
-  
-  // Create 4 new faces
-  const newLevel = face.level + 1;
-  const newFaces: TriangleFace[] = [
-    // Remove the original face and add 4 new ones
-    ...mesh.faces.slice(0, faceIndex),
-    ...mesh.faces.slice(faceIndex + 1),
-    
-    // Four new triangles with white color and 0 clicks
-    {
-      id: `${faceId}-1`,
-      vertices: [v1Index, m1Index, m3Index] as [number, number, number],
-      level: newLevel,
-      clickCount: 0,
-      color: 'white',
-      parentFaceId: faceId,
-    },
-    {
-      id: `${faceId}-2`,
-      vertices: [m1Index, v2Index, m2Index] as [number, number, number],
-      level: newLevel,
-      clickCount: 0,
-      color: 'white',
-      parentFaceId: faceId,
-    },
-    {
-      id: `${faceId}-3`,
-      vertices: [m3Index, m2Index, v3Index] as [number, number, number],
-      level: newLevel,
-      clickCount: 0,
-      color: 'white',
-      parentFaceId: faceId,
-    },
-    {
-      id: `${faceId}-4`,
-      vertices: [m1Index, m2Index, m3Index] as [number, number, number],
-      level: newLevel,
-      clickCount: 0,
-      color: 'white',
-      parentFaceId: faceId,
-    },
-  ];
-  
-  // Return updated mesh
-  return {
-    vertices: newVertices,
-    faces: newFaces,
-  };
-}
-
-/**
- * Triangle mesh store using Zustand
- */
-const useTriangleMeshStore = create<TriangleMeshState>((set, get) => ({
-  // Initial state
-  mesh: null,
-  loading: false,
-  error: null,
-  selectedFaceId: null,
-  
-  // Initialize the mesh
-  initializeMesh: async () => {
-    try {
-      set({ loading: true, error: null });
-      
-      // Create initial mesh
-      const initialMesh = createInitialMesh();
-      
-      // Simulate async loading for demonstration
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      set({
-        mesh: initialMesh,
-        loading: false,
-      });
-    } catch (error) {
-      set({
-        error: error instanceof Error ? error.message : 'Failed to initialize mesh',
-        loading: false,
-      });
-    }
-  },
-  
-  // Handle clicking on a triangle
-  clickTriangle: (faceId: string) => {
-    const { mesh } = get();
-    if (!mesh) return;
-    
-    // Find the face in the mesh
-    const faceIndex = mesh.faces.findIndex(face => face.id === faceId);
-    if (faceIndex === -1) return;
-    
-    const face = mesh.faces[faceIndex];
-    const newClickCount = face.clickCount + 1;
-    
-    // Create copy of faces array
-    let newFaces = [...mesh.faces];
-    let newMesh = { ...mesh };
-    
-    if (newClickCount <= 10) {
-      // Just increment click count and update color
-      const color = getColorForClickCount(newClickCount, face.level);
-      
-      newFaces[faceIndex] = {
-        ...face,
-        clickCount: newClickCount,
-        color,
-      };
-      
-      set({
-        mesh: {
-          ...mesh,
-          faces: newFaces,
-        },
-        selectedFaceId: faceId,
-      });
-    } else if (face.level < 19) {
-      // Subdivide the triangle on the 11th click
-      newMesh = subdivideTriangle(mesh, faceId);
-      
-      set({
-        mesh: newMesh,
-        selectedFaceId: null, // Deselect after subdivision
-      });
-    } else if (face.level === 19) {
-      // At max level, just turn red on 11th click
-      newFaces[faceIndex] = {
-        ...face,
-        clickCount: newClickCount,
-        color: 'red',
-      };
-      
-      set({
-        mesh: {
-          ...mesh,
-          faces: newFaces,
-        },
-        selectedFaceId: faceId,
-      });
-    }
-  },
-  
-  // Select a face
-  selectFace: (faceId: string | null) => {
-    set({ selectedFaceId: faceId });
-  },
-  
-  // Reset the mesh to its initial state
-  resetMesh: () => {
-    set({
-      mesh: createInitialMesh(),
-      selectedFaceId: null,
-      error: null,
-    });
-  },
-}));
-
-export default useTriangleMeshStore;
 

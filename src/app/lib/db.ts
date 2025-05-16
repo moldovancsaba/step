@@ -1,16 +1,20 @@
-import mongoose from 'mongoose';
+import mongoose, { Connection } from 'mongoose';
+import { TriangleMeshModel, InteractionModel, SessionModel } from './models';
+
+// Interface for the global mongoose connection cache
+interface MongooseCache {
+  conn: Connection | null;
+  promise: Promise<typeof mongoose> | null;
+}
 
 // Define cached connection variable in global scope
 declare global {
-  var mongoose: {
-    conn: typeof mongoose | null;
-    promise: Promise<typeof mongoose> | null;
-  };
+  var mongooseCache: MongooseCache;
 }
 
-// Initialize global mongoose object if it doesn't exist
-if (!global.mongoose) {
-  global.mongoose = {
+// Initialize global mongoose cache object if it doesn't exist
+if (!global.mongooseCache) {
+  global.mongooseCache = {
     conn: null,
     promise: null,
   };
@@ -20,14 +24,14 @@ if (!global.mongoose) {
  * Database connection utility
  * Creates a connection to MongoDB and caches it for reuse
  */
-export async function connectToDatabase(): Promise<typeof mongoose> {
+export async function connectToDatabase(): Promise<Connection> {
   // If we have a connection, return it
-  if (global.mongoose.conn) {
-    return global.mongoose.conn;
+  if (global.mongooseCache.conn) {
+    return global.mongooseCache.conn;
   }
 
   // If a connection is initializing, wait for it
-  if (!global.mongoose.promise) {
+  if (!global.mongooseCache.promise) {
     const MONGODB_URI = process.env.MONGODB_URI;
 
     if (!MONGODB_URI) {
@@ -41,22 +45,47 @@ export async function connectToDatabase(): Promise<typeof mongoose> {
     };
 
     // Create a new connection promise
-    global.mongoose.promise = mongoose
+    global.mongooseCache.promise = mongoose
       .connect(MONGODB_URI, opts)
       .then((mongoose) => {
         console.log('Connected to MongoDB');
         return mongoose;
-      })
-      .catch((error) => {
-        console.error('Error connecting to MongoDB:', error);
-        throw error;
       });
   }
 
-  // Wait for connection to resolve
-  global.mongoose.conn = await global.mongoose.promise;
-  return global.mongoose.conn;
+  try {
+    const client = await global.mongooseCache.promise;
+    global.mongooseCache.conn = client.connection;
+    return global.mongooseCache.conn;
+  } catch (error) {
+    global.mongooseCache.promise = null;
+    throw error;
+  }
 }
+
+/**
+ * Check connection status
+ */
+export function isDatabaseConnected(): boolean {
+  return mongoose.connection.readyState === 1;
+}
+
+/**
+ * Disconnect from database
+ */
+export async function disconnectFromDatabase(): Promise<void> {
+  try {
+    await mongoose.disconnect();
+    global.mongooseCache.conn = null;
+    global.mongooseCache.promise = null;
+  } catch (error) {
+    console.error('Error disconnecting from MongoDB:', error);
+    throw error;
+  }
+}
+
+// Export models for convenience
+export { TriangleMeshModel, InteractionModel, SessionModel };
 
 export default connectToDatabase;
 
