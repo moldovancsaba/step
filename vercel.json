@@ -1,18 +1,14 @@
 {
   "version": 2,
-  "framework": "nextjs",
-  "buildCommand": "next build",
-  "devCommand": "next dev",
-  "installCommand": "npm install",
-  "outputDirectory": ".next",
-  "regions": ["fra1"],
-  "env": {
-    "NODE_ENV": "production"
-  },
-  "build": {
-    "env": {
-      "NODE_ENV": "production"
+  "buildCommand": "NODE_ENV=production next build",
+  "builds": [
+    {
+      "src": "package.json",
+      "use": "@vercel/next"
     }
+  ],
+  "env": {
+    "MONGODB_URI": "mongodb+srv://moldovancsaba:bYnmuz-5gaqqa-riqriw@cluster-step.crnvmcs.mongodb.net/step?retryWrites=true&w=majority&appName=Cluster-Step",
+    "NODE_ENV": "production"
   }
 }
-
