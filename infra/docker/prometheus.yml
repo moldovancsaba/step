@@ -1,0 +1,11 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: validator-node
+    static_configs:
+      # validator nodes expose /metrics on 9464+ when run locally (see services/validator-node)
+      - targets: ["host.docker.internal:9464", "host.docker.internal:9465", "host.docker.internal:9466"]
+  - job_name: gateway-api
+    static_configs:
+      - targets: ["host.docker.internal:9470"]

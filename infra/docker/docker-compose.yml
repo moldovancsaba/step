@@ -1,0 +1,71 @@
+# STEP local development stack — infrastructure services (DEV §19.2).
+# Application services (gateway-api, indexer, validator-node, merchant-api) are added
+# here as their Dockerfiles land; until then run them directly via cargo/pnpm against
+# these infra services.
+#
+# NOTE: this Compose file has not been boot-verified in CI yet — the initial build
+# machine had no Docker daemon. Verification is tracked in the release log.
+
+name: step-local
+
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: step
+      POSTGRES_PASSWORD: step_local_dev_only
+      POSTGRES_DB: step
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U step"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  ipfs:
+    image: ipfs/kubo:v0.32.1
+    ports:
+      - "5001:5001"   # API
+      - "8081:8080"   # gateway
+    volumes:
+      - ipfsdata:/data/ipfs
+
+  anvil:
+    image: ghcr.io/foundry-rs/foundry:latest
+    entrypoint: ["anvil", "--host", "0.0.0.0", "--chain-id", "31337", "--block-time", "2"]
+    ports:
+      - "8545:8545"
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+
+  grafana:
+    image: grafana/grafana-oss:11.1.0
+    ports:
+      - "3009:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: step_local_dev_only
+    depends_on:
+      - prometheus
+
+  loki:
+    image: grafana/loki:3.1.0
+    ports:
+      - "3100:3100"
+
+volumes:
+  pgdata:
+  ipfsdata:

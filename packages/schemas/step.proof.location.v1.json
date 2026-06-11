@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.step.invalid/step.proof.location.v1.json",
+  "title": "STEP location proof claim (step.proof.location.v1)",
+  "description": "Signed mining claim produced by the miner app. The app never claims final validity; it only produces evidence (DEV §6.4). Raw coordinates in this object exist ONLY in the encrypted off-chain evidence path — this object must never be written on-chain or to logs (PRV-001).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "wallet_address",
+    "triangle_id",
+    "mesh_level",
+    "latitude",
+    "longitude",
+    "horizontal_accuracy_m",
+    "timestamp_utc",
+    "nonce",
+    "integrity_mode",
+    "signature"
+  ],
+  "properties": {
+    "schema_version": { "const": "step.proof.location.v1" },
+    "wallet_address": { "type": "string", "pattern": "^0x[0-9a-fA-F]{40}$" },
+    "triangle_id": {
+      "type": "string",
+      "pattern": "^STEP-[0-9]{1,2}-F(0[0-9]|1[0-9])(-[0-3]+)?$",
+      "description": "Deterministic triangle ID per step-mesh-v1 (ADR-002): STEP-{level}-F{face:02}[-{base4path}]"
+    },
+    "mesh_level": { "type": "integer", "minimum": 1, "maximum": 30 },
+    "latitude": { "type": "number", "minimum": -90, "maximum": 90 },
+    "longitude": { "type": "number", "minimum": -180, "maximum": 180 },
+    "horizontal_accuracy_m": { "type": "number", "exclusiveMinimum": 0, "maximum": 10000 },
+    "altitude_m": { "type": "number" },
+    "vertical_accuracy_m": { "type": "number", "minimum": 0 },
+    "timestamp_utc": { "type": "string", "format": "date-time" },
+    "nonce": { "type": "string", "minLength": 16, "maxLength": 128, "description": "Gateway-issued single-use challenge (ADR-017)" },
+    "integrity_mode": {
+      "enum": ["attested", "dev-unattested", "failed"],
+      "description": "ADR-015: 'attested' = real App Attest + DeviceCheck; 'dev-unattested' accepted only by validators with allow_dev_claims=true; never silently upgraded"
+    },
+    "app_attestation": { "type": "string", "description": "Opaque Apple App Attest token (base64); required when integrity_mode=attested" },
+    "device_integrity": { "type": "string", "description": "Opaque DeviceCheck token (base64); required when integrity_mode=attested" },
+    "previous_claim_hash": { "type": "string", "pattern": "^0x[0-9a-fA-F]{64}$" },
+    "campaign_id": { "type": "string", "description": "Present for sponsored oasis claims" },
+    "merchant_proof": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "L4 merchant proof (QR in alpha)",
+      "required": ["kind", "payload"],
+      "properties": {
+        "kind": { "enum": ["qr"] },
+        "payload": { "type": "string", "description": "Signed rotating QR payload scanned at the POI" }
+      }
+    },
+    "signature": {
+      "type": "string",
+      "pattern": "^0x[0-9a-fA-F]{130}$",
+      "description": "EIP-712 secp256k1 signature by wallet_address over the claim struct (domain: StepMiningClaim v1)"
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "integrity_mode": { "const": "attested" } } },
+      "then": { "required": ["app_attestation", "device_integrity"] }
+    }
+  ]
+}
