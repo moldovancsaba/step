@@ -1,0 +1,10 @@
+# Claude Code machine-local settings
+.claude/settings.local.json
+
+# Environment files — never commit secrets (DEV §19.3)
+.env
+.env.*
+!.env.example
+
+# OS noise
+.DS_Store
