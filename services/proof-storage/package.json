@@ -1,0 +1,27 @@
+{
+  "name": "@step/proof-storage",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.13.0",
+    "@noble/ciphers": "^1.0.0",
+    "@noble/hashes": "^1.5.0",
+    "@step/shared-types": "workspace:*",
+    "hono": "^4.6.0",
+    "multiformats": "^13.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.21",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}

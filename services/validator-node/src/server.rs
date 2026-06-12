@@ -43,9 +43,56 @@ pub struct ValidateResponse {
 pub fn router(state: Arc<AppState>) -> Router {
     Router::new()
         .route("/v1/validate", post(validate))
+        .route("/v1/mesh/resolve", get(mesh_resolve))
+        .route("/v1/mesh/triangle/{id}", get(mesh_triangle))
         .route("/healthz", get(healthz))
         .route("/metrics", get(metrics))
         .with_state(state)
+}
+
+#[derive(Debug, Deserialize)]
+struct ResolveQuery {
+    lat: f64,
+    lon: f64,
+    level: u8,
+}
+
+/// Canonical mesh resolution for TS consumers (gateway, web apps): one Rust
+/// implementation serves every platform that has no native binding yet
+/// (ADR-004; WASM binding is the MVP path).
+async fn mesh_resolve(
+    axum::extract::Query(q): axum::extract::Query<ResolveQuery>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let id = step_mesh_engine::lat_lon_to_triangle(q.lat, q.lon, q.level)
+        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+    Ok(Json(triangle_info(&id)))
+}
+
+async fn mesh_triangle(
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let id: step_mesh_engine::TriangleId = id
+        .parse()
+        .map_err(|e: step_mesh_engine::MeshError| (StatusCode::BAD_REQUEST, e.to_string()))?;
+    Ok(Json(triangle_info(&id)))
+}
+
+fn triangle_info(id: &step_mesh_engine::TriangleId) -> serde_json::Value {
+    let verts = step_mesh_engine::triangle_to_vertices(id);
+    let centroid = step_mesh_engine::triangle_centroid(id);
+    let neighbours = step_mesh_engine::neighbour_triangles(id);
+    serde_json::json!({
+        "triangle_id": id.to_string(),
+        "triangle_id_hash": format!("0x{}", hex::encode(triangle_id_hash(&id.to_string()))),
+        "level": id.level(),
+        "vertices": verts.iter().map(|v| serde_json::json!({"lat": v.lat_deg, "lon": v.lon_deg})).collect::<Vec<_>>(),
+        "centroid": {"lat": centroid.lat_deg, "lon": centroid.lon_deg},
+        "area_m2": step_mesh_engine::triangle_area_m2(id),
+        "min_side_m": step_mesh_engine::triangle_min_side_m(id),
+        "parent": step_mesh_engine::parent_triangle(id).map(|p| p.to_string()),
+        "neighbours": neighbours.iter().map(|n| n.to_string()).collect::<Vec<_>>(),
+        "mesh_spec_version": step_mesh_engine::MESH_SPEC_VERSION,
+    })
 }
 
 async fn healthz() -> &'static str {
@@ -391,5 +438,79 @@ mod tests {
             .unwrap();
         let bytes = resp.into_body().collect().await.unwrap().to_bytes();
         assert!(String::from_utf8_lossy(&bytes).contains("step_validator_claims_total"));
+    }
+}
+
+#[cfg(test)]
+mod mesh_api_tests {
+    use super::*;
+    use crate::state::NodeConfig;
+    use http_body_util::BodyExt;
+    use k256::ecdsa::SigningKey;
+    use tower::ServiceExt;
+
+    fn state() -> Arc<AppState> {
+        let config = NodeConfig {
+            port: 0,
+            chain_id: 31337,
+            verifier_contract: "0x610178dA211FEF7D417bC0e6FeD39F05609AD788".into(),
+            validator_private_key: hex::encode([0x22; 32]),
+            gateway_nonce_secret: "s".into(),
+            allow_dev_claims: true,
+            params_file: concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../../config/protocol-params.alpha.json"
+            )
+            .into(),
+            wallet_rate_limit_per_hour: 5,
+        };
+        Arc::new(AppState::new(config, SigningKey::from_slice(&[0x22; 32]).unwrap()))
+    }
+
+    #[tokio::test]
+    async fn mesh_resolve_and_triangle_round_trip() {
+        let app = router(state());
+        let resp = app
+            .clone()
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri("/v1/mesh/resolve?lat=47.4979&lon=19.0402&level=10")
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let json: serde_json::Value = serde_json::from_slice(
+            &resp.into_body().collect().await.unwrap().to_bytes(),
+        )
+        .unwrap();
+        let id = json["triangle_id"].as_str().unwrap().to_string();
+        assert!(id.starts_with("STEP-10-F"));
+        assert_eq!(json["vertices"].as_array().unwrap().len(), 3);
+        assert_eq!(json["neighbours"].as_array().unwrap().len(), 3);
+
+        let resp2 = app
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri(format!("/v1/mesh/triangle/{id}"))
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp2.status(), StatusCode::OK);
+
+        // Invalid inputs are 400.
+        let bad = router(state())
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri("/v1/mesh/resolve?lat=99&lon=0&level=10")
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(bad.status(), StatusCode::BAD_REQUEST);
     }
 }

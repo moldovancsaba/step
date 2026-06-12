@@ -11,3 +11,5 @@ packages:
   - "apps/web"
   - "apps/merchant-dashboard"
   - "apps/protocol-admin"
+allowBuilds:
+  esbuild: true
