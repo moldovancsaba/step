@@ -1,0 +1,23 @@
+[package]
+name = "step-validator-node"
+version = "0.1.0"
+description = "STEP validator node: deterministic claim validation + EIP-712 vote signing"
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+step-validation-rules = { path = "../../packages/validation-rules" }
+step-mesh-engine = { path = "../../packages/mesh-engine" }
+axum = "0.8"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+k256 = { version = "0.13", features = ["ecdsa"] }
+hex = "0.4"
+time = { version = "0.3", features = ["parsing", "formatting"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"

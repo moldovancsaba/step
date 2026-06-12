@@ -2,6 +2,8 @@
 resolver = "2"
 members = [
     "packages/mesh-engine",
+    "packages/validation-rules",
+    "services/validator-node",
 ]
 
 [workspace.package]
