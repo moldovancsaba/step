@@ -224,6 +224,31 @@ importers:
         specifier: ^3.0.0
         version: 3.2.6(@types/node@22.19.21)(tsx@4.22.4)
 
+  tests/e2e:
+    dependencies:
+      '@step/api-client':
+        specifier: workspace:*
+        version: link:../../packages/api-client
+      '@step/proof-protocol':
+        specifier: workspace:*
+        version: link:../../packages/proof-protocol
+      '@step/shared-types':
+        specifier: workspace:*
+        version: link:../../packages/shared-types
+      viem:
+        specifier: ^2.21.0
+        version: 2.52.2(typescript@5.9.3)
+    devDependencies:
+      '@types/node':
+        specifier: ^22
+        version: 22.19.21
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.6(@types/node@22.19.21)(tsx@4.22.4)
+
 packages:
 
   '@adraffy/ens-normalize@1.11.1':

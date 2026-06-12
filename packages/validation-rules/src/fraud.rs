@@ -63,8 +63,8 @@ pub fn score_claim(
     if let (Some(prev), Some(now_ts)) = (previous, parse_ts(claim_ts)) {
         if let Some(prev_ts) = parse_ts(&prev.timestamp_utc) {
             let dt = (now_ts - prev_ts).as_seconds_f64();
+            let d = distance_m(prev.latitude, prev.longitude, claim_lat, claim_lon);
             if dt > 0.0 {
-                let d = distance_m(prev.latitude, prev.longitude, claim_lat, claim_lon);
                 let speed = d / dt;
                 if speed > max_plausible_speed_mps {
                     signals.push(FraudSignal {
@@ -81,6 +81,16 @@ pub fn score_claim(
                     signal: "teleport".into(),
                     value: 1.0,
                     detail: "claim predates previous accepted claim".into(),
+                });
+            } else if d > accuracy_m.max(25.0) {
+                // Identical second-granularity timestamps but materially
+                // different locations: instantaneous teleport. Without this
+                // branch, two same-second claims from different cities would
+                // evade both the speed and backdating checks.
+                signals.push(FraudSignal {
+                    signal: "teleport".into(),
+                    value: 1.0,
+                    detail: format!("{d:.0} m displacement at identical timestamp"),
                 });
             }
         }
