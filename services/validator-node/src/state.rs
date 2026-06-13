@@ -26,6 +26,25 @@ impl NodeConfig {
         fn req(k: &str) -> Result<String, String> {
             std::env::var(k).map_err(|_| format!("missing env {k}"))
         }
+        // Verifier address: explicit env wins; otherwise read it from the shared
+        // deployments file (container deployments mount it as a volume, matching
+        // how the TS services consume STEP_DEPLOYMENTS_FILE).
+        let verifier_contract = match std::env::var("VERIFIER_CONTRACT_ADDRESS") {
+            Ok(addr) => addr,
+            Err(_) => {
+                let path = std::env::var("STEP_DEPLOYMENTS_FILE").map_err(|_| {
+                    "set VERIFIER_CONTRACT_ADDRESS or STEP_DEPLOYMENTS_FILE".to_string()
+                })?;
+                let raw = std::fs::read_to_string(&path)
+                    .map_err(|e| format!("read {path}: {e}"))?;
+                let v: serde_json::Value =
+                    serde_json::from_str(&raw).map_err(|e| format!("parse {path}: {e}"))?;
+                v.get("MiningClaimVerifier")
+                    .and_then(|x| x.as_str())
+                    .ok_or(format!("MiningClaimVerifier missing in {path}"))?
+                    .to_string()
+            }
+        };
         Ok(NodeConfig {
             port: std::env::var("VALIDATOR_PORT")
                 .unwrap_or_else(|_| "9100".into())
@@ -34,7 +53,7 @@ impl NodeConfig {
             chain_id: req("STEP_CHAIN_ID")?
                 .parse()
                 .map_err(|_| "bad STEP_CHAIN_ID")?,
-            verifier_contract: req("VERIFIER_CONTRACT_ADDRESS")?,
+            verifier_contract,
             validator_private_key: req("VALIDATOR_PRIVATE_KEY")?,
             gateway_nonce_secret: req("GATEWAY_NONCE_SECRET")?,
             allow_dev_claims: std::env::var("VALIDATOR_ALLOW_DEV_CLAIMS")

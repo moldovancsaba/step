@@ -1,0 +1,248 @@
+# STEP pilot deployment stack (containerised, ADR-005/006 alpha topology).
+#
+# Brings up the full controlled pilot: internal EVM testnet, one-shot contract
+# deploy + validator registration, 3 foundation validators, the backend
+# services, the three web apps, and the operational infra (PostGIS, IPFS,
+# Redis, Prometheus/Grafana/Loki).
+#
+#   cp infra/deployment/.env.deploy.example infra/deployment/.env.deploy
+#   # edit secrets, then:
+#   docker compose -f infra/deployment/docker-compose.deploy.yml --env-file infra/deployment/.env.deploy up -d --build
+#
+# NOT boot-verified in this environment (no Docker daemon). The identical wiring
+# is proven by scripts/dev/up.mjs (native) + scripts/dev/smoke.mjs and the E2E
+# suite. Production note: this is an internal testnet pilot — NOT mainnet.
+# Mainnet/audit/legal gates are tracked in docs/operations/STEP_release_log.md.
+
+name: step-pilot
+
+x-deployments-volume: &deployments-vol
+  - deployments:/shared:ro
+
+services:
+  chain:
+    image: ghcr.io/foundry-rs/foundry:latest
+    entrypoint: ["anvil", "--host", "0.0.0.0", "--chain-id", "31337", "--state", "/data/anvil-state.json"]
+    ports: ["8545:8545"]
+    volumes: ["chaindata:/data"]
+    healthcheck:
+      test: ["CMD", "cast", "block-number", "--rpc-url", "http://127.0.0.1:8545"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # One-shot: deploy contracts + register validators, write address book to the
+  # shared volume. Idempotent — skips if already deployed (deployed.ok marker).
+  contracts-deploy:
+    image: ghcr.io/foundry-rs/foundry:latest
+    depends_on:
+      chain:
+        condition: service_healthy
+    working_dir: /contracts
+    volumes:
+      - ../../contracts:/contracts
+      - deployments:/shared
+    environment:
+      DEPLOYER_PRIVATE_KEY: ${ADMIN_PRIVATE_KEY}
+      STEP_PARAM_DELAY: ${STEP_PARAM_DELAY:-86400}
+      RPC: http://chain:8545
+      VALIDATOR_ADDRS: ${VALIDATOR_ADDRS}
+    entrypoint:
+      - sh
+      - -c
+      - |
+        set -e
+        if [ -f /shared/deployed.ok ]; then echo "already deployed; skipping"; exit 0; fi
+        forge script script/Deploy.s.sol --rpc-url $$RPC --broadcast
+        cp deployments/31337.json /shared/31337.json
+        REG=$$(node -e "console.log(require('/shared/31337.json').ValidatorRegistry)" 2>/dev/null || sed -n 's/.*"ValidatorRegistry": *"\([^"]*\)".*/\1/p' /shared/31337.json)
+        for A in $$(echo $$VALIDATOR_ADDRS | tr ',' ' '); do
+          cast send $$REG "registerValidator(address,uint8,uint32)" $$A 5 50 --rpc-url $$RPC --private-key $$DEPLOYER_PRIVATE_KEY
+        done
+        touch /shared/deployed.ok
+        echo "deploy + validator registration complete"
+
+  validator-1: &validator
+    build:
+      context: ../..
+      dockerfile: services/validator-node/Dockerfile
+    depends_on:
+      contracts-deploy:
+        condition: service_completed_successfully
+    volumes: *deployments-vol
+    environment:
+      VALIDATOR_PORT: 9100
+      STEP_CHAIN_ID: 31337
+      STEP_DEPLOYMENTS_FILE: /shared/31337.json
+      VALIDATOR_PRIVATE_KEY: ${VALIDATOR_1_KEY}
+      GATEWAY_NONCE_SECRET: ${GATEWAY_NONCE_SECRET}
+      VALIDATOR_ALLOW_DEV_CLAIMS: "false"   # pilot nodes reject unattested claims (ADR-015)
+  validator-2:
+    <<: *validator
+    environment:
+      VALIDATOR_PORT: 9100
+      STEP_CHAIN_ID: 31337
+      STEP_DEPLOYMENTS_FILE: /shared/31337.json
+      VALIDATOR_PRIVATE_KEY: ${VALIDATOR_2_KEY}
+      GATEWAY_NONCE_SECRET: ${GATEWAY_NONCE_SECRET}
+      VALIDATOR_ALLOW_DEV_CLAIMS: "false"
+  validator-3:
+    <<: *validator
+    environment:
+      VALIDATOR_PORT: 9100
+      STEP_CHAIN_ID: 31337
+      STEP_DEPLOYMENTS_FILE: /shared/31337.json
+      VALIDATOR_PRIVATE_KEY: ${VALIDATOR_3_KEY}
+      GATEWAY_NONCE_SECRET: ${GATEWAY_NONCE_SECRET}
+      VALIDATOR_ALLOW_DEV_CLAIMS: "false"
+
+  gateway-api:
+    build: &ts-build
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.ts-service
+      args: { SERVICE: gateway-api }
+    depends_on: [validator-1, validator-2, validator-3, proof-storage]
+    ports: ["8080:8080"]
+    volumes: *deployments-vol
+    environment:
+      GATEWAY_PORT: 8080
+      STEP_CHAIN_ID: 31337
+      STEP_RPC_URL: http://chain:8545
+      STEP_DEPLOYMENTS_FILE: /shared/31337.json
+      STEP_PROTOCOL_PARAMS: /repo/config/protocol-params.alpha.json
+      RELAYER_PRIVATE_KEY: ${RELAYER_PRIVATE_KEY}
+      GATEWAY_NONCE_SECRET: ${GATEWAY_NONCE_SECRET}
+      VALIDATOR_URLS: http://validator-1:9100,http://validator-2:9100,http://validator-3:9100
+      PROOF_STORAGE_URL: http://proof-storage:8095
+
+  indexer:
+    build: { <<: *ts-build, args: { SERVICE: indexer } }
+    depends_on: [chain, postgres]
+    ports: ["8090:8090"]
+    volumes: *deployments-vol
+    environment:
+      INDEXER_PORT: 8090
+      STEP_CHAIN_ID: 31337
+      STEP_RPC_URL: http://chain:8545
+      STEP_DEPLOYMENTS_FILE: /shared/31337.json
+
+  proof-storage:
+    build: { <<: *ts-build, args: { SERVICE: proof-storage } }
+    ports: ["8095:8095"]
+    environment:
+      PROOF_STORAGE_PORT: 8095
+      EVIDENCE_MASTER_KEY: ${EVIDENCE_MASTER_KEY}
+      FOUNDATION_API_TOKEN: ${FOUNDATION_API_TOKEN}
+
+  merchant-api:
+    build: { <<: *ts-build, args: { SERVICE: merchant-api } }
+    depends_on: [validator-1]
+    ports: ["8097:8097"]
+    environment:
+      MERCHANT_API_PORT: 8097
+      MESH_API_URL: http://validator-1:9100
+      FOUNDATION_API_TOKEN: ${FOUNDATION_API_TOKEN}
+      MERCHANT_QR_SECRET: ${MERCHANT_QR_SECRET}
+
+  exchange-service:
+    build: { <<: *ts-build, args: { SERVICE: exchange-service } }
+    ports: ["8096:8096"]
+    environment:
+      EXCHANGE_PORT: 8096
+      STEP_PROTOCOL_PARAMS: /repo/config/protocol-params.alpha.json
+      FOUNDATION_API_TOKEN: ${FOUNDATION_API_TOKEN}
+
+  campaign-worker:
+    build: { <<: *ts-build, args: { SERVICE: campaign-worker } }
+    depends_on: [indexer]
+    volumes: *deployments-vol
+    environment:
+      STEP_CHAIN_ID: 31337
+      STEP_RPC_URL: http://chain:8545
+      STEP_DEPLOYMENTS_FILE: /shared/31337.json
+      INDEXER_URL: http://indexer:8090
+      WORKER_PRIVATE_KEY: ${WORKER_PRIVATE_KEY}
+      WORKER_INTERVAL_MS: 15000
+
+  explorer:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.web
+      args:
+        APP: web
+        NEXT_PUBLIC_INDEXER_URL: ${PUBLIC_INDEXER_URL}
+        NEXT_PUBLIC_MESH_API_URL: ${PUBLIC_MESH_API_URL}
+        PORT: 3000
+    depends_on: [indexer]
+    ports: ["3000:3000"]
+
+  merchant-dashboard:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.web
+      args: { APP: merchant-dashboard, PORT: 3001, NEXT_PUBLIC_INDEXER_URL: "${PUBLIC_INDEXER_URL}" }
+    ports: ["3001:3001"]
+    environment:
+      STEP_RPC_URL: http://chain:8545
+      STEP_DEPLOYMENTS_FILE: /shared/31337.json
+      MANAGED_MERCHANT_PRIVATE_KEY: ${MANAGED_MERCHANT_PRIVATE_KEY}
+      MERCHANT_API_URL: http://merchant-api:8097
+    volumes: *deployments-vol
+
+  protocol-admin:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.web
+      args: { APP: protocol-admin, PORT: 3002, NEXT_PUBLIC_INDEXER_URL: "${PUBLIC_INDEXER_URL}" }
+    ports: ["3002:3002"]
+    environment:
+      STEP_RPC_URL: http://chain:8545
+      STEP_DEPLOYMENTS_FILE: /shared/31337.json
+      ADMIN_PRIVATE_KEY: ${ADMIN_PRIVATE_KEY}
+      MERCHANT_API_URL: http://merchant-api:8097
+      FOUNDATION_API_TOKEN: ${FOUNDATION_API_TOKEN}
+      STEP_PROTOCOL_PARAMS: /repo/config/protocol-params.alpha.json
+    volumes: *deployments-vol
+
+  postgres:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: step
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: step
+    volumes: ["pgdata:/var/lib/postgresql/data", "../docker/initdb:/docker-entrypoint-initdb.d:ro"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U step"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  ipfs:
+    image: ipfs/kubo:v0.32.1
+    ports: ["5001:5001"]
+    volumes: ["ipfsdata:/data/ipfs"]
+
+  redis:
+    image: redis:7-alpine
+
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    ports: ["9090:9090"]
+    volumes: ["../docker/prometheus.yml:/etc/prometheus/prometheus.yml:ro"]
+
+  grafana:
+    image: grafana/grafana-oss:11.1.0
+    ports: ["3009:3000"]
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD}
+    depends_on: [prometheus]
+
+  loki:
+    image: grafana/loki:3.1.0
+    ports: ["3100:3100"]
+
+volumes:
+  chaindata:
+  deployments:
+  pgdata:
+  ipfsdata:
