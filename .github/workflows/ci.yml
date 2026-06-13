@@ -37,11 +37,36 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm -r typecheck
-      - run: pnpm -r test
+      # Unit/integration tests only; the full-stack E2E runs in its own job
+      # (it needs foundry + cargo + a spawned chain).
+      - run: pnpm -r --filter='!@step/e2e' test
       - run: pnpm -r build
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: foundry-rs/foundry-toolchain@v1
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: pnpm install --frozen-lockfile
+      # Spawns anvil + deployed contracts + 3 release validator nodes + gateway
+      # and asserts the full claim → quorum → mint flow on real components.
+      - run: pnpm --filter @step/e2e test
+
+  swift:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - run: swift test
+        working-directory: apps/ios/StepCore
 
   schemas:
     runs-on: ubuntu-latest
@@ -50,13 +75,18 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npx --yes ajv-cli@5 compile --spec=draft2020 -s packages/schemas/step.proof.location.v1.json
-      - run: npx --yes ajv-cli@5 compile --spec=draft2020 -s packages/schemas/step.evidence.bundle.v1.json -r packages/schemas/step.proof.location.v1.json
+      # ajv-formats supplies the "date-time" format used by our schemas.
+      - run: npx --yes -p ajv-cli@5 -p ajv-formats@3 ajv compile --spec=draft2020 -c ajv-formats -s packages/schemas/step.proof.location.v1.json
+      - run: npx --yes -p ajv-cli@5 -p ajv-formats@3 ajv compile --spec=draft2020 -c ajv-formats -s packages/schemas/step.evidence.bundle.v1.json -r packages/schemas/step.proof.location.v1.json
 
   secrets:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Filesystem scan (no-git) avoids history/submodule scan errors and needs
+      # no license; scans the working tree for committed secrets.
+      - name: gitleaks (filesystem scan)
+        run: |
+          VERSION=8.21.2
+          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_linux_x64.tar.gz" | tar -xz gitleaks
+          ./gitleaks dir . --no-banner --redact --exit-code 1

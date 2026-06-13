@@ -6,7 +6,9 @@ fn main() {
     let key = SigningKey::from_slice(&[0x42; 32]).unwrap();
     let wallet_addr = sign::signer_address(&key);
     let wallet = sign::format_address(&wallet_addr);
-    let triangle = step_mesh_engine::lat_lon_to_triangle(47.4979, 19.0402, 21).unwrap().to_string();
+    let triangle = step_mesh_engine::lat_lon_to_triangle(47.4979, 19.0402, 21)
+        .unwrap()
+        .to_string();
     let nonce = "f39f000000000000000000000000000000000000:2000000000:cafe0123";
     // keyed tag with secret "vector-secret"
     let mut keyed = Vec::new();
@@ -44,17 +46,20 @@ fn main() {
     let contract = sign::parse_address("0x610178dA211FEF7D417bC0e6FeD39F05609AD788").unwrap();
     let vote_digest = sign::eip712_vote_digest(31337, &contract, &ch, &th, &wallet_addr, true);
 
-    println!("{}", serde_json::json!({
-        "miner_private_key": "0x4242424242424242424242424242424242424242424242424242424242424242",
-        "wallet": wallet,
-        "triangle_id": triangle,
-        "nonce_secret": "vector-secret",
-        "nonce": full_nonce,
-        "canonical_message": msg,
-        "claim_hash": format!("0x{}", hex::encode(ch)),
-        "triangle_id_hash": format!("0x{}", hex::encode(th)),
-        "miner_signature": claim.signature,
-        "vote_digest_chain31337_contract_0x610178dA211FEF7D417bC0e6FeD39F05609AD788": format!("0x{}", hex::encode(vote_digest)),
-        "claim_json": claim,
-    }));
+    println!(
+        "{}",
+        serde_json::json!({
+            "miner_private_key": "0x4242424242424242424242424242424242424242424242424242424242424242",
+            "wallet": wallet,
+            "triangle_id": triangle,
+            "nonce_secret": "vector-secret",
+            "nonce": full_nonce,
+            "canonical_message": msg,
+            "claim_hash": format!("0x{}", hex::encode(ch)),
+            "triangle_id_hash": format!("0x{}", hex::encode(th)),
+            "miner_signature": claim.signature,
+            "vote_digest_chain31337_contract_0x610178dA211FEF7D417bC0e6FeD39F05609AD788": format!("0x{}", hex::encode(vote_digest)),
+            "claim_json": claim,
+        })
+    );
 }

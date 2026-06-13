@@ -35,8 +35,8 @@ impl NodeConfig {
                 let path = std::env::var("STEP_DEPLOYMENTS_FILE").map_err(|_| {
                     "set VERIFIER_CONTRACT_ADDRESS or STEP_DEPLOYMENTS_FILE".to_string()
                 })?;
-                let raw = std::fs::read_to_string(&path)
-                    .map_err(|e| format!("read {path}: {e}"))?;
+                let raw =
+                    std::fs::read_to_string(&path).map_err(|e| format!("read {path}: {e}"))?;
                 let v: serde_json::Value =
                     serde_json::from_str(&raw).map_err(|e| format!("parse {path}: {e}"))?;
                 v.get("MiningClaimVerifier")

@@ -464,7 +464,10 @@ mod mesh_api_tests {
             .into(),
             wallet_rate_limit_per_hour: 5,
         };
-        Arc::new(AppState::new(config, SigningKey::from_slice(&[0x22; 32]).unwrap()))
+        Arc::new(AppState::new(
+            config,
+            SigningKey::from_slice(&[0x22; 32]).unwrap(),
+        ))
     }
 
     #[tokio::test]
@@ -481,10 +484,8 @@ mod mesh_api_tests {
             .await
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        let json: serde_json::Value = serde_json::from_slice(
-            &resp.into_body().collect().await.unwrap().to_bytes(),
-        )
-        .unwrap();
+        let json: serde_json::Value =
+            serde_json::from_slice(&resp.into_body().collect().await.unwrap().to_bytes()).unwrap();
         let id = json["triangle_id"].as_str().unwrap().to_string();
         assert!(id.starts_with("STEP-10-F"));
         assert_eq!(json["vertices"].as_array().unwrap().len(), 3);
