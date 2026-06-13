@@ -8,11 +8,16 @@ on:
 jobs:
   rust:
     runs-on: ubuntu-latest
+    env:
+      CARGO_NET_RETRY: "10"        # tolerate transient crates.io download resets
+      CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+      CARGO_TERM_COLOR: always
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
@@ -46,11 +51,15 @@ jobs:
 
   e2e:
     runs-on: ubuntu-latest
+    env:
+      CARGO_NET_RETRY: "10"
+      CARGO_NET_GIT_FETCH_WITH_CLI: "true"
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
       - uses: foundry-rs/foundry-toolchain@v1
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
@@ -62,9 +71,15 @@ jobs:
       - run: pnpm --filter @step/e2e test
 
   swift:
-    runs-on: macos-14
+    # macos-15 ships Xcode 16 / Swift 6, which includes the `Testing` module
+    # used by the StepCore conformance tests.
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+      - run: swift --version
       - run: swift test
         working-directory: apps/ios/StepCore
 

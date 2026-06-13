@@ -1,5 +1,17 @@
 # STEP Release Log
 
+## alpha-0.2 — 2026-06-13 (go-live enablement)
+
+Pushed to GitHub (`moldovancsaba/step`, PR #1 into `main`). Adds the deployable/operable layer on top of alpha-0.1:
+
+- **One-command native pilot bring-up** (`scripts/dev/up.mjs` / `down.mjs` / `smoke.mjs`): launches the full backend stack and verifies it end-to-end. **Verified on the build machine — smoke 17/17.**
+- **Container artifacts**: multi-stage Rust Dockerfile, parameterised TS-service and Next.js Dockerfiles, and `infra/deployment/docker-compose.deploy.yml` (full pilot stack with idempotent contract deploy + validator registration) + `.env.deploy.example`. Authored for the pilot host; not boot-verified here (no Docker daemon).
+- **Validator** now resolves the verifier address from `STEP_DEPLOYMENTS_FILE` (container-friendly).
+- **CI green on GitHub runners**: fixed all jobs (rust fmt, ajv-formats schema validation, filesystem gitleaks scan, web `--passWithNoTests`); added dedicated `e2e` (full-stack, passed on a fresh runner) and `swift` (macOS/Xcode 16) jobs; cargo network-retry + cache hardening. Untracked the per-env `contracts/deployments/31337.json` artifact.
+- **[Go-live runbook](STEP_go_live_runbook.md)**: native + container bring-up, required pilot config changes, and the binding go-live checklist separating in-repo engineering items from external gates (audit/legal/Apple/mainnet).
+
+CI status at push: contracts, e2e, web, schemas, secrets green; rust/swift fixes applied for environmental issues (transient crates.io reset; runner Xcode version).
+
 ## alpha-0.1 — 2026-06-12 (initial engineering delivery)
 
 **Commits:** `3965476` docs baseline → `e5dc9a8` M0 → `843f14a` M1 mesh → `561c7b5` M3 contracts → `e2964dd` M4 validators → M2/M4 services → E2E green → M5 web apps → iOS StepCore → this documentation set.

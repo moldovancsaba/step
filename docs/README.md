@@ -43,6 +43,7 @@ STEP is a proof-of-location / proof-of-presence blockchain system on a determini
 - [Repository structure](engineering/STEP_repository_structure.md)
 - [API contracts](engineering/STEP_api_contracts.md)
 - [Data models](engineering/STEP_data_models.md)
+- [Go-live runbook](operations/STEP_go_live_runbook.md) — native + container bring-up, the binding go-live checklist, external gates
 - [Incident response](operations/STEP_incident_response.md)
 - [Release log](operations/STEP_release_log.md)
 
