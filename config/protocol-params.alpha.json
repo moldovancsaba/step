@@ -1,0 +1,49 @@
+{
+  "$comment": "STEP protocol parameter registry — alpha environment. Every parameter marked UNFROZEN is a working default pending the tokenomics constitution or MESH audit, NOT a decided value (master prompt §6.3, ADR-003/007/008). No code may hardcode these values; load them from this registry or the matching on-chain registry.",
+  "registry_version": "alpha.1",
+  "mesh": {
+    "mesh_spec_version": "step-mesh-v1",
+    "mineable_levels": { "value": [21], "status": "UNFROZEN", "adr": "ADR-003" },
+    "boundary_tie_eps": { "value": 1e-12, "status": "FROZEN-ALPHA", "adr": "ADR-002", "comment": "unit-sphere edge-plane tolerance band for lowest-ID tie-break" },
+    "max_accuracy_fraction_of_side": { "value": 1.0, "status": "UNFROZEN", "requirement": "MESH-008", "comment": "claims with accuracy radius > fraction × triangle side are rejected/downgraded" }
+  },
+  "trinity": {
+    "trinity_per_step": { "value": 100000000, "status": "UNFROZEN", "adr": "OPEN-1", "comment": "1 STEP = 100,000,000 Trinity (documented recommendation, unconfirmed)" },
+    "indivisible": { "value": true, "status": "FROZEN", "requirement": "PRD-004" }
+  },
+  "mining": {
+    "collector_slots_per_triangle": { "value": 27, "status": "UNFROZEN", "adr": "ADR-007" },
+    "reward_curve": { "value": "geometric_halving", "status": "UNFROZEN", "adr": "ADR-007" },
+    "base_reward_trinity": { "value": 67108864, "status": "UNFROZEN", "adr": "ADR-007", "comment": "2^26; slot 27 of halving curve = exactly 1 Trinity" },
+    "opening_delay_seconds": { "value": 604800, "status": "UNFROZEN", "requirement": "MIN-004", "comment": "legacy 168h rule, parameterised" },
+    "post_claim_cooldown_seconds": { "value": 3600, "status": "UNFROZEN", "requirement": "MIN-004" }
+  },
+  "treasury": {
+    "foundation_twin_bps": { "value": 10000, "status": "UNFROZEN", "adr": "ADR-008", "comment": "100% bootstrap-phase rate on testnet only" },
+    "foundation_twin_cap_trinity": { "value": 0, "status": "UNFROZEN", "adr": "ADR-008", "comment": "0 = no cap configured" }
+  },
+  "proof": {
+    "nonce_ttl_seconds": { "value": 120, "status": "FROZEN-ALPHA", "adr": "ADR-017" },
+    "claim_timestamp_window_seconds": { "value": 300, "status": "UNFROZEN", "requirement": "POP-014" },
+    "max_accuracy_radius_m_l1": { "value": 25.0, "status": "UNFROZEN", "requirement": "POP-014" },
+    "max_accuracy_radius_m_l2": { "value": 15.0, "status": "UNFROZEN", "requirement": "POP-014" },
+    "max_plausible_speed_mps": { "value": 69.4, "status": "UNFROZEN", "requirement": "POP-006", "comment": "250 km/h — generous ground-travel bound for pilot-area teleport detection" },
+    "fraud_score_reject_threshold": { "value": 0.7, "status": "UNFROZEN", "requirement": "POP-014" }
+  },
+  "validators": {
+    "weights": {
+      "value": { "mobile_peer": 1, "approved_point": 5, "merchant": 20, "infrastructure": 25, "protocol": 50 },
+      "status": "UNFROZEN",
+      "source": "SYS §12.4 example weights"
+    },
+    "quorum_threshold_weight": { "value": 100, "status": "UNFROZEN", "requirement": "VAL-002", "comment": "alpha: 2 protocol validators or equivalent mix" }
+  },
+  "campaigns": {
+    "reference_price_eur_per_step": { "value": 1.0, "status": "UNFROZEN", "adr": "ADR-011", "comment": "pilot campaign accounting reference price only — not a market value or promise (HARD §8.4)" },
+    "max_campaign_duration_days": { "value": 92, "status": "UNFROZEN" },
+    "default_per_wallet_limit": { "value": 1, "status": "UNFROZEN" }
+  },
+  "chain": {
+    "chain_id": { "value": 31337, "status": "FROZEN-ALPHA", "comment": "Anvil local / internal testnet (ADR-006)" }
+  }
+}

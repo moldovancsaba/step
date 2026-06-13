@@ -1,0 +1,32 @@
+# Shared Dockerfile for the STEP TypeScript services (gateway-api, indexer,
+# proof-storage, merchant-api, exchange-service, campaign-worker).
+# Build from the REPO ROOT, selecting the service via SERVICE:
+#   docker build -f infra/docker/Dockerfile.ts-service \
+#     --build-arg SERVICE=gateway-api -t step/gateway-api .
+#
+# Runs the service under tsx (alpha; matches scripts/dev/up.mjs). NOT
+# build-verified here (no Docker daemon) — authored for the pilot host.
+FROM node:22-slim AS base
+ENV PNPM_HOME=/pnpm PATH=/pnpm:$PATH
+RUN corepack enable
+WORKDIR /repo
+
+# Install the whole workspace (frozen lockfile) so workspace deps resolve.
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
+COPY tsconfig.base.json ./
+# Copy every package manifest first for cached dependency resolution.
+COPY packages ./packages
+COPY services ./services
+RUN pnpm install --frozen-lockfile --prod=false
+
+ARG SERVICE
+ENV SERVICE=${SERVICE}
+RUN test -n "${SERVICE}" || (echo "build-arg SERVICE is required" && false)
+
+# Non-root runtime.
+RUN useradd -m -u 10001 step && chown -R step:step /repo
+USER step
+WORKDIR /repo/services/${SERVICE}
+
+# Required env varies per service; see infra/deployment/.env.deploy.example.
+ENTRYPOINT ["sh","-c","cd /repo && exec pnpm --filter @step/${SERVICE} exec tsx src/index.ts"]

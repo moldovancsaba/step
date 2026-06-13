@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.step.invalid/step.evidence.bundle.v1.json",
+  "title": "STEP evidence bundle (step.evidence.bundle.v1)",
+  "description": "Off-chain proof bundle. MUST be encrypted (XChaCha20-Poly1305 per ADR-014) before upload to content-addressed storage. Only its hash/CID is referenced on-chain (POP-008). Deletion = destruction of the wrapped bundle keys.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "claim_hash", "claim", "validator_signatures", "fraud_score", "proof_level", "created_at"],
+  "properties": {
+    "schema_version": { "const": "step.evidence.bundle.v1" },
+    "claim_hash": { "type": "string", "pattern": "^0x[0-9a-fA-F]{64}$", "description": "keccak256 of the EIP-712 claim digest" },
+    "claim": { "$ref": "https://schemas.step.invalid/step.proof.location.v1.json" },
+    "raw_location_samples": {
+      "type": "array",
+      "description": "Additional GNSS samples around claim time (sensitive — encrypted-only)",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["latitude", "longitude", "horizontal_accuracy_m", "timestamp_utc"],
+        "properties": {
+          "latitude": { "type": "number", "minimum": -90, "maximum": 90 },
+          "longitude": { "type": "number", "minimum": -180, "maximum": 180 },
+          "horizontal_accuracy_m": { "type": "number", "exclusiveMinimum": 0 },
+          "speed_mps": { "type": "number", "minimum": 0 },
+          "course_deg": { "type": "number", "minimum": 0, "maximum": 360 },
+          "timestamp_utc": { "type": "string", "format": "date-time" }
+        }
+      }
+    },
+    "attestation_verdicts": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "app_attest_verified": { "type": "boolean" },
+        "device_check_verified": { "type": "boolean" },
+        "verified_at": { "type": "string", "format": "date-time" },
+        "verifier": { "type": "string" }
+      }
+    },
+    "validator_signatures": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["validator_address", "validator_type", "weight", "verdict", "signature", "signed_at"],
+        "properties": {
+          "validator_address": { "type": "string", "pattern": "^0x[0-9a-fA-F]{40}$" },
+          "validator_type": { "enum": ["mobile_peer", "approved_point", "merchant", "venue", "infrastructure", "protocol"] },
+          "weight": { "type": "integer", "minimum": 1 },
+          "verdict": { "enum": ["approve", "reject"] },
+          "reject_reason": { "type": "string" },
+          "signature": { "type": "string", "pattern": "^0x[0-9a-fA-F]{130}$" },
+          "signed_at": { "type": "string", "format": "date-time" }
+        }
+      }
+    },
+    "merchant_confirmation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "merchant_id": { "type": "string" },
+        "poi_id": { "type": "string" },
+        "kind": { "enum": ["qr"] },
+        "verified": { "type": "boolean" },
+        "verified_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "fraud_score": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["score"],
+      "properties": {
+        "score": { "type": "number", "minimum": 0, "maximum": 1 },
+        "signals": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["signal", "value"],
+            "properties": {
+              "signal": { "enum": ["speed_violation", "teleport", "duplicate_device", "rate_limit", "accuracy_anomaly", "unattested", "wallet_clustering", "validator_affinity"] },
+              "value": { "type": "number" },
+              "detail": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "proof_level": { "enum": ["L1", "L2", "L3", "L4", "L5"] },
+    "created_at": { "type": "string", "format": "date-time" }
+  }
+}

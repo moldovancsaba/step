@@ -1,0 +1,17 @@
+[package]
+name = "step-mesh-engine"
+version = "0.1.0"
+description = "Canonical STEP spherical triangular MESH engine (step-mesh-v1)"
+edition.workspace = true
+license.workspace = true
+
+# Intentionally dependency-free: this crate is the deterministic protocol core and
+# must be auditable, portable (iOS staticlib, WASM), and buildable offline.
+[dependencies]
+
+[lib]
+crate-type = ["lib", "staticlib"]
+
+[[bin]]
+name = "golden-gen"
+path = "src/bin/golden_gen.rs"

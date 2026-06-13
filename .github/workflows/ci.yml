@@ -1,0 +1,107 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    env:
+      CARGO_NET_RETRY: "10"        # tolerate transient crates.io download resets
+      CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace
+
+  contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: foundry-rs/foundry-toolchain@v1
+      - run: forge build
+        working-directory: contracts
+      - run: forge test -vvv
+        working-directory: contracts
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -r typecheck
+      # Unit/integration tests only; the full-stack E2E runs in its own job
+      # (it needs foundry + cargo + a spawned chain).
+      - run: pnpm -r --filter='!@step/e2e' test
+      - run: pnpm -r build
+
+  e2e:
+    runs-on: ubuntu-latest
+    env:
+      CARGO_NET_RETRY: "10"
+      CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: foundry-rs/foundry-toolchain@v1
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: pnpm install --frozen-lockfile
+      # Spawns anvil + deployed contracts + 3 release validator nodes + gateway
+      # and asserts the full claim → quorum → mint flow on real components.
+      - run: pnpm --filter @step/e2e test
+
+  swift:
+    # macos-15 ships Xcode 16 / Swift 6, which includes the `Testing` module
+    # used by the StepCore conformance tests.
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+      - run: swift --version
+      - run: swift test
+        working-directory: apps/ios/StepCore
+
+  schemas:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # ajv-formats supplies the "date-time" format used by our schemas.
+      - run: npx --yes -p ajv-cli@5 -p ajv-formats@3 ajv compile --spec=draft2020 -c ajv-formats -s packages/schemas/step.proof.location.v1.json
+      - run: npx --yes -p ajv-cli@5 -p ajv-formats@3 ajv compile --spec=draft2020 -c ajv-formats -s packages/schemas/step.evidence.bundle.v1.json -r packages/schemas/step.proof.location.v1.json
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Filesystem scan (no-git) avoids history/submodule scan errors and needs
+      # no license; scans the working tree for committed secrets.
+      - name: gitleaks (filesystem scan)
+        run: |
+          VERSION=8.21.2
+          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_linux_x64.tar.gz" | tar -xz gitleaks
+          ./gitleaks dir . --no-banner --redact --exit-code 1

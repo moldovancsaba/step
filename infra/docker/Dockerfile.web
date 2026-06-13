@@ -1,0 +1,36 @@
+# Shared Dockerfile for the STEP Next.js apps (web explorer, merchant-dashboard,
+# protocol-admin). Build from the REPO ROOT, selecting the app via APP:
+#   docker build -f infra/docker/Dockerfile.web \
+#     --build-arg APP=web -t step/web . \
+#     --build-arg PORT=3000
+#
+# Uses Next standalone output. Public NEXT_PUBLIC_* URLs are baked at build
+# time, so pass them as build args for the target environment. NOT
+# build-verified here (no Docker daemon) — authored for the pilot host.
+FROM node:22-slim AS build
+ENV PNPM_HOME=/pnpm PATH=/pnpm:$PATH
+RUN corepack enable
+WORKDIR /repo
+COPY . .
+RUN pnpm install --frozen-lockfile --prod=false
+ARG APP
+ARG NEXT_PUBLIC_INDEXER_URL
+ARG NEXT_PUBLIC_MESH_API_URL
+ENV NEXT_PUBLIC_INDEXER_URL=${NEXT_PUBLIC_INDEXER_URL} \
+    NEXT_PUBLIC_MESH_API_URL=${NEXT_PUBLIC_MESH_API_URL}
+RUN test -n "${APP}" || (echo "build-arg APP is required" && false) \
+ && pnpm --filter @step/${APP}* run build
+
+FROM node:22-slim AS run
+ARG APP
+ARG PORT=3000
+RUN useradd -m -u 10001 step
+WORKDIR /app
+# Next standalone bundle + static assets (monorepo tracing root = repo root).
+COPY --from=build --chown=step:step /repo/apps/${APP}/.next/standalone ./
+COPY --from=build --chown=step:step /repo/apps/${APP}/.next/static ./apps/${APP}/.next/static
+ENV PORT=${PORT} HOSTNAME=0.0.0.0 NODE_ENV=production
+ENV APP_ENTRY=apps/${APP}/server.js
+USER step
+EXPOSE ${PORT}
+ENTRYPOINT ["sh","-c","exec node ${APP_ENTRY}"]

@@ -1,0 +1,15 @@
+[workspace]
+resolver = "2"
+members = [
+    "packages/mesh-engine",
+    "packages/validation-rules",
+    "services/validator-node",
+]
+
+[workspace.package]
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://example.invalid/step"
+
+[profile.release]
+lto = true

@@ -1,0 +1,17 @@
+packages:
+  - "packages/shared-types"
+  - "packages/api-client"
+  - "packages/proof-protocol"
+  - "services/gateway-api"
+  - "services/indexer"
+  - "services/merchant-api"
+  - "services/proof-storage"
+  - "services/exchange-service"
+  - "services/campaign-worker"
+  - "apps/web"
+  - "apps/merchant-dashboard"
+  - "apps/protocol-admin"
+  - "tests/e2e"
+allowBuilds:
+  esbuild: true
+  sharp: true
