@@ -21,13 +21,25 @@ node scripts/dev/down.mjs     # stop everything
 
 `up.mjs` generates per-run secrets into `.runtime/.env.runtime`, writes pidfiles and per-service logs under `.runtime/logs/`, and prints the service URLs. `smoke.mjs` asserts all health endpoints, a full natural-mining flow (mesh resolve → signed claim → quorum → on-chain mint + twin → indexer), merchant onboarding + rotating QR, and closed campaign-credit conversion. **This path is verified on the build machine — smoke passes 17/17.**
 
-Web apps (optional, separate terminals):
+Web apps (separate terminals). The **web miner** is the Apple-independent way to
+actually use the platform — anyone with a phone browser can mine:
 ```sh
+# Browser miner (:3003) — geolocation + in-browser wallet + signed claim.
+# Its server-side /api routes proxy to the stack, so no CORS setup is needed.
+GATEWAY_URL=http://127.0.0.1:8080 MESH_API_URL=http://127.0.0.1:9101 \
+STEP_RPC_URL=http://127.0.0.1:8545 STEP_DEPLOYMENTS_FILE=$PWD/contracts/deployments/31337.json \
+  pnpm --filter @step/web-miner dev
+
 pnpm --filter @step/web-explorer dev          # :3000  explorer
 pnpm --filter @step/merchant-dashboard dev     # :3001  merchant
 pnpm --filter @step/protocol-admin dev          # :3002  admin
-# point NEXT_PUBLIC_INDEXER_URL / NEXT_PUBLIC_MESH_API_URL at the running stack
+# explorer/merchant: point NEXT_PUBLIC_INDEXER_URL / NEXT_PUBLIC_MESH_API_URL at the stack
 ```
+
+> The web miner submits `dev-unattested` claims, so the validators must run with
+> `VALIDATOR_ALLOW_DEV_CLAIMS=true` (the native `up.mjs` does this; pilot/compose
+> validators set it false and expect App Attest from the iOS app). Use the web
+> miner for the open sandbox; use the iPhone app for the attested pilot.
 
 ## 2. Container bring-up (the pilot host)
 

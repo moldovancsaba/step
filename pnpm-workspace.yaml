@@ -9,6 +9,7 @@ packages:
   - "services/exchange-service"
   - "services/campaign-worker"
   - "apps/web"
+  - "apps/web-miner"
   - "apps/merchant-dashboard"
   - "apps/protocol-admin"
   - "tests/e2e"

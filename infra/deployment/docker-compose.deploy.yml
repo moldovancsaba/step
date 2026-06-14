@@ -176,6 +176,22 @@ services:
     depends_on: [indexer]
     ports: ["3000:3000"]
 
+  # Browser miner — the Apple-independent way to actually use the platform.
+  # Its server-side /api routes proxy to the gateway/mesh/chain (no CORS).
+  web-miner:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.web
+      args: { APP: web-miner, PORT: 3003 }
+    depends_on: [gateway-api, validator-1]
+    ports: ["3003:3003"]
+    environment:
+      GATEWAY_URL: http://gateway-api:8080
+      MESH_API_URL: http://validator-1:9100
+      STEP_RPC_URL: http://chain:8545
+      STEP_DEPLOYMENTS_FILE: /shared/31337.json
+    volumes: *deployments-vol
+
   merchant-dashboard:
     build:
       context: ../..

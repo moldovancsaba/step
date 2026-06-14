@@ -18,8 +18,11 @@ ARG NEXT_PUBLIC_INDEXER_URL
 ARG NEXT_PUBLIC_MESH_API_URL
 ENV NEXT_PUBLIC_INDEXER_URL=${NEXT_PUBLIC_INDEXER_URL} \
     NEXT_PUBLIC_MESH_API_URL=${NEXT_PUBLIC_MESH_API_URL}
+# Path filter (not name glob): APP is the directory under apps/, which is
+# unambiguous even where the dir name differs from the package name
+# (apps/web → @step/web-explorer).
 RUN test -n "${APP}" || (echo "build-arg APP is required" && false) \
- && pnpm --filter @step/${APP}* run build
+ && pnpm --filter "./apps/${APP}" run build
 
 FROM node:22-slim AS run
 ARG APP

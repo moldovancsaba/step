@@ -146,6 +146,52 @@ importers:
         specifier: ^3.0.0
         version: 3.2.6(@types/node@22.19.21)(jiti@1.21.7)(tsx@4.22.4)
 
+  apps/web-miner:
+    dependencies:
+      '@step/proof-protocol':
+        specifier: workspace:*
+        version: link:../../packages/proof-protocol
+      '@step/shared-types':
+        specifier: workspace:*
+        version: link:../../packages/shared-types
+      next:
+        specifier: ^15.1.0
+        version: 15.5.19(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      react:
+        specifier: ^19.0.0
+        version: 19.2.7
+      react-dom:
+        specifier: ^19.0.0
+        version: 19.2.7(react@19.2.7)
+      viem:
+        specifier: ^2.21.0
+        version: 2.52.2(typescript@5.9.3)
+    devDependencies:
+      '@types/node':
+        specifier: ^22
+        version: 22.19.21
+      '@types/react':
+        specifier: ^19
+        version: 19.2.17
+      '@types/react-dom':
+        specifier: ^19
+        version: 19.2.3(@types/react@19.2.17)
+      autoprefixer:
+        specifier: ^10.4.20
+        version: 10.5.0(postcss@8.5.15)
+      postcss:
+        specifier: ^8.4.49
+        version: 8.5.15
+      tailwindcss:
+        specifier: ^3.4.16
+        version: 3.4.19(tsx@4.22.4)
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.6(@types/node@22.19.21)(jiti@1.21.7)(tsx@4.22.4)
+
   packages/api-client:
     dependencies:
       '@step/shared-types':

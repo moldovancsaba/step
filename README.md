@@ -12,7 +12,8 @@ STEP is **not** a walking app, not a fitness app, and not move-to-earn. Step cou
 
 | Path | Contents |
 |---|---|
-| `apps/ios` | Native Swift/SwiftUI miner app (Apple-first) |
+| `apps/ios` | Native Swift/SwiftUI miner app (Apple-first; attested pilot) |
+| `apps/web-miner` | Browser miner (geolocation + in-browser wallet) — usable on any phone browser, no Apple needed |
 | `apps/web` | Public explorer (Next.js + MapLibre GL JS) |
 | `apps/merchant-dashboard` | Merchant campaign tools |
 | `apps/protocol-admin` | Foundation admin / safety console |
