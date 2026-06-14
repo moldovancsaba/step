@@ -1,5 +1,11 @@
 # STEP Release Log
 
+## alpha-0.3 — 2026-06-14 (usable without Apple — browser miner)
+
+- **`apps/web-miner`**: a browser-based miner so anyone with a phone browser can use the platform — no Apple, no TestFlight. The browser generates a self-custody wallet, reads geolocation, and signs the canonical claim locally (`@step/proof-protocol`); same-origin `/api` routes proxy to the gateway/mesh/chain (no CORS). **Verified end-to-end against the live stack — a browser-path claim finalised on-chain and received the base reward.**
+- Wired into the deploy compose (`:3003`) and the go-live runbook as the primary "let people use it" path. Sandbox uses `dev-unattested` claims (validators `allow_dev_claims=true`); the attested iPhone pilot path is unchanged.
+- `Dockerfile.web` now uses an exact `./apps/<APP>` path filter. All 7 CI jobs green on `main`.
+
 ## alpha-0.2 — 2026-06-13 (go-live enablement)
 
 Pushed to GitHub (`moldovancsaba/step`, PR #1 into `main`). Adds the deployable/operable layer on top of alpha-0.1:
