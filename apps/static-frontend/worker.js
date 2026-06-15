@@ -20,7 +20,7 @@ function copyHeaders(headers) {
 
 function targetUrl(requestUrl, prefix, upstream) {
   const source = new URL(requestUrl);
-  const path = source.pathname.slice(prefix.length) || "/";
+  const path = source.pathname.slice(prefix.length).replace(/^\/+/, "");
   const target = new URL(path, upstream.endsWith("/") ? upstream : `${upstream}/`);
   target.search = source.search;
   return target;

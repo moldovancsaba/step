@@ -19,8 +19,8 @@ function copyHeaders(headers) {
 }
 
 function pathParam(value) {
-  if (Array.isArray(value)) return value.join("/");
-  return value || "";
+  const path = Array.isArray(value) ? value.join("/") : value || "";
+  return path.replace(/^\/+/, "");
 }
 
 export async function onRequest(context) {
