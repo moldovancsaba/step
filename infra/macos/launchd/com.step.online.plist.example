@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.step.online</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string>
+    <string>-lc</string>
+    <string>cd /Users/Shared/Projects/step &amp;&amp; /opt/homebrew/bin/node scripts/ops/run-mac-online.mjs</string>
+  </array>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>STEP_ONLINE_GATEWAY_PORT</key>
+    <string>8070</string>
+    <key>STEP_PUBLIC_BASE_URL</key>
+    <string>https://step.example.com</string>
+    <key>STEP_ONLINE_CORS_ORIGINS</key>
+    <string>https://YOUR_GITHUB_USER.github.io</string>
+  </dict>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/Shared/Projects/step</string>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/Users/Shared/Projects/step/.runtime/logs/mac-online.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/Shared/Projects/step/.runtime/logs/mac-online.err.log</string>
+</dict>
+</plist>

@@ -131,6 +131,10 @@ const deps: GatewayDeps = {
 
   randomHex: () => randomBytes(8).toString("hex"),
   nowUnix: () => Math.floor(Date.now() / 1000),
+  corsOrigins: process.env.STEP_CORS_ORIGINS
+    ? process.env.STEP_CORS_ORIGINS.split(",").map((s) => s.trim()).filter(Boolean)
+    : undefined,
+  meshUrl: process.env.MESH_API_URL,
 };
 
 const { app } = createApp(deps);

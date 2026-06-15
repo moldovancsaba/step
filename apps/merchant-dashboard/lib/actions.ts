@@ -104,7 +104,6 @@ export async function createCampaign(formData: FormData): Promise<ActionResult> 
     const { deployments, pub, wallet, account } = chainClients();
     const triangleIdHash = formData.get("triangle_id_hash") as Hex;
     const rewardPerClaim = BigInt(formData.get("reward_per_claim") as string);
-    const budget = BigInt(formData.get("budget_trinity") as string);
     const days = BigInt((formData.get("duration_days") as string) || "7");
     const now = BigInt(Math.floor(Date.now() / 1000));
 

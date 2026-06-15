@@ -1,0 +1,20 @@
+# STEP online sandbox override.
+#
+# Use with docker-compose.deploy.yml when the browser/static miner is the
+# primary client. This intentionally accepts `dev-unattested` claims, so it is
+# only appropriate for a valueless internal-testnet sandbox.
+#
+#   docker compose -f infra/deployment/docker-compose.deploy.yml \
+#     -f infra/deployment/docker-compose.sandbox.yml \
+#     --env-file infra/deployment/.env.deploy up -d --build
+
+services:
+  validator-1:
+    environment:
+      VALIDATOR_ALLOW_DEV_CLAIMS: "true"
+  validator-2:
+    environment:
+      VALIDATOR_ALLOW_DEV_CLAIMS: "true"
+  validator-3:
+    environment:
+      VALIDATOR_ALLOW_DEV_CLAIMS: "true"

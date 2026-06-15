@@ -9,6 +9,7 @@
  * wiring lives in index.ts and the real end-to-end path runs in tests/e2e.
  */
 import { Hono } from "hono";
+import { cors } from "hono/cors";
 import {
   canonicalClaimMessage,
   claimHash,
@@ -68,13 +69,46 @@ export interface GatewayDeps {
   storeEvidence(bundle: unknown): Promise<Hex>;
   randomHex(): string;
   nowUnix(): number;
+  /** Allowed browser origins for static frontends (GitHub Pages/Cloudflare Pages). */
+  corsOrigins?: string[];
+  /** Optional mesh API URL; defaults to the first validator URL. */
+  meshUrl?: string;
 }
 
 export function createApp(deps: GatewayDeps) {
   const app = new Hono();
   const records = new Map<string, ClaimRecord>();
+  const meshUrl = deps.meshUrl ?? deps.validatorUrls[0];
+
+  if (deps.corsOrigins?.length) {
+    app.use(
+      "*",
+      cors({
+        origin: deps.corsOrigins,
+        allowMethods: ["GET", "POST", "OPTIONS"],
+        allowHeaders: ["content-type"],
+      }),
+    );
+  }
 
   app.get("/healthz", (c) => c.text("ok"));
+
+  app.get("/v1/mesh/resolve", async (c) => {
+    if (!meshUrl) return c.json({ error: "mesh API unavailable" }, 503);
+    const url = new URL(`${meshUrl}/v1/mesh/resolve`);
+    for (const key of ["lat", "lon", "level"]) {
+      const value = c.req.query(key);
+      if (value !== undefined) url.searchParams.set(key, value);
+    }
+    const resp = await fetch(url);
+    return c.json(await resp.json(), resp.status as never);
+  });
+
+  app.get("/v1/mesh/triangle/:id", async (c) => {
+    if (!meshUrl) return c.json({ error: "mesh API unavailable" }, 503);
+    const resp = await fetch(`${meshUrl}/v1/mesh/triangle/${c.req.param("id")}`);
+    return c.json(await resp.json(), resp.status as never);
+  });
 
   app.post("/v1/nonce", async (c) => {
     const body = await c.req.json().catch(() => null);

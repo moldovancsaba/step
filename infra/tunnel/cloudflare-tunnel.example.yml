@@ -1,0 +1,37 @@
+# cloudflared tunnel config for a Mac mini STEP sandbox.
+#
+# Create the tunnel with Cloudflare first, then replace:
+#   - TUNNEL_UUID
+#   - /Users/YOU/.cloudflared/TUNNEL_UUID.json
+#   - the hostnames below
+#
+# Recommended mode: expose one public hostname that points to the local
+# online-gateway service (:8070). That service serves the static frontend and
+# proxies /api/gateway/* + /api/indexer/* to the internal STEP backend.
+
+tunnel: TUNNEL_UUID
+credentials-file: /Users/YOU/.cloudflared/TUNNEL_UUID.json
+
+ingress:
+  - hostname: step.example.com
+    service: http://127.0.0.1:8070
+
+  # Alternative mode: expose API hostnames directly and host the frontend on
+  # GitHub Pages/Cloudflare Pages. Only enable these if you are not using the
+  # single step.example.com gateway above.
+  # - hostname: gateway.example.com
+  #   service: http://127.0.0.1:8080
+  # - hostname: indexer.example.com
+  #   service: http://127.0.0.1:8090
+  # - hostname: miner.example.com
+  #   service: http://127.0.0.1:3010
+
+  # Protect these with Cloudflare Access if you enable them.
+  # - hostname: admin.example.com
+  #   service: http://127.0.0.1:3002
+  # - hostname: merchant.example.com
+  #   service: http://127.0.0.1:3001
+  # - hostname: grafana.example.com
+  #   service: http://127.0.0.1:3009
+
+  - service: http_status:404

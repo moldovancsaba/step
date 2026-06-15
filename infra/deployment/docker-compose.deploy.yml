@@ -113,7 +113,9 @@ services:
       RELAYER_PRIVATE_KEY: ${RELAYER_PRIVATE_KEY}
       GATEWAY_NONCE_SECRET: ${GATEWAY_NONCE_SECRET}
       VALIDATOR_URLS: http://validator-1:9100,http://validator-2:9100,http://validator-3:9100
+      MESH_API_URL: http://validator-1:9100
       PROOF_STORAGE_URL: http://proof-storage:8095
+      STEP_CORS_ORIGINS: ${STEP_CORS_ORIGINS:-}
 
   indexer:
     build: { <<: *ts-build, args: { SERVICE: indexer } }
@@ -125,6 +127,7 @@ services:
       STEP_CHAIN_ID: 31337
       STEP_RPC_URL: http://chain:8545
       STEP_DEPLOYMENTS_FILE: /shared/31337.json
+      STEP_CORS_ORIGINS: ${STEP_CORS_ORIGINS:-}
 
   proof-storage:
     build: { <<: *ts-build, args: { SERVICE: proof-storage } }

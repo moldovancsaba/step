@@ -1,5 +1,6 @@
 /** Explorer-facing REST API over the projection (WEB-003 data source). */
 import { Hono } from "hono";
+import { cors } from "hono/cors";
 import type { MemoryStore } from "./store.js";
 
 function json(value: unknown): unknown {
@@ -8,8 +9,19 @@ function json(value: unknown): unknown {
   );
 }
 
-export function createApi(store: MemoryStore) {
+export function createApi(store: MemoryStore, corsOrigins: string[] = []) {
   const app = new Hono();
+
+  if (corsOrigins.length) {
+    app.use(
+      "*",
+      cors({
+        origin: corsOrigins,
+        allowMethods: ["GET", "OPTIONS"],
+        allowHeaders: ["content-type"],
+      }),
+    );
+  }
 
   app.get("/healthz", (c) => c.text("ok"));
 

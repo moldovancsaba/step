@@ -26,6 +26,9 @@ contracts/broadcast/
 .next/
 out/
 
+# Static frontend build output
+apps/static-frontend/dist/
+
 # OS noise
 .DS_Store
 

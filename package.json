@@ -10,6 +10,9 @@
   "scripts": {
     "test": "pnpm -r test",
     "build": "pnpm -r build",
+    "build:cloudflare-pages": "pnpm --filter @step/static-frontend build",
+    "deploy:cloudflare-pages": "pnpm --dir apps/static-frontend deploy:cloudflare",
+    "deploy:cloudflare-worker": "pnpm --dir apps/static-frontend deploy:cloudflare-worker",
     "typecheck": "pnpm -r typecheck",
     "lint": "pnpm -r lint"
   },

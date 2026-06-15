@@ -55,7 +55,10 @@ async function poll() {
 }
 
 const port = Number(process.env.INDEXER_PORT ?? 8090);
+const corsOrigins = process.env.STEP_CORS_ORIGINS
+  ? process.env.STEP_CORS_ORIGINS.split(",").map((s) => s.trim()).filter(Boolean)
+  : [];
 console.log(`indexer listening on :${port}, watching ${watched.length} contracts`);
-serve({ fetch: createApi(store).fetch, port });
+serve({ fetch: createApi(store, corsOrigins).fetch, port });
 setInterval(poll, 2000);
 void poll();

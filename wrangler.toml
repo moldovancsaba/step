@@ -1,0 +1,9 @@
+name = "step"
+account_id = "66ce3adbb96f6715f8cc2b04991c30e4"
+compatibility_date = "2026-06-15"
+main = "./apps/static-frontend/worker.js"
+
+[assets]
+directory = "./apps/static-frontend/dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"

@@ -173,6 +173,8 @@ async function main() {
     PROOF_STORAGE_URL: `http://127.0.0.1:${PORTS.proofStorage}`,
     EXCHANGE_URL: `http://127.0.0.1:${PORTS.exchange}`,
     MERCHANT_API_URL: `http://127.0.0.1:${PORTS.merchant}`,
+    STEP_CORS_ORIGINS:
+      process.env.STEP_CORS_ORIGINS ?? "http://127.0.0.1:3010,http://localhost:3010",
     ...secrets,
   };
   writeFileSync(
