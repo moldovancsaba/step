@@ -193,8 +193,7 @@ pnpm deploy:cloudflare-pages
 ```
 
 The static app includes `apps/static-frontend/wrangler.pages.toml` with
-`pages_build_output_dir = "./dist"` for Wrangler-based Pages deploys. It also
-ships `_redirects` so deep links return `index.html`.
+`pages_build_output_dir = "./dist"` for Wrangler-based Pages deploys.
 
 ## 9. Cloudflare Workers (`workers.dev`)
 
@@ -217,6 +216,11 @@ The Worker serves `apps/static-frontend/dist` as static assets and proxies:
 
 - `/api/gateway/*` -> `STEP_BACKEND_GATEWAY_URL`
 - `/api/indexer/*` -> `STEP_BACKEND_INDEXER_URL`
+
+Do not include a `_redirects` file in this Worker deployment. The Worker
+static-assets config already sets
+`not_found_handling = "single-page-application"`, and Wrangler rejects the
+Pages-style `/* /index.html 200` rule as an infinite redirect loop for Workers.
 
 ## 10. Reliability checklist
 
