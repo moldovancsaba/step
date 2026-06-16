@@ -27,7 +27,7 @@ valid signature ∧ fresh single-use nonce ∧ timestamp within window ∧ field
 
 Alpha currently mines only level 21, and the app does not auto-downgrade to lower levels. If your resolved `mesh_level` is not mineable, the claim is rejected as `level_not_mineable`. Child triangles (21+1, etc.) are only mineable after the parent triangle is fully exhausted.
 
-Boundary semantics at level 21 (≈6.7 m sides): a realistic GPS accuracy circle almost always overlaps an edge, so `boundary_ambiguous` is the *normal* informational state — the deterministic lowest-ID assignment stands (HARD §5.7); only `reject_accuracy` blocks.
+Boundary semantics at level 21 (≈6.7 m sides): with the alpha threshold this level is intentionally tuned for real GNSS hardware. `boundary_ambiguous` still applies when the accuracy circle intersects an edge, but only `reject_accuracy` blocks submission once the configured radius cap is exceeded.
 
 ## 4. Fraud scoring v1 (implemented signals)
 
@@ -54,4 +54,4 @@ Off-chain: the full claim + validator signatures + fraud score as a `step.eviden
 
 ## 8. Parameters (all from the registry, never hardcoded)
 
-`claim_timestamp_window_seconds` 300 · `nonce_ttl_seconds` 120 · `max_accuracy_radius_m_l1` 25 · `max_accuracy_fraction_of_side` 1.0 · `max_plausible_speed_mps` 69.4 · `fraud_score_reject_threshold` 0.7 · `mineable_levels` [21] — all UNFROZEN alpha defaults pending the tokenomics constitution and field data.
+`claim_timestamp_window_seconds` 300 · `nonce_ttl_seconds` 120 · `max_accuracy_radius_m_l1` 25 · `max_accuracy_fraction_of_side` 10.0 · `max_plausible_speed_mps` 69.4 · `fraud_score_reject_threshold` 0.7 · `mineable_levels` [21] — all UNFROZEN alpha defaults pending the tokenomics constitution and field data.

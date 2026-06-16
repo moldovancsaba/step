@@ -44,6 +44,8 @@ interface WalletFilePayload {
 const DEFAULT_MESH_LEVEL = 21;
 const DEFAULT_WALLET_ALIAS = "Local wallet";
 const DEFAULT_WALLET_FILE_NAME = "step-wallet-profile";
+const ALPHA_ACCURACY_CAP_M = 25;
+const MESH_ACCURACY_FRACTION_FOR_LEVEL = 10;
 
 const MESH_LEVEL_BY_ACCURACY = [
   { maxAccuracy: 25, level: 21 },
@@ -55,12 +57,13 @@ const MESH_LEVEL_FALLBACK_ORDER = [...NATURAL_MINEABLE_LEVELS] as const;
 
 const MESH_ACCURACY_GUIDE = [
   "Pilot mineable level is 21 only (all lower levels are non-mineable in alpha).",
-  "Keep accuracy around 25m or better for level 21 to avoid accuracy_too_low.",
+  `Keep location accuracy around ${ALPHA_ACCURACY_CAP_M}m or better for level 21.`,
   "If your level is not mineable, we stop immediately and do not auto-fall into lower levels.",
+  "Backend validation uses the configured accuracy threshold and boundary policy in the same request.",
 ];
 
 const REJECT_REASON_HINTS: Record<string, string> = {
-  nonce_rejected: "Your one-time nonce was rejected. Wait for the next nonce or refresh your device clock.",
+  nonce_rejected: "Your one-time nonce was rejected. Refreshing with a fresh nonce.",
   accuracy_too_low: "Your location accuracy was too low for level 21. Open sky and retry.",
   level_not_mineable: "Your location resolved to a non-mineable level. Current network rule is level 21 only.",
   geometry_mismatch: "Geometry verification rejected the claimed triangle.",
@@ -305,7 +308,11 @@ function isLevelNotMineableReason(rejectReasons: string[]) {
 }
 
 function isRetryableReason(rejectReasons: string[]) {
-  return isAccuracyTooLowReason(rejectReasons) || isLevelNotMineableReason(rejectReasons);
+  return (
+    isAccuracyTooLowReason(rejectReasons) ||
+    isLevelNotMineableReason(rejectReasons) ||
+    rejectReasons.includes("nonce_rejected")
+  );
 }
 
 function short(value: string, left = 10, right = 6) {
@@ -693,59 +700,76 @@ function Miner({
         const tri = await json<TriangleInfo>(
           `${config.gatewayUrl}/v1/mesh/resolve?lat=${loc.lat}&lon=${loc.lon}&level=${attemptLevel}`,
         );
+        const maxAcceptableAccuracy = Math.min(
+          ALPHA_ACCURACY_CAP_M,
+          tri.min_side_m * MESH_ACCURACY_FRACTION_FOR_LEVEL,
+        );
         setMeshAdvice(
-          `${resolutionHint} Level ${attemptLevel} triangle side is ${tri.min_side_m.toFixed(1)}m at this location.`
+          `${resolutionHint} Level ${attemptLevel} triangle side is ${tri.min_side_m.toFixed(1)}m at this location. Max accepted accuracy ${maxAcceptableAccuracy.toFixed(1)}m.`
         );
         setTriangle(tri);
 
-        setMessage("Requesting nonce and signing claim locally...");
-        setPhase("signing");
-        const nonce = await json<{ nonce: string }>(`${config.gatewayUrl}/v1/nonce`, {
-          method: "POST",
-          body: JSON.stringify({ wallet: account.address }),
-        });
-        const claim = await signClaim(
-          buildUnsignedClaim({
-            wallet: account.address,
-            triangleId: tri.triangle_id,
-            meshLevel: attemptLevel,
-            latitude: loc.lat,
-            longitude: loc.lon,
-            horizontalAccuracyM: loc.acc,
-            nonce: nonce.nonce,
-          }),
-          account,
-        );
+        let nonceAttempts = 1;
+        while (true) {
+          setMessage("Requesting nonce and signing claim locally...");
+          setPhase("signing");
+          const nonce = await json<{ nonce: string }>(`${config.gatewayUrl}/v1/nonce`, {
+            method: "POST",
+            body: JSON.stringify({ wallet: account.address }),
+          });
+          const claim = await signClaim(
+            buildUnsignedClaim({
+              wallet: account.address,
+              triangleId: tri.triangle_id,
+              meshLevel: attemptLevel,
+              latitude: loc.lat,
+              longitude: loc.lon,
+              horizontalAccuracyM: loc.acc,
+              nonce: nonce.nonce,
+            }),
+            account,
+          );
 
-        setPhase("submitting");
-        setMessage("Submitting claim to gateway and validators...");
-        const submitted = await json<GatewayClaimRecord>(`${config.gatewayUrl}/v1/claims`, {
-          method: "POST",
-          body: JSON.stringify({ claim }),
-        });
-        setRecord(submitted);
+          setPhase("submitting");
+          setMessage("Submitting claim to gateway and validators...");
+          const submitted = await json<GatewayClaimRecord>(`${config.gatewayUrl}/v1/claims`, {
+            method: "POST",
+            body: JSON.stringify({ claim }),
+          });
+          setRecord(submitted);
 
-        const reasons = submitted.reject_reasons ?? [];
-        if (submitted.status === "finalised") {
-          setPhase("done");
-          setMessage("Claim finalised. Trinity mined on the internal testnet.");
-          return;
-        }
+          const reasons = submitted.reject_reasons ?? [];
+          if (submitted.status === "finalised") {
+            setPhase("done");
+            setMessage("Claim finalised. Trinity mined on the internal testnet.");
+            return;
+          }
 
-        if (submitted.status === "rejected") {
+          if (submitted.status === "rejected") {
+            if (
+              reasons.includes("nonce_rejected") &&
+              !isAccuracyTooLowReason(reasons) &&
+              nonceAttempts > 0
+            ) {
+              nonceAttempts -= 1;
+              setPhase("signing");
+              setMessage("Nonce was rejected. Refreshing and retrying with a new nonce.");
+              continue;
+            }
+            setPhase("error");
+            const humanReason = describeRejectReasons(reasons);
+            const hint =
+              isRetryableReason(reasons) && isAccuracyTooLowReason(reasons)
+                ? `${humanReason} Move to open area and retry manually.`
+                : humanReason;
+            setMessage(`Rejected: ${hint}`);
+            return;
+          }
+
           setPhase("error");
-          const humanReason = describeRejectReasons(reasons);
-          const hint =
-            isRetryableReason(reasons) && isAccuracyTooLowReason(reasons)
-              ? `${humanReason} Move to open area and retry manually.`
-              : humanReason;
-          setMessage(`Rejected: ${hint}`);
+          setMessage(`Claim ${submitted.status}: ${submitted.reject_reasons.join(", ") || "processing"}`);
           return;
         }
-
-        setPhase("error");
-        setMessage(`Claim ${submitted.status}: ${submitted.reject_reasons.join(", ") || "processing"}`);
-        return;
       }
     } catch (err) {
       setPhase("error");

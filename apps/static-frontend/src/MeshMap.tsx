@@ -171,7 +171,7 @@ export default function MeshMap({ gatewayUrl, indexerUrl }: MeshMapProps) {
       <div ref={container} className="mesh-map-canvas" />
       {error && (
         <p className="mesh-error">
-          {error} — is the mesh API/indexer online? (open /mesh path to check backend health)
+          {error} — is the mesh API and indexer online? Check /api/gateway/healthz and /api/indexer/healthz.
         </p>
       )}
       {selected && (

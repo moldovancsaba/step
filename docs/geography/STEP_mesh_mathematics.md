@@ -114,7 +114,7 @@ Each term is the sine of the angular distance from p to the oriented edge great-
 | `BoundaryAmbiguous` | accuracy circle overlaps an edge | deterministic assignment stands; sponsored campaigns may require stronger proof (HARD §5.7) |
 | `RejectAccuracy` | accuracy radius > `max_fraction × min_side`, or invalid | reject or offer a lower (larger) level |
 
-`max_fraction` is the protocol parameter `mesh.max_accuracy_fraction_of_side` (UNFROZEN, default 1.0). Edge distance is measured to the edge great-circle plane (`asin(p·n̂)·R`), a lower bound on segment distance — conservative in the safe direction.
+`max_fraction` is the protocol parameter `mesh.max_accuracy_fraction_of_side` (UNFROZEN, alpha default 10.0). Edge distance is measured to the edge great-circle plane (`asin(p·n̂)·R`), a lower bound on segment distance — conservative in the safe direction.
 
 ## 8. Neighbour computation
 
