@@ -35,3 +35,17 @@ Full inventory of remaining work: [release log](../operations/STEP_release_log.m
 ## 4. Working agreements (unchanged from M0)
 
 No placeholder code or mocked production paths (environment-dependent behaviour is explicit config, ADR-015); parameters from the registry only; English comments; no raw GPS in logs; schema versioning on every wire format; every contract change re-runs ABI extraction; release-log entry per milestone.
+
+## 5. Contract + protocol update playbook (copy/paste for next code changes)
+
+1. Keep `config/protocol-params.alpha.json` as the canonical source for mineable levels, denominator, and slot policy.
+2. Apply source changes first in `contracts/` and then patch `contracts/test/*` in the same commit for matching behavior.
+3. Regenerate ABIs via `scripts/dev/extract-abis.mjs` after any contract shape change and commit outputs.
+4. Update `contracts/src/*` shared type artifacts in `packages/shared-types` after ABI changes.
+5. Update mirrored constants in tests and fixtures in the same commit (`contracts/test/StepFixture.sol`, service tests).
+6. Update smart-contract-facing docs (`docs/smart-contracts/STEP_contract_specification.md`, `docs/engineering/STEP_api_contracts.md`) whenever events, claims, or params change.
+7. Update user-facing docs (`docs/tokenomics/STEP_tokenomics_constitution.md`, `docs/product/STEP_product_specification.md`) for denomination, level, reward, or exhaustion changes.
+8. Update backend services that convert/display STEP and Trinity in lockstep with the new ratio.
+9. Update frontend map and claim UX copy from the same constants before release.
+10. Add a release entry in `docs/operations/STEP_release_log.md` with migration impact and rollback plan.
+11. Before merge, verify all prior CONFIRMED mechanisms remain intact and create a short verification note in the release entry.

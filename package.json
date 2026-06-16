@@ -13,6 +13,9 @@
     "build:cloudflare-pages": "pnpm --filter @step/static-frontend build",
     "deploy:cloudflare-pages": "pnpm --dir apps/static-frontend deploy:cloudflare",
     "deploy:cloudflare-worker": "pnpm --dir apps/static-frontend deploy:cloudflare-worker",
+    "deploy:cloudflare-worker:env": "set -a; source .env; set +a; pnpm --dir apps/static-frontend deploy:cloudflare-worker",
+    "dev:full-stack": "node scripts/dev/start-full-stack.mjs",
+    "start:non-sandbox-webapp": "node scripts/start-non-sandbox.mjs",
     "typecheck": "pnpm -r typecheck",
     "lint": "pnpm -r lint"
   },

@@ -3,4 +3,6 @@
 window.STEP_CONFIG = {
   gatewayUrl: "/api/gateway",
   indexerUrl: "/api/indexer",
+  explorerUrl: "/explorer",
+  minerUrl: "/miner",
 };

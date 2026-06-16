@@ -75,6 +75,11 @@ button:disabled {
   opacity: 0.55;
 }
 
+button.tiny {
+  font-size: 12px;
+  padding: 6px 10px;
+}
+
 button.active,
 button.primary {
   background: #047857;
@@ -120,6 +125,11 @@ button.primary {
 .mono {
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   font-size: 13px;
+}
+
+ul.mono {
+  margin: 6px 0 0;
+  padding-left: 18px;
 }
 
 .break {
@@ -176,6 +186,53 @@ dd {
   margin-bottom: 16px;
 }
 
+.row .primary {
+  font-size: 12px;
+  padding: 8px 12px;
+}
+
+.mesh-mode-pill {
+  color: #86efac;
+  font-size: 11px;
+}
+
+.mesh-map-canvas {
+  border-radius: 8px;
+  border: 1px solid #1f2a25;
+  height: 480px;
+  width: 100%;
+}
+
+.mesh-selected,
+.mesh-hint,
+.mesh-error {
+  border: 1px solid #1f2a25;
+  border-radius: 8px;
+  margin: 0;
+  padding: 12px;
+}
+
+.mesh-selected {
+  background: #101713;
+}
+
+.mesh-hint {
+  color: #9ca3af;
+  font-size: 12px;
+}
+
+.mesh-error {
+  background: #3f1515;
+  border-color: #7f1d1d;
+  color: #fecaca;
+}
+
+.mesh-details {
+  display: grid;
+  gap: 8px 18px;
+  grid-template-columns: 140px minmax(0, 1fr);
+}
+
 table {
   border-collapse: collapse;
   width: 100%;
@@ -214,6 +271,37 @@ input {
   font: inherit;
   padding: 10px 12px;
   width: 100%;
+}
+
+.wallet-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+  align-items: end;
+}
+
+.wallet-file-upload {
+  align-items: center;
+  background: #111827;
+  border: 1px solid #374151;
+  border-radius: 8px;
+  color: #ecfdf5;
+  display: grid;
+  gap: 6px;
+  margin-bottom: 0;
+  padding: 9px 12px;
+  width: min(320px, 100%);
+}
+
+.wallet-file-upload input {
+  width: 100%;
+}
+
+.wallet-token-line {
+  align-items: center;
+  display: flex;
+  gap: 8px;
 }
 
 @media (max-width: 760px) {

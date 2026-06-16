@@ -59,10 +59,72 @@ cd contracts && forge test
 
 # TypeScript workspace
 pnpm install && pnpm -r test
-
-# Full local stack (requires Docker)
-docker compose -f infra/docker/docker-compose.yml up
 ```
+
+## Start the alpha stack locally
+
+```sh
+# 1) install dependencies
+pnpm install
+
+# 2) start everything (backend + all web experiences) in one terminal
+pnpm dev:full-stack
+
+# 3) optional: run only backend first, then launch frontends in separate terminals
+node scripts/dev/up.mjs
+
+# 3) in separate terminals, run the apps
+GATEWAY_URL=http://127.0.0.1:8080 \
+MESH_API_URL=http://127.0.0.1:9101 \
+STEP_RPC_URL=http://127.0.0.1:8545 \
+STEP_DEPLOYMENTS_FILE=$PWD/contracts/deployments/31337.json \
+pnpm --filter @step/web-miner dev
+
+pnpm --filter @step/static-frontend dev
+pnpm --filter @step/web-explorer dev
+```
+
+For non-sandbox online webapp checks, run:
+
+```sh
+pnpm start:non-sandbox-webapp
+```
+
+Open:
+- `http://127.0.0.1:3003` for browser mining (device-local wallet)
+- `http://127.0.0.1:3000` for mesh map explorer
+- `http://127.0.0.1:3010` for static launcher with links into full web products
+
+For the static launcher, use `http://127.0.0.1:3010/explorer/mesh` when you want the visible triangle map.
+
+The static frontend can be used at `http://127.0.0.1:3010`; in Settings you can set:
+- Explorer URL (default non-sandbox app entry, e.g. `/explorer`)
+- Miner URL (default non-sandbox app entry, e.g. `/miner`)
+
+Wallet workflow in web frontend:
+- Create a new wallet in Settings or import from a downloaded wallet file / private key.
+- Export wallet file from Settings to back up identity.
+- Paste the same private key on another device to restore that wallet and load it into that browser session.
+
+For a single-host public deployment, route `/explorer/*` and `/miner/*` through the online gateway
+to the web explorer (`apps/web`) and web miner (`apps/web-miner`) services.
+
+If you use the Cloudflare Worker deployment, set:
+- `STEP_BACKEND_GATEWAY_URL` (for `https://.../api/gateway` on your backend host, e.g. `https://step-api.example.com/api/gateway`)
+- `STEP_BACKEND_INDEXER_URL` (for `https://.../api/indexer` on your backend host, e.g. `https://step-api.example.com/api/indexer`)
+- `STEP_WEB_EXPLORER_URL` (example: `https://step-explorer.example.com`)
+- `STEP_WEB_MINER_URL` (example: `https://step-miner.example.com`)
+
+For a single `workers.dev` launcher, the static app can keep `gatewayUrl` and `indexerUrl`
+on `/api/gateway` and `/api/indexer`; set only `STEP_BACKEND_*` and the optional
+`STEP_WEB_*` bindings in the Worker environment.
+
+If you use `services/online-gateway`, set:
+- `STEP_EXPLORER_URL` (example: `http://127.0.0.1:3000`)
+- `STEP_MINER_URL` (example: `http://127.0.0.1:3003`)
+
+## Full local stack (requires Docker)
+docker compose -f infra/docker/docker-compose.yml up
 
 ## Protocol parameters
 

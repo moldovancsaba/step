@@ -8,7 +8,7 @@
     "max_accuracy_fraction_of_side": { "value": 1.0, "status": "UNFROZEN", "requirement": "MESH-008", "comment": "claims with accuracy radius > fraction × triangle side are rejected/downgraded" }
   },
   "trinity": {
-    "trinity_per_step": { "value": 100000000, "status": "UNFROZEN", "adr": "OPEN-1", "comment": "1 STEP = 100,000,000 Trinity (documented recommendation, unconfirmed)" },
+    "trinity_per_step": { "value": 67108864, "status": "UNFROZEN", "adr": "OPEN-1", "comment": "1 STEP = 67,108,864 Trinity (first mining slot at this level)" },
     "indivisible": { "value": true, "status": "FROZEN", "requirement": "PRD-004" }
   },
   "mining": {

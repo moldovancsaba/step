@@ -26,6 +26,41 @@ function targetUrl(requestUrl, prefix, upstream) {
   return target;
 }
 
+async function proxyTo(request, upstream) {
+  const method = request.method;
+  const body = method === "GET" || method === "HEAD" ? undefined : request.body;
+  const response = await fetch(upstream, {
+    method,
+    headers: copyHeaders(request.headers),
+    body,
+  });
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: copyHeaders(response.headers),
+  });
+}
+
+function normalizeSubpath(pathname, prefix) {
+  if (pathname === prefix) return "/";
+  return pathname.slice(prefix.length);
+}
+
+function normalizeBase(envUrl) {
+  return envUrl?.replace(/\/$/, "") ?? "";
+}
+
+function resolveConfiguredUrl(base, candidate) {
+  if (!candidate) return "";
+  const value = candidate.trim();
+  if (!value) return "";
+  return value.startsWith("http") ? value : `${base}${value.startsWith("/") ? value : `/${value}`}`;
+}
+
+function isHttpUrl(value) {
+  return /^https?:\/\//i.test(value || "");
+}
+
 async function proxy(request, upstream, prefix) {
   const method = request.method;
   const body = method === "GET" || method === "HEAD" ? undefined : request.body;
@@ -45,6 +80,50 @@ async function proxy(request, upstream, prefix) {
 export default {
   async fetch(request, env) {
     const { pathname } = new URL(request.url);
+    const pageBase = (env.STEP_PUBLIC_BASE_URL || new URL(request.url).origin).replace(/\/$/, "");
+    const explorerRoot = normalizeBase(env.STEP_WEB_EXPLORER_URL);
+    const minerRoot = normalizeBase(env.STEP_WEB_MINER_URL);
+
+    if (pathname === "/config.js") {
+      const explorerUrl = resolveConfiguredUrl(pageBase, explorerRoot || "/explorer");
+      const minerUrl = resolveConfiguredUrl(pageBase, minerRoot || "/miner");
+      return new Response(
+        `window.STEP_CONFIG = ${JSON.stringify(
+          {
+            gatewayUrl: "/api/gateway",
+            indexerUrl: "/api/indexer",
+            explorerUrl,
+            minerUrl,
+          },
+          null,
+          2,
+        )};\n`,
+        {
+          headers: { "content-type": "application/javascript; charset=utf-8" },
+          status: 200,
+        },
+      );
+    }
+
+    if (pathname.startsWith("/explorer")) {
+      if (isHttpUrl(explorerRoot)) {
+        const path = normalizeSubpath(pathname, "/explorer");
+        const target = new URL(path, explorerRoot.endsWith("/") ? explorerRoot : `${explorerRoot}/`);
+        target.search = new URL(request.url).search;
+        return proxyTo(request, target.toString());
+      }
+      return env.ASSETS.fetch(request);
+    }
+
+    if (pathname.startsWith("/miner")) {
+      if (isHttpUrl(minerRoot)) {
+        const path = normalizeSubpath(pathname, "/miner");
+        const target = new URL(path, minerRoot.endsWith("/") ? minerRoot : `${minerRoot}/`);
+        target.search = new URL(request.url).search;
+        return proxyTo(request, target.toString());
+      }
+      return env.ASSETS.fetch(request);
+    }
 
     if (pathname.startsWith("/api/gateway")) {
       if (!env.STEP_BACKEND_GATEWAY_URL) {

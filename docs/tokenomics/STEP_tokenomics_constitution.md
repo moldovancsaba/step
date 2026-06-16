@@ -17,7 +17,7 @@
 
 | Output (HARD §4.11) | Alpha default | Blocking decision |
 |---|---|---|
-| 1 STEP : Trinity ratio | 100,000,000 | OPEN-1 |
+| 1 STEP : Trinity ratio | 67,108,864 | OPEN-1 |
 | Mineable levels | [21] | ADR-003 confirm + audit |
 | Triangle count at level 21 | 21,990,232,555,520 (implementation-verified) | MESH-014 independent audit |
 | Collector slots / triangle | 27 | OPEN with tokenomics |
@@ -42,4 +42,16 @@ A permanent 100% twin doubles effective issuance. The alpha default is the *docu
 
 ## 5. Ratification procedure
 
-1. MESH-014 independent audit of counts/areas/supply arithmetic. 2. Owner fixes OPEN-1/2/3/8 (+ slots/curve). 3. This document is rewritten with final values and loses its DRAFT banner. 4. On-chain parameters are scheduled/applied through the timelock with public notice. 5. Only then may external materials cite supply figures.
+1. MESH-014 independent audit of counts/areas/supply arithmetic.
+2. Owner resolves OPEN-1/2/3/8, including whether `67,108,864` remains canonical and whether 27 slots with geometric halving are kept.
+3. UI and accounting teams publish the denominator mapping as: `1 STEP = 67,108,864 Trinity`; first mineable slot at any mineable triangle starts at `slot 0 = 67,108,864`.
+4. This document is rewritten with final values and loses its DRAFT banner.
+5. On-chain parameters are scheduled/applied through the timelock with public notice.
+6. Only then may external materials cite definitive supply or emissions figures.
+
+## 6. Operational answers for the first beta run
+
+1. How many times can a triangle be mined naturally? `27` times (default `collector_slots_per_triangle`).
+2. How many breakdown levels are available? The deterministic subdivision is recursive and 4-way per level (`step-mesh-v1` supports deep levels by recursion; the protocol enforces mineable levels by configuration).
+3. How much Trinity does a miner earn? `slot 0` starts at `67,108,864`; each next slot divides by 2, and the protocol blocks any slot reward < `1` Trinity.
+4. How is a claim approved? A claim is approved only when it passes validator quorum checks and all acceptance gates (geometry, signature, freshness, precision, cooldown/open state, and no fraud reasons); rejections return explicit reasons and retry policy applies at lower levels for weak location accuracy.

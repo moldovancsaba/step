@@ -4,7 +4,7 @@
  * Browser miner — the Apple-independent path to actually using the platform.
  *
  * Self-custody: a secp256k1 key is generated in the browser and kept in
- * localStorage (clearly a sandbox wallet). The miner:
+ * localStorage (device-local). The miner:
  *   1. reads the device location (navigator.geolocation),
  *   2. resolves the canonical triangle (via /api/resolve → mesh engine),
  *   3. requests a nonce, builds + SIGNS the claim locally (@step/proof-protocol),
@@ -13,7 +13,7 @@
  *
  * The signed bytes are byte-identical to the iOS app and the validators —
  * this is the same protocol, just a browser client. Claims are
- * integrity_mode "dev-unattested": a sandbox path (pilot iPhone claims add
+ * integrity_mode "dev-unattested": a development path (pilot iPhone claims add
  * App Attest). Trinity is valueless testnet currency.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -43,6 +43,37 @@ function loadOrCreateKey(): Hex {
   const pk = generatePrivateKey();
   window.localStorage.setItem(KEY_STORAGE, pk);
   return pk;
+}
+
+function geolocationFailureMessage(error: unknown) {
+  if (error && typeof error === "object" && "code" in error) {
+    const code = (error as { code?: number }).code;
+    const message = (error as { message?: string }).message;
+    switch (code) {
+      case 1:
+        return (
+          "Location permission was denied. Open your browser settings and allow location access for this site, then retry."
+        );
+      case 2:
+        return `Location unavailable: ${message ?? "please check device GPS and network services."}`;
+      case 3:
+        return "Location request timed out. Try again with better GPS signal.";
+      default:
+        return message ?? "Unable to read device location.";
+    }
+  }
+  if (error instanceof Error) return error.message;
+  return "Unable to read device location.";
+}
+
+async function getLocationPermissionState(): Promise<PermissionState | null> {
+  if (!("permissions" in navigator)) return null;
+  try {
+    const status = await navigator.permissions.query({ name: "geolocation" } as PermissionDescriptor);
+    return status.state;
+  } catch {
+    return null;
+  }
 }
 
 type Phase = "idle" | "locating" | "resolving" | "signing" | "submitting" | "done" | "error";
@@ -86,7 +117,7 @@ export function Miner() {
             lon: p.coords.longitude,
             acc: p.coords.accuracy,
           }),
-        (e) => reject(new Error(e.message)),
+        (e) => reject(new Error(geolocationFailureMessage(e))),
         { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
       );
     });
@@ -98,6 +129,13 @@ export function Miner() {
     try {
       setPhase("locating");
       setMessage("Reading your location…");
+      const permission = await getLocationPermissionState();
+      if (permission === "denied") {
+        throw new Error(
+          "Location permission is blocked for this site. Enable it in browser settings and retry.",
+        );
+      }
+
       const loc = await getLocation();
       setCoords(loc);
 
@@ -165,13 +203,17 @@ export function Miner() {
           Prove you are physically inside a spherical triangle and mine Trinity.
         </p>
         <p className="rounded bg-amber-900/40 px-2 py-1 text-xs text-amber-300">
-          Sandbox · internal testnet · Trinity has no monetary value
+          Internal testnet · Trinity has no monetary value
         </p>
       </header>
 
       <section className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
         <div className="text-xs text-neutral-500">Your wallet (self-custody, this device)</div>
         <div className="mt-1 break-all font-mono text-xs text-neutral-300">{address || "…"}</div>
+        <p className="mt-2 text-[11px] text-neutral-500">
+          If you do not have a wallet yet, one is created automatically in this browser. Keep this
+          browser+device for the same wallet on next use.
+        </p>
         <div className="mt-3 flex items-baseline justify-between">
           <span className="text-xs text-neutral-500">Trinity balance</span>
           <span className="text-2xl font-semibold">{balance}</span>

@@ -3,7 +3,7 @@ import { createApp, REFERENCE_PRICE_DISCLAIMER } from "../src/app.js";
 
 const TOKEN = "admin-token";
 const app = () =>
-  createApp({ adminToken: TOKEN, referencePriceEurPerStep: 1, trinityPerStep: 100_000_000 });
+  createApp({ adminToken: TOKEN, referencePriceEurPerStep: 1, trinityPerStep: 67_108_864 });
 
 describe("closed campaign credits (ADR-011)", () => {
   it("grants require the foundation token", async () => {
@@ -34,8 +34,8 @@ describe("closed campaign credits (ADR-011)", () => {
         headers: { "content-type": "application/json" },
       })
     ).json()) as any;
-    // 2.5 EUR at 1 EUR/STEP × 1e8 Trinity/STEP = 250,000,000 Trinity exactly.
-    expect(conv.trinity_budget).toBe("250000000");
+    // 2.5 EUR at 1 EUR/STEP × 67,108,864 Trinity/STEP = 167,772,160 Trinity exactly.
+    expect(conv.trinity_budget).toBe("167772160");
     expect(conv.balance_credits).toBe(97.5);
     expect(conv.disclaimer).toBe(REFERENCE_PRICE_DISCLAIMER);
   });

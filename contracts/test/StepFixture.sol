@@ -20,7 +20,7 @@ import {MiningClaimVerifier} from "../src/MiningClaimVerifier.sol";
 abstract contract StepFixture is Test {
     // Alpha parameter defaults (UNFROZEN — mirror config/protocol-params.alpha.json).
     uint32 internal constant SLOTS = 27;
-    uint256 internal constant BASE_REWARD = 67_108_864; // 2^26 → slot 26 = exactly 1
+    uint256 internal constant BASE_REWARD = 67_108_864; // 2^26 → 0-indexed slot 26 (27th slot) = 1
     uint64 internal constant OPENING_DELAY = 0; // pilot config; non-zero tested separately
     uint64 internal constant COOLDOWN = 0; // pilot config; non-zero tested separately
     uint256 internal constant TWIN_BPS = 10_000;

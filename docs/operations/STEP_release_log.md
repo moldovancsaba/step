@@ -1,5 +1,16 @@
 # STEP Release Log
 
+## alpha-0.4 — 2026-06-16 (reference normalization pass)
+
+- Aligned denominator and reward-curve text in all published tokenomics/contract-adjacent docs:
+  - `docs/tokenomics/STEP_tokenomics_constitution.md` now uses `1 STEP = 67,108,864 Trinity` as the canonical working ratio.
+  - Development playbook now includes a file-by-file contract-doc-service update sequence in `docs/engineering/STEP_development_plan.md`.
+  - Exchange service conversion tests (`services/exchange-service/test/credits.test.ts`) updated to the same denominator.
+- Clarified operator onboarding docs:
+  - `README.md` now documents the `/explorer/mesh` route and wallet import/export behavior.
+  - `docs/product/STEP_product_specification.md` now states the concrete wallet recovery path and map route.
+- No protocol-contract behavior change in this release; only reference and operator-use guidance, plus assertion fixtures/comments for consistency.
+
 ## alpha-0.3 — 2026-06-14 (usable without Apple — browser miner)
 
 - **`apps/web-miner`**: a browser-based miner so anyone with a phone browser can use the platform — no Apple, no TestFlight. The browser generates a self-custody wallet, reads geolocation, and signs the canonical claim locally (`@step/proof-protocol`); same-origin `/api` routes proxy to the gateway/mesh/chain (no CORS). **Verified end-to-end against the live stack — a browser-path claim finalised on-chain and received the base reward.**

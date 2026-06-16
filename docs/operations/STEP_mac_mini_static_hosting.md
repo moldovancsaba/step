@@ -211,11 +211,14 @@ Set these Worker variables:
 
 - `STEP_BACKEND_GATEWAY_URL`: `https://YOUR_MAC_GATEWAY_HOST/api/gateway`
 - `STEP_BACKEND_INDEXER_URL`: `https://YOUR_MAC_GATEWAY_HOST/api/indexer`
+- `STEP_WEB_EXPLORER_URL`: `https://YOUR_EXPLORER_HOST` (or `/explorer` while hosting locally)
+- `STEP_WEB_MINER_URL`: `https://YOUR_MINER_HOST` (or `/miner` while hosting locally)
 
 The Worker serves `apps/static-frontend/dist` as static assets and proxies:
 
 - `/api/gateway/*` -> `STEP_BACKEND_GATEWAY_URL`
 - `/api/indexer/*` -> `STEP_BACKEND_INDEXER_URL`
+- `/explorer/*` and `/miner/*` -> `STEP_WEB_EXPLORER_URL` and `STEP_WEB_MINER_URL` when configured
 
 Do not include a `_redirects` file in this Worker deployment. The Worker
 static-assets config already sets
@@ -241,3 +244,54 @@ Move to a VPS/internal pilot host when you need any of:
 - persistent Postgres/IPFS backends;
 - multisig admin custody;
 - audit/legal/field-test gates.
+
+## 12. Non-sandbox usage and wallet identity
+
+The static web app includes explicit wallet-token login and recovery from Settings:
+
+- Open `Settings` in the web app and click `Copy current token` to copy your active wallet key.
+- On another device/browser, open `Settings`, paste that key into **Wallet token** and click `Login and save wallet`.
+- Save an editable **Wallet name** for easy identification.
+- Use `Save current token` to persist a temporary session wallet into local browser storage.
+- Use `Forget saved token` to remove persisted identity from this browser.
+
+Wallet identities are local to the browser and only restore when you paste the token.
+Treat the raw token as a private key.
+
+### Cloudflare runtime credentials
+
+Keep these in `.env.cloudflare` (already gitignored):
+
+```sh
+CLOUDFLARE_API_TOKEN=...
+CLOUDFLARE_ACCOUNT_ID=...
+R2_ACCESS_KEY_ID=...
+R2_SECRET_ACCESS_KEY=...
+R2_ENDPOINT=https://$CLOUDFLARE_ACCOUNT_ID.r2.cloudflarestorage.com
+```
+
+From the repo root, `pnpm --dir apps/static-frontend deploy:cloudflare-worker` reads
+from environment variables and updates `https://step.moldovancsaba.workers.dev`.
+
+### One-click non-sandbox launcher
+
+From the repo root:
+
+```sh
+pnpm start:non-sandbox-webapp
+```
+
+The script:
+
+- checks `STEP_WEB_BASE_URL/config.js`
+- checks `.../api/gateway/healthz`
+- checks `.../api/indexer/healthz`
+- checks `/explorer`, `/explorer/mesh`, and `/miner`
+- opens the launcher, explorer, map, and miner URLs in your browser
+
+Optional overrides:
+
+- `STEP_WEB_BASE_URL` (default: `https://step.moldovancsaba.workers.dev`)
+- `STEP_WEB_GATEWAY_BASE_URL` (default: `<base>/api/gateway`)
+- `STEP_WEB_INDEXER_BASE_URL` (default: `<base>/api/indexer`)
+- `STEP_WEB_OPEN_PAGES=0` to only verify routes without opening tabs

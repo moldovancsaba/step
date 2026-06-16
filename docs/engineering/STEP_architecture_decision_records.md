@@ -115,7 +115,7 @@ Deviations from the literal master-prompt tree, with reasons (documented as requ
 **Context:** SYS §8.5: the legacy 28-slot halving model can violate the ≥1-Trinity rule; "define Trinity first, then slots and curve." HARD §4.3: any formula producing <1 Trinity is invalid.
 **Decision:**
 - `TriangleMiningState` takes `totalSlots` and a reward-curve definition as constructor/registry parameters.
-- Alpha defaults: **27 slots**, geometric halving from a per-triangle base reward, with the contract enforcing `reward >= 1 Trinity` as a hard invariant (mint reverts otherwise). 27 is chosen because with 1 STEP = 1e8 Trinity and halving, slot 27 of a base reward 67,108,864 Trinity (= 2^26) yields exactly 1 Trinity — an internally consistent default that demonstrates the invariant. These numbers are demonstration defaults, **not** tokenomics commitments.
+- Alpha defaults: **27 slots**, geometric halving from a per-triangle base reward, with the contract enforcing `reward >= 1 Trinity` as a hard invariant (mint reverts otherwise). 27 is chosen because with 1 STEP = 67,108,864 Trinity and halving, slot 27 of a base reward 67,108,864 Trinity (= 2^26) yields exactly 1 Trinity — an internally consistent default that demonstrates the invariant. These numbers are demonstration defaults, **not** tokenomics commitments.
 - The parameter registry and all dashboards label these values `UNFROZEN — pending tokenomics constitution`.
 **Consequences:** Contracts and tests are real and complete; economics remain honest about being undecided (master prompt §6.3).
 
@@ -215,7 +215,7 @@ Deviations from the literal master-prompt tree, with reasons (documented as requ
 
 | # | Decision | Blocks | Owner type |
 |---|---|---|---|
-| OPEN-1 | Final Trinity denomination (default 1 STEP = 1e8 Trinity is RECOMMENDED, unconfirmed) | Tokenomics constitution, whitepaper | Product/founder |
+| OPEN-1 | Final Trinity denomination (default 1 STEP = 67,108,864 Trinity is RECOMMENDED, unconfirmed) | Tokenomics constitution, whitepaper | Product/founder |
 | OPEN-2 | Permanent twin schedule + cap | Tokenomics constitution, treasury docs | Product/founder + legal |
 | OPEN-3 | Max total supply model | Whitepaper, investor material | Product/founder |
 | OPEN-4 | Production chain (L2/appchain/rollup) | MVP deployment | Engineering + cost/legal review |

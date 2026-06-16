@@ -93,7 +93,7 @@ Each requirement has:
 
 | ID | Requirement | Source | Class | Alpha |
 |---|---|---|---|---|
-| TOK-001 | Recommended denomination: 1 STEP = 100,000,000 Trinity. | SYS §9.1, HARD §4.2 | RECOMMENDED (final ratio is DECISION) | IN (configurable constant) |
+| TOK-001 | Recommended denomination: 1 STEP = 67,108,864 Trinity. | SYS §9.1, HARD §4.2 | RECOMMENDED (final ratio is DECISION) | IN (configurable constant) |
 | TOK-002 | Natural Trinity is minted only when a valid proof-of-presence claim is accepted for an available collector slot of a mineable triangle. | HARD §4.5 | CONFIRMED | IN |
 | TOK-003 | Sponsored Trinity must come from already-existing Trinity (purchased/transferred/locked into campaign pools), never newly minted for campaigns. | HARD §4.6, SYS §9.5 | RECOMMENDED | IN |
 | TOK-004 | Sponsored Trinity does not reset natural mining scarcity/history. | SYS §9.5, HARD §10.2 | CONFIRMED | IN |

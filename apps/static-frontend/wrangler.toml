@@ -7,3 +7,7 @@ main = "./worker.js"
 directory = "./dist"
 binding = "ASSETS"
 not_found_handling = "single-page-application"
+
+[vars]
+STEP_WEB_EXPLORER_URL = "/explorer"
+STEP_WEB_MINER_URL = "/miner"

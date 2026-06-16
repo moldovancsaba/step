@@ -12,6 +12,8 @@ interface Config {
   gatewayUrl: string;
   indexerUrl: string;
   publicBaseUrl?: string;
+  explorerUrl?: string;
+  minerUrl?: string;
   staticRoot: string;
   corsOrigins: string[];
 }
@@ -31,6 +33,8 @@ function loadConfig(): Config {
     gatewayUrl: env("GATEWAY_URL", "http://127.0.0.1:8080"),
     indexerUrl: env("INDEXER_URL", "http://127.0.0.1:8090"),
     publicBaseUrl: process.env.STEP_PUBLIC_BASE_URL?.replace(/\/$/, ""),
+    explorerUrl: process.env.STEP_EXPLORER_URL?.trim(),
+    minerUrl: process.env.STEP_MINER_URL?.trim(),
     staticRoot,
     corsOrigins: (process.env.STEP_ONLINE_CORS_ORIGINS ?? "")
       .split(",")
@@ -59,6 +63,25 @@ function forwardHeaders(headers: Headers) {
   return next;
 }
 
+async function proxyTo(
+  c: Context,
+  targetUrl: string,
+) {
+  const method = c.req.method;
+  const body = method === "GET" || method === "HEAD" ? undefined : c.req.raw.body;
+  const resp = await fetch(targetUrl, {
+    method,
+    headers: forwardHeaders(c.req.raw.headers),
+    body,
+    duplex: body ? "half" : undefined,
+  } as RequestInit);
+  return new Response(resp.body, {
+    status: resp.status,
+    statusText: resp.statusText,
+    headers: forwardHeaders(resp.headers),
+  });
+}
+
 function joinTarget(base: string, path: string, query: string) {
   const url = new URL(path, base.endsWith("/") ? base : `${base}/`);
   url.search = query;
@@ -83,11 +106,23 @@ function createApp(config: Config) {
 
   app.get("/config.js", (c) => {
     const base = config.publicBaseUrl ?? "";
+    const explorerUrl = config.explorerUrl
+      ? config.explorerUrl.startsWith("http")
+        ? config.explorerUrl
+        : `${base}${config.explorerUrl}`
+      : "/explorer";
+    const minerUrl = config.minerUrl
+      ? config.minerUrl.startsWith("http")
+        ? config.minerUrl
+        : `${base}${config.minerUrl}`
+      : "/miner";
     return c.text(
       `window.STEP_CONFIG = ${JSON.stringify(
         {
           gatewayUrl: `${base}/api/gateway`,
           indexerUrl: `${base}/api/indexer`,
+          explorerUrl,
+          minerUrl,
         },
         null,
         2,
@@ -129,6 +164,30 @@ function createApp(config: Config) {
 
   app.all("/api/gateway/*", (c) => proxy(c, config.gatewayUrl, "/api/gateway"));
   app.all("/api/indexer/*", (c) => proxy(c, config.indexerUrl, "/api/indexer"));
+
+  if (config.explorerUrl) {
+    app.all("/explorer", (c) => {
+      return proxy(c, config.explorerUrl!, "/explorer");
+    });
+    app.all("/explorer/*", (c) => {
+      const url = new URL(c.req.url);
+      const path = url.pathname.slice("/explorer".length) || "/";
+      const target = new URL(path, config.explorerUrl!);
+      return proxyTo(c, `${target.href}${url.search}`);
+    });
+  }
+
+  if (config.minerUrl) {
+    app.all("/miner", (c) => {
+      return proxy(c, config.minerUrl!, "/miner");
+    });
+    app.all("/miner/*", (c) => {
+      const url = new URL(c.req.url);
+      const path = url.pathname.slice("/miner".length) || "/";
+      const target = new URL(path, config.minerUrl!);
+      return proxyTo(c, `${target.href}${url.search}`);
+    });
+  }
 
   if (existsSync(config.staticRoot)) {
     app.use("/*", serveStatic({ root: config.staticRoot }));

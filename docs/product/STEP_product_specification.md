@@ -31,7 +31,9 @@ The single protocol question: *Was this miner physically present inside this sph
 
 ## 4. Miner experience (alpha app)
 
-Onboarding explains location use plainly → self-custodial wallet in Keychain → location permission → map/triangle view → one-tap Mine → live status (validating → finalised/rejected with reasons) → balance and history → privacy controls. Testnet banner everywhere: pilot Trinity has no monetary value.
+Onboarding explains location use plainly → self-custodial wallet creation/import (browser wallet file + private-key restore, iOS keychain path in mobile app) → location permission → map/triangle view → one-tap Mine → live status (validating → finalised/rejected with reasons) → balance and history → privacy controls. Testnet banner everywhere: pilot Trinity has no monetary value.
+
+Map visibility: users should use `/explorer/mesh` for the visual triangle map and claim context; `/explorer` for claims/table telemetry.
 
 ## 5. Merchant experience (alpha dashboard)
 
