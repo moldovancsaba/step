@@ -25,6 +25,8 @@ Gateway-issued: `wallethex:expiryUnix:random.tag16` where `tag = keccak256(secre
 
 valid signature ∧ fresh single-use nonce ∧ timestamp within window ∧ fields in bounds ∧ integrity-mode policy satisfied (attested tokens present, or dev mode explicitly allowed off-pilot) ∧ **independently recomputed** triangle == claimed triangle ∧ accuracy within tier ceiling and boundary policy ∧ mineable level (natural) ∧ fraud score < threshold ∧ validator quorum weight ≥ threshold ∧ triangle open on-chain (not Locked/Cooldown/Exhausted/Frozen) ∧ claim hash never finalised before.
 
+Alpha currently mines only level 21, and the app does not auto-downgrade to lower levels. If your resolved `mesh_level` is not mineable, the claim is rejected as `level_not_mineable`. Child triangles (21+1, etc.) are only mineable after the parent triangle is fully exhausted.
+
 Boundary semantics at level 21 (≈6.7 m sides): a realistic GPS accuracy circle almost always overlaps an edge, so `boundary_ambiguous` is the *normal* informational state — the deterministic lowest-ID assignment stands (HARD §5.7); only `reject_accuracy` blocks.
 
 ## 4. Fraud scoring v1 (implemented signals)

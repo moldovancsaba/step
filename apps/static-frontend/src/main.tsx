@@ -47,25 +47,41 @@ const DEFAULT_WALLET_FILE_NAME = "step-wallet-profile";
 
 const MESH_LEVEL_BY_ACCURACY = [
   { maxAccuracy: 25, level: 21 },
-  { maxAccuracy: 50, level: 20 },
-  { maxAccuracy: 100, level: 19 },
-  { maxAccuracy: 200, level: 18 },
-  { maxAccuracy: 400, level: 17 },
-  { maxAccuracy: 800, level: 16 },
-  { maxAccuracy: Infinity, level: 15 },
+  { maxAccuracy: Infinity, level: 21 },
 ] as const;
 
-const MESH_LEVEL_FALLBACK_ORDER = [21, 20, 19, 18, 17, 16, 15];
+const NATURAL_MINEABLE_LEVELS = [21] as const;
+const MESH_LEVEL_FALLBACK_ORDER = [...NATURAL_MINEABLE_LEVELS] as const;
 
 const MESH_ACCURACY_GUIDE = [
-  "For level 21 targets, keep accuracy at 25m or better.",
-  "For level 20 targets, keep accuracy around 50m (actual level-20 side is ~13.6m).",
-  "For level 19 targets, keep accuracy around 100m.",
-  "For level 18 targets, keep accuracy around 200m.",
-  "For level 17 targets, keep accuracy around 400m.",
-  "For level 16 targets, keep accuracy around 800m.",
-  "If weaker than 800m, the app falls back to lower levels automatically.",
+  "Pilot mineable level is 21 only (all lower levels are non-mineable in alpha).",
+  "Keep accuracy around 25m or better for level 21 to avoid accuracy_too_low.",
+  "If your level is not mineable, we stop immediately and do not auto-fall into lower levels.",
 ];
+
+const REJECT_REASON_HINTS: Record<string, string> = {
+  nonce_rejected: "Your one-time nonce was rejected. Wait for the next nonce or refresh your device clock.",
+  accuracy_too_low: "Your location accuracy was too low for level 21. Open sky and retry.",
+  level_not_mineable: "Your location resolved to a non-mineable level. Current network rule is level 21 only.",
+  geometry_mismatch: "Geometry verification rejected the claimed triangle.",
+  geometry_rejected: "Geometry verification rejected the claimed triangle.",
+  boundary_ambiguous: "Your location overlaps an edge. Move a few meters and retry from a safer point.",
+  claim_already_finalised: "This claim hash was already finalised once.",
+  triangle_blocked: "This triangle is currently frozen by safety rules.",
+  parent_not_exhausted: "The parent triangle is not fully mined yet.",
+  triangle_id_malformed: "The triangle ID was malformed.",
+  level_mismatch: "The claimed level does not match the triangle ID.",
+};
+
+const CHAIN_REVERT_HINTS: Record<string, string> = {
+  claimalreadyfinalised: "This exact claim hash was already finalised.",
+  triangleidmalformed: "The triangle ID was malformed. Recompute your location claim.",
+  trianglelevelmismatch: "Level in claim does not match the triangle hierarchy.",
+  parenttrianglenotexhausted: "The parent triangle must be fully mined (all 27 miners) before this child can open.",
+  triangleblocked: "The triangle is currently blocked by safety controls.",
+  walletalreadymined: "That wallet already mined this triangle once. Move to an unmined child triangle.",
+  parentnotexhausted: "The parent triangle must be fully mined (all allowed slots) before this child becomes mineable.",
+};
 
 function normalizePath(pathname: string) {
   if (!pathname || pathname === "/") return "/";
@@ -232,16 +248,49 @@ async function json<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 function chooseMeshLevelForAccuracy(accuracyM: number) {
-  return MESH_LEVEL_BY_ACCURACY.find((entry) => accuracyM <= entry.maxAccuracy)?.level ?? DEFAULT_MESH_LEVEL;
+  const best = MESH_LEVEL_BY_ACCURACY.find((entry) => accuracyM <= entry.maxAccuracy)?.level ?? DEFAULT_MESH_LEVEL;
+  if (MESH_LEVEL_FALLBACK_ORDER.includes(best as (typeof MESH_LEVEL_FALLBACK_ORDER)[number])) return best;
+  return MESH_LEVEL_FALLBACK_ORDER[0]!;
 }
 
 function buildMeshAttemptLevels(startLevel: number) {
-  const index = MESH_LEVEL_FALLBACK_ORDER.indexOf(startLevel);
-  const base = index >= 0
-    ? MESH_LEVEL_FALLBACK_ORDER.slice(index)
-    : [DEFAULT_MESH_LEVEL, ...MESH_LEVEL_FALLBACK_ORDER.filter((level) => level < DEFAULT_MESH_LEVEL)];
+  const chosen = MESH_LEVEL_FALLBACK_ORDER.includes(startLevel as (typeof MESH_LEVEL_FALLBACK_ORDER)[number])
+    ? startLevel
+    : MESH_LEVEL_FALLBACK_ORDER[0];
+  return [chosen];
+}
 
-  return [...new Set([DEFAULT_MESH_LEVEL, ...base])];
+function normalizeChainReason(reason: string) {
+  if (!reason) return reason;
+  return reason.trim();
+}
+
+function describeRejectReason(reason: string) {
+  const normalized = normalizeChainReason(reason);
+  const key = normalized.toLowerCase();
+
+  if (key.startsWith("chain_revert:")) {
+    const chainKey = key.slice("chain_revert:".length).split("(")[0] ?? "";
+    for (const name of Object.keys(CHAIN_REVERT_HINTS)) {
+      if (chainKey.startsWith(name)) return CHAIN_REVERT_HINTS[name]!;
+    }
+    return `Chain rejected this claim (${chainKey}).`;
+  }
+
+  if (key.startsWith("claim_already_finalised")) return REJECT_REASON_HINTS.claim_already_finalised;
+  if (key.startsWith("triangle_id_malformed") || key.startsWith("triangleidm")) return REJECT_REASON_HINTS.triangle_id_malformed;
+  if (key.startsWith("trianglelevelmismatch")) return REJECT_REASON_HINTS.level_mismatch;
+  if (key.startsWith("parenttrianglenotexhausted")) return REJECT_REASON_HINTS.parent_not_exhausted;
+  if (key.startsWith("triangleblocked")) return REJECT_REASON_HINTS.triangle_blocked;
+  if (key.startsWith("chain_revert")) return "Chain consensus rejected this triangle.";
+
+  if (key in REJECT_REASON_HINTS) return REJECT_REASON_HINTS[key];
+  return reason;
+}
+
+function describeRejectReasons(reasons: string[]) {
+  if (!reasons.length) return "No detail.";
+  return reasons.map((reason) => describeRejectReason(reason)).join(", ");
 }
 
 function isAccuracyTooLowReason(rejectReasons: string[]) {
@@ -677,39 +726,25 @@ function Miner({
         setRecord(submitted);
 
         const reasons = submitted.reject_reasons ?? [];
-        const isRetryableRejection =
-          submitted.status === "rejected" &&
-          reasons.length > 0 &&
-          isRetryableReason(reasons);
-
-        if (submitted.status !== "rejected" || !isRetryableRejection) {
-          setPhase(submitted.status === "rejected" ? "error" : "done");
-          setMessage(
-            submitted.status === "finalised"
-              ? "Claim finalised. Trinity mined on the internal testnet."
-              : `Claim ${submitted.status}: ${submitted.reject_reasons.join(", ") || "waiting"}`,
-          );
+        if (submitted.status === "finalised") {
+          setPhase("done");
+          setMessage("Claim finalised. Trinity mined on the internal testnet.");
           return;
         }
 
-        if (i < levelSequence.length - 1) {
-          const nextLevel = levelSequence[i + 1];
-          const reasonHint = isLevelNotMineableReason(reasons)
-            ? "level not mineable"
-            : "accuracy too low";
-          setMessage(`${reasonHint} at level ${attemptLevel}. Retrying at level ${nextLevel}...`);
-          continue;
+        if (submitted.status === "rejected") {
+          setPhase("error");
+          const humanReason = describeRejectReasons(reasons);
+          const hint =
+            isRetryableReason(reasons) && isAccuracyTooLowReason(reasons)
+              ? `${humanReason} Move to open area and retry manually.`
+              : humanReason;
+          setMessage(`Rejected: ${hint}`);
+          return;
         }
 
         setPhase("error");
-        const finalHint = isAccuracyTooLowReason(reasons)
-          ? `accuracy still too low at level ${attemptLevel}`
-          : isLevelNotMineableReason(reasons)
-            ? `level ${attemptLevel} is not mineable in this network`
-            : `mining cannot continue at level ${attemptLevel}`;
-        setMessage(
-          `Rejected: ${finalHint}.`,
-        );
+        setMessage(`Claim ${submitted.status}: ${submitted.reject_reasons.join(", ") || "processing"}`);
         return;
       }
     } catch (err) {

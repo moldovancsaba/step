@@ -54,4 +54,5 @@ A permanent 100% twin doubles effective issuance. The alpha default is the *docu
 1. How many times can a triangle be mined naturally? `27` times (default `collector_slots_per_triangle`).
 2. How many breakdown levels are available? The deterministic subdivision is recursive and 4-way per level (`step-mesh-v1` supports deep levels by recursion; the protocol enforces mineable levels by configuration).
 3. How much Trinity does a miner earn? `slot 0` starts at `67,108,864`; each next slot divides by 2, and the protocol blocks any slot reward < `1` Trinity.
-4. How is a claim approved? A claim is approved only when it passes validator quorum checks and all acceptance gates (geometry, signature, freshness, precision, cooldown/open state, and no fraud reasons); rejections return explicit reasons and retry policy applies at lower levels for weak location accuracy.
+4. How is a claim approved? A claim is approved only when it passes validator quorum checks and all acceptance gates (geometry, signature, freshness, precision, cooldown/open state, and no fraud reasons). Rejection reasons are returned by the gateway/contract and shown to the miner.
+5. Can I mine the same triangle twice with the same wallet? No. A wallet can consume each natural triangle slot only once.

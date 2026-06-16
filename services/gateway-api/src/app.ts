@@ -38,6 +38,34 @@ export interface ClaimRecord {
   finalised_at?: string;
 }
 
+function shorten(str: string, maxLen = 180) {
+  if (str.length <= maxLen) return str;
+  return str.slice(0, maxLen);
+}
+
+function extractRevertReason(error: unknown): string {
+  const raw =
+    error instanceof Error ? error.message : typeof error === "string" ? error : JSON.stringify(error ?? "");
+
+  const direct = raw.match(/reverted with the following reason: ([^\n]+)/);
+  if (direct && direct[1]) return direct[1].trim();
+
+  const known = raw.match(
+    /\b(ClaimAlreadyFinalised|TriangleIdMalformed|TriangleLevelMismatch|ParentTriangleNotExhausted|TriangleBlocked|LevelNotMineable|AccuracyTooLow|BoundaryAmbiguous|ParentNotExhausted|NonceRejected|WalletAlreadyMined|TriangleNotOpen|ParentNotExhausted|ClaimNotFound)\b/,
+  );
+  if (known && known[1]) return known[1];
+
+  const nested = raw.match(/\breason=([A-Za-z0-9_]+)\b/);
+  if (nested && nested[1]) return nested[1];
+
+  const fallback = raw.match(/\b([A-Z][A-Za-z0-9_]+)\b/);
+  if (fallback && fallback[1]) {
+    return fallback[1];
+  }
+
+  return raw.trim();
+}
+
 export interface GatewayDeps {
   nonceSecret: string;
   nonceTtlSeconds: number;
@@ -50,6 +78,7 @@ export interface GatewayDeps {
   /** Submit finaliseNaturalClaim; resolves to the tx hash after inclusion. */
   submitNatural(args: {
     claimHash: Hex;
+    triangleId: string;
     triangleIdHash: Hex;
     meshLevel: number;
     miner: Address;
@@ -130,7 +159,7 @@ export function createApp(deps: GatewayDeps) {
 
     const message = canonicalClaimMessage(claim);
     const ch = claimHash(message);
-    const th = triangleIdHash(claim.triangle_id);
+  const th = triangleIdHash(claim.triangle_id);
     const existing = records.get(ch);
     if (existing) {
       // Idempotent: resubmission returns the existing record (POP-005 replays
@@ -171,7 +200,7 @@ export function createApp(deps: GatewayDeps) {
       for (const reason of resp.verdict.reject_reasons) rejectReasons.add(reason);
     }
 
-    if (!votesAreConsistent(votes.map((v) => v.vote), ch, record.miner)) {
+    if (!votesAreConsistent(votes.map((v) => v.vote), ch, record.triangle_id_hash, record.miner)) {
       record.status = "rejected";
       record.reject_reasons = ["inconsistent_votes"];
       return c.json(record, 200);
@@ -208,6 +237,7 @@ export function createApp(deps: GatewayDeps) {
           })
         : await deps.submitNatural({
             claimHash: ch,
+            triangleId: claim.triangle_id,
             triangleIdHash: th,
             meshLevel: claim.mesh_level,
             miner: record.miner,
@@ -220,9 +250,10 @@ export function createApp(deps: GatewayDeps) {
     } catch (err) {
       // Contract is the final authority: a revert (exhausted slot, frozen
       // triangle, campaign rules…) rejects the claim with the revert detail.
+      const chainReason = extractRevertReason(err);
       record.status = "rejected";
       record.reject_reasons = [
-        `chain_revert:${err instanceof Error ? err.message.slice(0, 200) : "unknown"}`,
+        `chain_revert:${shorten(chainReason, 220)}`,
       ];
     }
     return c.json(record, 200);

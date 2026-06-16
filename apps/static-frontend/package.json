@@ -8,7 +8,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 0.0.0.0 --port 3010",
     "deploy:cloudflare": "pnpm dlx wrangler pages deploy dist",
-    "deploy:cloudflare-worker": "pnpm dlx wrangler deploy",
+    "deploy:cloudflare-worker": "pnpm dlx wrangler deploy --keep-vars ${STEP_BACKEND_GATEWAY_URL:+--var STEP_BACKEND_GATEWAY_URL:${STEP_BACKEND_GATEWAY_URL}} ${STEP_BACKEND_INDEXER_URL:+--var STEP_BACKEND_INDEXER_URL:${STEP_BACKEND_INDEXER_URL}} ${STEP_WEB_EXPLORER_URL:+--var STEP_WEB_EXPLORER_URL:${STEP_WEB_EXPLORER_URL}} ${STEP_WEB_MINER_URL:+--var STEP_WEB_MINER_URL:${STEP_WEB_MINER_URL}}",
     "test": "vitest run --passWithNoTests",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit"

@@ -34,6 +34,9 @@ contract TriangleMiningState is Parameterized {
     uint64 public immutable GENESIS_TIME;
 
     mapping(bytes32 => TriState) public triangles;
+    mapping(bytes32 => mapping(address => bool)) public minedByWallet;
+
+    error WalletAlreadyMined(address miner, bytes32 triangleId);
 
     event TriangleSlotConsumed(
         bytes32 indexed triangleId, uint32 slot, uint256 rewardTrinity, address indexed miner
@@ -118,6 +121,7 @@ contract TriangleMiningState is Parameterized {
     {
         TriangleStatus st = status(triangleId);
         if (st != TriangleStatus.Open) revert TriangleNotOpen(triangleId, st);
+        if (minedByWallet[triangleId][miner]) revert WalletAlreadyMined(miner, triangleId);
         TriState storage t = triangles[triangleId];
         slot = t.usedSlots;
         reward = slotReward(slot);
@@ -125,6 +129,7 @@ contract TriangleMiningState is Parameterized {
         require(reward >= 1, "TriangleMiningState: sub-Trinity reward");
         t.usedSlots = slot + 1;
         t.lastMinedAt = uint64(block.timestamp);
+        minedByWallet[triangleId][miner] = true;
         emit TriangleSlotConsumed(triangleId, slot, reward, miner);
     }
 }

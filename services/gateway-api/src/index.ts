@@ -91,6 +91,7 @@ const deps: GatewayDeps = {
   async submitNatural(a) {
     return submitFinalise("finaliseNaturalClaim", [
       a.claimHash,
+      a.triangleId,
       a.triangleIdHash,
       a.meshLevel,
       a.miner,

@@ -59,6 +59,9 @@ contract MiningClaimVerifier is Parameterized, EIP712 {
 
     error ClaimAlreadyFinalised(bytes32 claimHash);
     error LevelNotMineable(uint8 level);
+    error TriangleLevelMismatch(uint8 claimLevel, uint8 parsedLevel);
+    error TriangleIdMalformed(bytes32 triangleIdHash);
+    error ParentTriangleNotExhausted(bytes32 parentTriangleId);
     error TriangleBlocked(bytes32 triangleId);
     error UnsortedOrDuplicateValidator(address validator);
     error SignerMismatch(address expected, address recovered);
@@ -137,27 +140,127 @@ contract MiningClaimVerifier is Parameterized, EIP712 {
         if (SAFETY.isTriangleBlocked(triangleId)) revert TriangleBlocked(triangleId);
     }
 
+    function _parseTriangleId(string calldata triangleId)
+        internal
+        pure
+        returns (uint8 level, bytes32 triangleIdHash, bool hasParent, bytes32 parentHash)
+    {
+        bytes memory value = bytes(triangleId);
+        if (value.length < 10) revert TriangleIdMalformed(keccak256(bytes(triangleId)));
+
+        if (
+            value[0] != 0x53
+            || value[1] != 0x54
+            || value[2] != 0x45
+            || value[3] != 0x50
+            || value[4] != 0x2d
+        ) {
+            revert TriangleIdMalformed(keccak256(bytes(triangleId)));
+        }
+
+        uint256 cursor = 5;
+        if (cursor >= value.length) revert TriangleIdMalformed(keccak256(bytes(triangleId)));
+
+        while (cursor < value.length) {
+            if (value[cursor] < 0x30 || value[cursor] > 0x39) break;
+            if (level > 25) revert TriangleIdMalformed(keccak256(bytes(triangleId)));
+            level = uint8(level * 10 + (uint8(value[cursor]) - 0x30));
+            cursor++;
+        }
+
+        if (level == 0 || cursor >= value.length || value[cursor] != 0x2d) {
+            revert TriangleIdMalformed(keccak256(bytes(triangleId)));
+        }
+        cursor++;
+        if (cursor >= value.length || value[cursor] != 0x46) {
+            revert TriangleIdMalformed(keccak256(bytes(triangleId)));
+        }
+
+        if (cursor + 2 >= value.length) revert TriangleIdMalformed(keccak256(bytes(triangleId)));
+        if (value[cursor + 1] < 0x30 || value[cursor + 1] > 0x39) {
+            revert TriangleIdMalformed(keccak256(bytes(triangleId)));
+        }
+        if (value[cursor + 2] < 0x30 || value[cursor + 2] > 0x39) {
+            revert TriangleIdMalformed(keccak256(bytes(triangleId)));
+        }
+        uint8 face = (uint8(value[cursor + 1]) - 0x30) * 10 + (uint8(value[cursor + 2]) - 0x30);
+        if (face >= 20) {
+            revert TriangleIdMalformed(keccak256(bytes(triangleId)));
+        }
+
+        cursor += 3;
+        if (cursor == value.length) {
+            if (level != 1) {
+                revert TriangleIdMalformed(keccak256(bytes(triangleId)));
+            }
+            hasParent = false;
+            triangleIdHash = keccak256(bytes(triangleId));
+            return (level, triangleIdHash, hasParent, bytes32(0));
+        }
+
+        uint256 pathLen = value.length - cursor;
+        if (pathLen != (uint256(level) - 1)) {
+            revert TriangleIdMalformed(keccak256(bytes(triangleId)));
+        }
+
+        for (uint256 i = 0; i < pathLen; i++) {
+            uint8 child = uint8(value[cursor + i]);
+            if (child < 0x30 || child > 0x33) {
+                revert TriangleIdMalformed(keccak256(bytes(triangleId)));
+            }
+        }
+
+        hasParent = true;
+        triangleIdHash = keccak256(bytes(triangleId));
+        bytes memory parent = new bytes(value.length - 1);
+        for (uint256 i = 0; i < value.length - 1; i++) {
+            parent[i] = value[i];
+        }
+        parentHash = keccak256(parent);
+        return (level, triangleIdHash, hasParent, parentHash);
+    }
+
     /// @notice Finalise a natural mining claim: consume slot, mint reward to the
     ///         miner, allocate the foundation twin, commit the proof hash
     ///         (SYS §23.1 / SYS §8.4 atomic reward logic).
     function finaliseNaturalClaim(
         bytes32 claimHash,
-        bytes32 triangleId,
+        string calldata triangleId,
         uint8 meshLevel,
         address miner,
         bytes32 proofCidHash,
         ValidatorSig[] calldata sigs
     ) external whenDomainNotPaused(ACCESS.PAUSE_MINTING()) {
-        _beginFinalise(claimHash, triangleId);
-        if (!MESH.isMineableLevel(meshLevel)) revert LevelNotMineable(meshLevel);
-        _checkQuorum(claimHash, triangleId, miner, sigs);
+        (uint8 parsedLevel, bytes32 triangleIdHash, bool hasParent, bytes32 parentTriangleId) =
+            _parseTriangleId(triangleId);
 
-        (uint32 slot, uint256 reward) = STATE.consumeSlot(triangleId, miner);
+        if (parsedLevel != meshLevel) revert TriangleLevelMismatch(meshLevel, parsedLevel);
+        if (hasParent && MESH.isMineableLevel(parsedLevel - 1)) {
+            if (STATE.status(parentTriangleId) != TriangleMiningState.TriangleStatus.Exhausted) {
+                revert ParentTriangleNotExhausted(parentTriangleId);
+            }
+        }
+
+        _beginFinalise(claimHash, triangleIdHash);
+        if (!MESH.isMineableLevel(meshLevel)) revert LevelNotMineable(meshLevel);
+        _checkQuorum(claimHash, triangleIdHash, miner, sigs);
+
+        _mintToMiner(claimHash, triangleIdHash, miner, proofCidHash);
+    }
+
+    function _mintToMiner(
+        bytes32 claimHash,
+        bytes32 triangleIdHash,
+        address miner,
+        bytes32 proofCidHash
+    ) internal {
+
+        (uint32 slot, uint256 reward) = STATE.consumeSlot(triangleIdHash, miner);
         TOKEN.mint(miner, reward);
         TREASURY.allocateTwin(claimHash, reward);
-        PROOFS.store(claimHash, triangleId, proofCidHash);
+        PROOFS.store(claimHash, triangleIdHash, proofCidHash);
 
-        emit TriangleMined(triangleId, miner, slot, reward, claimHash);
+        emit TriangleMined(triangleIdHash, miner, slot, reward, claimHash);
     }
 
     /// @notice Finalise a sponsored oasis claim: release locked campaign Trinity

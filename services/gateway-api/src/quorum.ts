@@ -45,11 +45,13 @@ export function aggregateQuorum(
 export function votesAreConsistent(
   votes: SignedVote[],
   claimHash: string,
+  triangleIdHash: string,
   miner: Address,
 ): boolean {
   return votes.every(
     (v) =>
       v.claim_hash.toLowerCase() === claimHash.toLowerCase() &&
+      v.triangle_id_hash.toLowerCase() === triangleIdHash.toLowerCase() &&
       v.miner.toLowerCase() === miner.toLowerCase(),
   );
 }

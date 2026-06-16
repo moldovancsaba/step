@@ -36,6 +36,8 @@ jobs:
         env:
           GATEWAY_URL: ${{ inputs.gateway_url || vars.STEP_STATIC_GATEWAY_URL || 'https://step.moldovancsaba.workers.dev/api/gateway' }}
           INDEXER_URL: ${{ inputs.indexer_url || vars.STEP_STATIC_INDEXER_URL || 'https://step.moldovancsaba.workers.dev/api/indexer' }}
+          BACKEND_GATEWAY_URL: ${{ vars.STEP_BACKEND_GATEWAY_URL }}
+          BACKEND_INDEXER_URL: ${{ vars.STEP_BACKEND_INDEXER_URL }}
         run: |
           cat > apps/static-frontend/dist/config.js <<EOF
           window.STEP_CONFIG = {
@@ -54,13 +56,30 @@ jobs:
             echo "enabled=false" >> "$GITHUB_OUTPUT"
             echo "::notice::Cloudflare secrets not set. Skipping deployment.";
           fi
+      - name: Resolve backend endpoint variables
+        if: steps.cf-check.outputs.enabled == 'true'
+        env:
+          BACKEND_GATEWAY_URL: ${{ env.BACKEND_GATEWAY_URL }}
+          BACKEND_INDEXER_URL: ${{ env.BACKEND_INDEXER_URL }}
+        run: |
+          if [ -z "${BACKEND_GATEWAY_URL}" ]; then
+            echo "::warning::STEP_BACKEND_GATEWAY_URL not set. /api/gateway will return 502 until this is configured.";
+          fi
+          if [ -z "${BACKEND_INDEXER_URL}" ]; then
+            echo "::warning::STEP_BACKEND_INDEXER_URL not set. /api/indexer will return 502 until this is configured.";
+          fi
       - name: Deploy to Cloudflare Pages Worker
         if: steps.cf-check.outputs.enabled == 'true'
         working-directory: apps/static-frontend
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: pnpm dlx wrangler deploy
+          BACKEND_GATEWAY_URL: ${{ vars.STEP_BACKEND_GATEWAY_URL }}
+          BACKEND_INDEXER_URL: ${{ vars.STEP_BACKEND_INDEXER_URL }}
+        run: |
+          pnpm dlx wrangler deploy --keep-vars \
+            ${BACKEND_GATEWAY_URL:+--var STEP_BACKEND_GATEWAY_URL:${BACKEND_GATEWAY_URL}} \
+            ${BACKEND_INDEXER_URL:+--var STEP_BACKEND_INDEXER_URL:${BACKEND_INDEXER_URL}}
       - name: Deployment skipped
         if: steps.cf-check.outputs.enabled != 'true'
         run: |

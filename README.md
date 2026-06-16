@@ -115,6 +115,18 @@ If you use the Cloudflare Worker deployment, set:
 - `STEP_WEB_EXPLORER_URL` (example: `https://step-explorer.example.com`)
 - `STEP_WEB_MINER_URL` (example: `https://step-miner.example.com`)
 
+Store `STEP_BACKEND_GATEWAY_URL` and `STEP_BACKEND_INDEXER_URL` as GitHub repository Variables
+(Settings → Actions → Variables). Workflow deployment uses those values when deploying Cloudflare Worker.
+
+For one-command local worker deploy with real endpoints:
+
+```sh
+cp .env.example .env
+# fill in your real values
+source .env
+pnpm --dir apps/static-frontend deploy:cloudflare-worker
+```
+
 For a single `workers.dev` launcher, the static app can keep `gatewayUrl` and `indexerUrl`
 on `/api/gateway` and `/api/indexer`; set only `STEP_BACKEND_*` and the optional
 `STEP_WEB_*` bindings in the Worker environment.

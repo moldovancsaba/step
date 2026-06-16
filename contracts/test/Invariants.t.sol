@@ -13,11 +13,11 @@ contract MiningHandler is Test {
     uint256 public ghostMinerMinted;
     uint256 internal nonce;
 
-    bytes32[4] internal tris = [
-        keccak256("STEP-21-F00-000000000000000000A0"),
-        keccak256("STEP-21-F03-000000000000000000B1"),
-        keccak256("STEP-21-F11-000000000000000000C2"),
-        keccak256("STEP-21-F19-000000000000000000D3")
+    string[4] internal tris = [
+        "STEP-21-F00-00000000000000000000",
+        "STEP-21-F03-00000000000000000001",
+        "STEP-21-F11-00000000000000000002",
+        "STEP-21-F19-00000000000000000003"
     ];
 
     constructor(StepFixtureHarness h_) {
@@ -25,10 +25,10 @@ contract MiningHandler is Test {
     }
 
     function mineNatural(uint256 triSeed, uint256 minerSeed) external {
-        bytes32 tri = tris[triSeed % tris.length];
+        string memory tri = tris[triSeed % tris.length];
         address miner_ = address(uint160(0x10000 + (minerSeed % 64)));
         bytes32 claimHash = keccak256(abi.encode("inv", ++nonce));
-        uint256 expected = h.exposedNextReward(tri);
+        uint256 expected = h.exposedNextReward(keccak256(bytes(tri)));
         if (expected == 0) return; // exhausted: skip rather than revert
         h.exposedFinalise(claimHash, tri, miner_);
         ghostMinerMinted += expected;
@@ -37,7 +37,7 @@ contract MiningHandler is Test {
 
 /// @dev Exposes fixture internals to the handler.
 contract StepFixtureHarness is StepFixture {
-    function exposedFinalise(bytes32 claimHash, bytes32 tri, address miner_) external {
+    function exposedFinalise(bytes32 claimHash, string memory tri, address miner_) external {
         _finaliseNatural(claimHash, tri, miner_);
     }
 

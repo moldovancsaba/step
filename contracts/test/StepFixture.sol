@@ -47,8 +47,10 @@ abstract contract StepFixture is Test {
     RewardPool public pool;
     MiningClaimVerifier public verifier;
 
-    bytes32 internal constant TRI_A = keccak256("STEP-21-F00-12203302320201032103");
-    bytes32 internal constant TRI_B = keccak256("STEP-21-F07-03210320312030120312");
+    string internal constant TRI_A_STRING = "STEP-21-F00-12203302320201032103";
+    string internal constant TRI_B_STRING = "STEP-21-F07-03210320312030120312";
+    bytes32 internal constant TRI_A = keccak256(bytes(TRI_A_STRING));
+    bytes32 internal constant TRI_B = keccak256(bytes(TRI_B_STRING));
     uint8 internal constant LEVEL = 21;
 
     function setUp() public virtual {
@@ -109,12 +111,12 @@ abstract contract StepFixture is Test {
         }
     }
 
-    function _vote(uint256 pk, bytes32 claimHash, bytes32 tri, address miner_, bool approve)
+    function _vote(uint256 pk, bytes32 claimHash, string memory tri, address miner_, bool approve)
         internal
         view
         returns (MiningClaimVerifier.ValidatorSig memory)
     {
-        bytes32 digest = verifier.voteDigest(claimHash, tri, miner_, approve);
+        bytes32 digest = verifier.voteDigest(claimHash, keccak256(bytes(tri)), miner_, approve);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(pk, digest);
         return MiningClaimVerifier.ValidatorSig({
             validator: vm.addr(pk),
@@ -123,7 +125,7 @@ abstract contract StepFixture is Test {
     }
 
     /// @dev Approval votes from validators [0..n), already address-sorted.
-    function _quorumSigs(bytes32 claimHash, bytes32 tri, address miner_, uint256 n)
+    function _quorumSigs(bytes32 claimHash, string memory tri, address miner_, uint256 n)
         internal
         view
         returns (MiningClaimVerifier.ValidatorSig[] memory sigs)
@@ -134,7 +136,7 @@ abstract contract StepFixture is Test {
         }
     }
 
-    function _finaliseNatural(bytes32 claimHash, bytes32 tri, address miner_) internal {
+    function _finaliseNatural(bytes32 claimHash, string memory tri, address miner_) internal {
         verifier.finaliseNaturalClaim(
             claimHash, tri, LEVEL, miner_, keccak256("cid"), _quorumSigs(claimHash, tri, miner_, 2)
         );

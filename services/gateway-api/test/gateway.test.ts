@@ -9,6 +9,7 @@ import {
   canonicalClaimMessage,
   claimHash,
   personalDigest,
+  triangleIdHash,
   voteDigest,
   type Claim,
   type Hex,
@@ -54,8 +55,8 @@ async function buildClaim(overrides: Partial<Claim> = {}): Promise<Claim> {
 function fakeValidator(index: number, approve: boolean) {
   return async (claim: Claim): Promise<ValidateResponse> => {
     const ch = claimHash(canonicalClaimMessage(claim));
+    const th = triangleIdHash(claim.triangle_id);
     const account = validators[index]!;
-    const th = ("0x" + "11".repeat(32)) as Hex;
     const digest = voteDigest(31337n, VERIFIER, ch, th, claim.wallet_address, approve);
     const signature = await account.sign({ hash: digest });
     return {

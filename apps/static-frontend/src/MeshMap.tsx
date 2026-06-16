@@ -5,7 +5,7 @@ import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { TriangleInfo } from "@step/shared-types";
 
-const MESH_LEVEL = 15;
+const MESH_LEVEL = 21;
 const PILOT_CENTER: [number, number] = [19.0402, 47.4979];
 
 interface MeshState {
@@ -48,6 +48,7 @@ export default function MeshMap({ gatewayUrl, indexerUrl }: MeshMapProps) {
   const mapRef = useRef<maplibregl.Map | null>(null);
   const [selected, setSelected] = useState<TriangleInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState("");
 
   useEffect(() => {
     if (!container.current || mapRef.current) return;
@@ -62,6 +63,64 @@ export default function MeshMap({ gatewayUrl, indexerUrl }: MeshMapProps) {
     mapRef.current = map;
 
     map.on("load", () => {
+      const GeolocateControl = (maplibregl as unknown as {
+        GeolocateControl?: new (options: {
+          positionOptions?: PositionOptions;
+          trackUserLocation?: boolean;
+          showAccuracyCircle?: boolean;
+        }) => maplibregl.IControl;
+      }).GeolocateControl;
+      if (GeolocateControl) {
+        map.addControl(
+          new GeolocateControl({
+            positionOptions: { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
+            trackUserLocation: true,
+            showAccuracyCircle: true,
+          }),
+        );
+      }
+
+      const refreshFromCoordinates = async (lat: number, lon: number) => {
+        const level = MESH_LEVEL;
+        setStatus("Resolving current position...");
+        setError(null);
+        try {
+          const resolved = await fetchJson<TriangleInfo>(
+            `${gatewayUrl}/v1/mesh/resolve?lat=${lat}&lon=${lon}&level=${level}`,
+          );
+          if (!resolved) throw new Error("mesh API unreachable");
+          setSelected(resolved);
+          setStatus(`Resolved triangle ${resolved.triangle_id}`);
+
+          const state = await (async () => {
+            const row = await fetchJson<{ used_slots?: number; frozen?: boolean; oasis_campaigns?: unknown[] }>(
+              `${indexerUrl}/v1/triangles/${resolved.triangle_id_hash}`,
+            );
+            if (!row) return {};
+            return {
+              used_slots: row.used_slots,
+              frozen: row.frozen,
+              oasis: Array.isArray(row.oasis_campaigns) && row.oasis_campaigns.length > 0,
+            };
+          })();
+
+          const neighbours = await Promise.all(
+            resolved.neighbours.map(async (id) =>
+              fetchJson<TriangleInfo>(`${gatewayUrl}/v1/mesh/triangle/${id}`)
+            ),
+          );
+          const features = [
+            triangleToFeature(resolved, state),
+            ...neighbours.filter((n): n is TriangleInfo => n !== null).map((n) => triangleToFeature(n)),
+          ];
+          const src = map.getSource("mesh") as maplibregl.GeoJSONSource | undefined;
+          src?.setData({ type: "FeatureCollection", features });
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "mesh API unreachable");
+          setStatus("");
+        }
+      };
+
       map.addSource("mesh", {
         type: "geojson",
         data: { type: "FeatureCollection", features: [] },
@@ -78,46 +137,26 @@ export default function MeshMap({ gatewayUrl, indexerUrl }: MeshMapProps) {
         source: "mesh",
         paint: { "line-color": "#10b981", "line-width": 1.5 },
       });
-    });
+      map.on("geolocate", (event: unknown) => {
+        const anyEvent = event as { coords: { latitude: number; longitude: number } };
+        void refreshFromCoordinates(anyEvent.coords.latitude, anyEvent.coords.longitude);
+      });
 
-    map.on("click", async (e) => {
-      const level = map.getZoom() >= 16 ? 21 : MESH_LEVEL;
-      try {
-        setError(null);
+      map.on("click", (event: unknown) => {
+        const anyEvent = event as { lngLat: { lat: number; lng: number } };
+        void refreshFromCoordinates(anyEvent.lngLat.lat, anyEvent.lngLat.lng);
+      });
 
-        const resolved = await fetchJson<TriangleInfo>(
-          `${gatewayUrl}/v1/mesh/resolve?lat=${e.lngLat.lat}&lon=${e.lngLat.lng}&level=${level}`,
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            void refreshFromCoordinates(position.coords.latitude, position.coords.longitude);
+          },
+          () => {
+            setStatus("No location permission. Click map to resolve manually.");
+          },
+          { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 },
         );
-        if (!resolved) throw new Error("mesh API unreachable");
-        setSelected(resolved);
-
-        const state = await (async () => {
-          const row = await fetchJson<{ used_slots?: number; frozen?: boolean; oasis_campaigns?: unknown[] }>(
-            `${indexerUrl}/v1/triangles/${resolved.triangle_id_hash}`,
-          );
-          if (!row) return {};
-          return {
-            used_slots: row.used_slots,
-            frozen: row.frozen,
-            oasis: Array.isArray(row.oasis_campaigns) && row.oasis_campaigns.length > 0,
-          };
-        })();
-
-        const neighbours = await Promise.all(
-          resolved.neighbours.map(async (id) =>
-            fetchJson<TriangleInfo>(`${gatewayUrl}/v1/mesh/triangle/${id}`),
-          ),
-        );
-
-        const features = [
-          triangleToFeature(resolved, state),
-          ...neighbours.filter((n): n is TriangleInfo => n !== null).map((n) => triangleToFeature(n)),
-        ];
-
-        const src = map.getSource("mesh") as maplibregl.GeoJSONSource | undefined;
-        src?.setData({ type: "FeatureCollection", features });
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "mesh API unreachable");
       }
     });
 

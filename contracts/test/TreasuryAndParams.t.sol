@@ -17,7 +17,7 @@ contract TreasuryAndParamsTest is StepFixture {
         treasury.applyParam(key);
 
         bytes32 ch = keccak256(abi.encode("twin", bps));
-        _finaliseNatural(ch, TRI_A, miner);
+        _finaliseNatural(ch, TRI_A_STRING, miner);
 
         assertEq(treasury.totalTwinMinted(), (BASE_REWARD * bps) / 10_000);
     }
@@ -31,10 +31,10 @@ contract TreasuryAndParamsTest is StepFixture {
         vm.warp(block.timestamp + PARAM_DELAY);
         treasury.applyParam(key);
 
-        _finaliseNatural(keccak256("cap-1"), TRI_A, miner);
+        _finaliseNatural(keccak256("cap-1"), TRI_A_STRING, miner);
         assertEq(treasury.totalTwinMinted(), cap, "first twin clamped to cap");
 
-        _finaliseNatural(keccak256("cap-2"), TRI_A, miner);
+        _finaliseNatural(keccak256("cap-2"), TRI_A_STRING, miner);
         assertEq(treasury.totalTwinMinted(), cap, "no twin beyond cap");
         // Miner rewards unaffected by the cap.
         assertEq(token.balanceOf(miner), BASE_REWARD + BASE_REWARD / 2);
@@ -81,7 +81,7 @@ contract TreasuryAndParamsTest is StepFixture {
     }
 
     function test_treasury_withdraw_role_gated_and_event_coded() public {
-        _finaliseNatural(keccak256("w-1"), TRI_A, miner);
+        _finaliseNatural(keccak256("w-1"), TRI_A_STRING, miner);
         uint256 bal = treasury.balance();
         assertGt(bal, 0);
 
