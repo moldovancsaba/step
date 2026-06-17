@@ -6,6 +6,7 @@ packages:
   - "services/account-api"
   - "services/online-gateway"
   - "services/indexer"
+  - "services/nft-indexer"
   - "services/merchant-api"
   - "services/proof-storage"
   - "services/exchange-service"

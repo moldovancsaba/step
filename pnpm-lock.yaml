@@ -445,6 +445,34 @@ importers:
         specifier: ^3.0.0
         version: 3.2.6(@types/node@22.19.21)(jiti@1.21.7)(tsx@4.22.4)
 
+  services/nft-indexer:
+    dependencies:
+      '@hono/node-server':
+        specifier: ^1.13.0
+        version: 1.19.14(hono@4.12.25)
+      '@step/shared-types':
+        specifier: workspace:*
+        version: link:../../packages/shared-types
+      hono:
+        specifier: ^4.6.0
+        version: 4.12.25
+      viem:
+        specifier: ^2.21.0
+        version: 2.52.2(typescript@5.9.3)
+    devDependencies:
+      '@types/node':
+        specifier: ^22.19.21
+        version: 22.19.21
+      tsx:
+        specifier: ^4.19.0
+        version: 4.22.4
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.6(@types/node@22.19.21)(jiti@1.21.7)(tsx@4.22.4)
+
   services/online-gateway:
     dependencies:
       '@hono/node-server':
