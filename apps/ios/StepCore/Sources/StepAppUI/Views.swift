@@ -18,10 +18,12 @@ public struct RootView: View {
 
     public var body: some View {
         Group {
-            if model.walletAddress == nil {
-                OnboardingView(model: model)
-            } else {
+            if model.walletAddress != nil {
                 shell
+            } else if model.hasAccount {
+                LoginWall(model: model)   // #27: account/login gate
+            } else {
+                OnboardingView(model: model)  // device-local-key onboarding
             }
         }
         .background(StepColor.background.ignoresSafeArea())

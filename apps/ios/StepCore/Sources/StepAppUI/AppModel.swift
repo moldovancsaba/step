@@ -39,21 +39,30 @@ public final class AppModel: ObservableObject {
     /// Indexer state lookup; when present, mining resolves the current mineable
     /// triangle via the v2 genesis→breakdown walk instead of a fixed level.
     let stateProvider: TriangleStateProviding?
+    /// account-api client; when present the login wall (#27) gates the app with
+    /// a zero-knowledge vault instead of the device-local-key onboarding.
+    let account: AccountClient?
     var wallet: Wallet?
 
     public init(
         keyStore: KeyStore,
         client: GatewayClient,
-        stateProvider: TriangleStateProviding? = nil
+        stateProvider: TriangleStateProviding? = nil,
+        account: AccountClient? = nil
     ) {
         self.keyStore = keyStore
         self.client = client
         self.stateProvider = stateProvider
+        self.account = account
         if let existing = try? Wallet.load(store: keyStore) {
             wallet = existing
             walletAddress = existing.address
         }
     }
+
+    /// True when the app is configured for account/login (#27) rather than the
+    /// device-local-key onboarding.
+    public var hasAccount: Bool { account != nil }
 
     /// Flow A step 4–5: create wallet, store key securely.
     public func createWallet() {
@@ -87,6 +96,98 @@ public final class AppModel: ObservableObject {
         currentTriangle = nil
         claimHistory = []
         status = .idle
+        if let account { Task { try? await account.logout() } }
+    }
+
+    @Published public private(set) var authError: String?
+
+    public func clearAuthError() { authError = nil }
+
+    /// Login wall (#27) — register: derive keys client-side, encrypt the wallet
+    /// (existing key or a fresh one), POST the verifier + ciphertext, then sign
+    /// in. Zero-knowledge: the password/wrapKey never leave the device.
+    public func register(identity: String, password: String) async {
+        guard let account else { return }
+        authError = nil
+        do {
+            let walletKey = (try? keyStore.load()) ?? Self.freshWalletKey()
+            let blob = try await Self.offMain { try AccountVault.encrypt(password: password, walletKey: walletKey) }
+            try await account.register(identity: identity, blob: blob)
+            Self.cacheKdf(blob.kdf, for: identity)        // salt is not secret
+            try keyStore.save(walletKey)
+            _ = try await account.login(identity: identity, authKey: blob.authKey)  // obtain session cookie
+            adopt(walletKey: walletKey, identity: identity)
+        } catch {
+            authError = Self.authMessage(error)
+        }
+    }
+
+    /// Login wall (#27) — sign in: derive authKey from the cached KDF salt,
+    /// fetch the ciphertext, decrypt the wallet into the KeyStore.
+    public func signIn(identity: String, password: String) async {
+        guard let account else { return }
+        authError = nil
+        guard let kdf = Self.cachedKdf(for: identity) else {
+            authError = "No saved key parameters on this device. Create an account here, or import your key."
+            return
+        }
+        do {
+            let authKey = try await Self.offMain { try AccountVault.deriveAuthKey(password: password, kdf: kdf) }
+            let res = try await account.login(identity: identity, authKey: authKey)
+            let key = try await Self.offMain {
+                try AccountVault.decrypt(password: password, ciphertext: res.ciphertext, iv: res.iv, kdf: res.kdf)
+            }
+            try keyStore.save(key)
+            adopt(walletKey: key, identity: identity)
+        } catch {
+            authError = Self.authMessage(error)
+        }
+    }
+
+    private func adopt(walletKey: Data, identity: String) {
+        if let w = try? Wallet(privateKeyData: walletKey) {
+            wallet = w
+            walletAddress = w.address
+            status = .idle
+        } else {
+            authError = "Corrupted wallet key."
+        }
+    }
+
+    // MARK: account helpers
+
+    /// Run a CPU-heavy block (Argon2id) off the main actor.
+    private static func offMain<T: Sendable>(_ work: @escaping @Sendable () throws -> T) async throws -> T {
+        try await Task.detached(priority: .userInitiated) { try work() }.value
+    }
+
+    private static func freshWalletKey() -> Data {
+        while true {
+            let candidate = AccountVault.randomBytes(32)
+            if (try? Wallet(privateKeyData: candidate)) != nil { return candidate }
+        }
+    }
+
+    private static func authMessage(_ error: Error) -> String {
+        switch error {
+        case AccountError.identityTaken: return "That email/username is already taken."
+        case AccountError.invalidCredentials: return "Invalid credentials."
+        case VaultError.decrypt: return "Wrong password or corrupted vault."
+        default: return "Sign-in failed. Check your connection and try again."
+        }
+    }
+
+    private static func kdfKey(_ identity: String) -> String { "step.kdf.\(identity.lowercased())" }
+
+    private static func cacheKdf(_ kdf: KdfParams, for identity: String) {
+        if let data = try? JSONEncoder().encode(kdf) {
+            UserDefaults.standard.set(data, forKey: kdfKey(identity))
+        }
+    }
+
+    private static func cachedKdf(for identity: String) -> KdfParams? {
+        guard let data = UserDefaults.standard.data(forKey: kdfKey(identity)) else { return nil }
+        return try? JSONDecoder().decode(KdfParams.self, from: data)
     }
 
     /// Flow B steps 1–3: resolve the current mineable triangle from a location.
