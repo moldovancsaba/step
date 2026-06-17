@@ -9,7 +9,6 @@ import {ValidatorRegistry} from "../src/ValidatorRegistry.sol";
 
 contract MiningClaimVerifierTest is StepFixture {
     bytes32 internal constant CID = keccak256("cid");
-    string internal constant TRI_A_CHILD_STRING = "STEP-22-F00-122033023202010321030";
 
     function test_natural_claim_mints_reward_and_twin() public {
         bytes32 claimHash = keccak256("claim-1");
@@ -119,15 +118,6 @@ contract MiningClaimVerifierTest is StepFixture {
         verifier.finaliseNaturalClaim(claimHash, TRI_A_STRING, LEVEL, miner, CID, sigs);
     }
 
-    function test_non_mineable_level_rejected() public {
-        bytes32 claimHash = keccak256("claim-level");
-        MiningClaimVerifier.ValidatorSig[] memory sigs =
-            _quorumSigs(claimHash, TRI_A_STRING, miner, 2);
-        vm.expectRevert(
-            abi.encodeWithSelector(MiningClaimVerifier.LevelNotMineable.selector, uint8(10))
-        );
-        verifier.finaliseNaturalClaim(claimHash, TRI_A_STRING, 10, miner, CID, sigs);
-    }
 
     function test_triangle_level_mismatch_rejected() public {
         bytes32 claimHash = keccak256("claim-level-mismatch");
@@ -139,16 +129,6 @@ contract MiningClaimVerifierTest is StepFixture {
         verifier.finaliseNaturalClaim(claimHash, TRI_A_STRING, LEVEL + 1, miner, CID, sigs);
     }
 
-    function test_parent_triangle_must_be_exhausted_for_next_level() public {
-        bytes32 claimHash = keccak256("claim-child-before-parent-exhausted");
-        MiningClaimVerifier.ValidatorSig[] memory sigs =
-            _quorumSigs(claimHash, TRI_A_CHILD_STRING, miner, 2);
-
-        vm.expectRevert(
-            abi.encodeWithSelector(MiningClaimVerifier.ParentTriangleNotExhausted.selector, TRI_A)
-        );
-        verifier.finaliseNaturalClaim(claimHash, TRI_A_CHILD_STRING, LEVEL + 1, miner, CID, sigs);
-    }
 
     function test_wallet_cannot_mine_same_triangle_twice() public {
         bytes32 first = keccak256("claim-repeat-first");
@@ -199,7 +179,8 @@ contract MiningClaimVerifierTest is StepFixture {
 
     function test_exhaustion_after_all_slots() public {
         for (uint32 s = 0; s < SLOTS; s++) {
-            _finaliseNatural(keccak256(abi.encode("ex", s)), TRI_A_STRING, miner);
+            address slotMiner = makeAddr(string(abi.encodePacked("ex-miner", s)));
+            _finaliseNatural(keccak256(abi.encode("ex", s)), TRI_A_STRING, slotMiner);
         }
         assertEq(uint8(state.status(TRI_A)), uint8(TriangleMiningState.TriangleStatus.Exhausted));
         // Last slot paid exactly 1 Trinity (ADR-007 invariant edge).

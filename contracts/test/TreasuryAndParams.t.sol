@@ -31,13 +31,17 @@ contract TreasuryAndParamsTest is StepFixture {
         vm.warp(block.timestamp + PARAM_DELAY);
         treasury.applyParam(key);
 
-        _finaliseNatural(keccak256("cap-1"), TRI_A_STRING, miner);
+        // One mine per wallet per triangle: slot 0 and slot 1 are distinct miners.
+        address capMiner1 = makeAddr("cap-miner-1");
+        address capMiner2 = makeAddr("cap-miner-2");
+        _finaliseNatural(keccak256("cap-1"), TRI_A_STRING, capMiner1);
         assertEq(treasury.totalTwinMinted(), cap, "first twin clamped to cap");
 
-        _finaliseNatural(keccak256("cap-2"), TRI_A_STRING, miner);
+        _finaliseNatural(keccak256("cap-2"), TRI_A_STRING, capMiner2);
         assertEq(treasury.totalTwinMinted(), cap, "no twin beyond cap");
         // Miner rewards unaffected by the cap.
-        assertEq(token.balanceOf(miner), BASE_REWARD + BASE_REWARD / 2);
+        assertEq(token.balanceOf(capMiner1), BASE_REWARD);
+        assertEq(token.balanceOf(capMiner2), BASE_REWARD / 2);
     }
 
     function test_param_timelock_enforced() public {
@@ -121,7 +125,8 @@ contract TreasuryAndParamsTest is StepFixture {
         timed.consumeSlot(TRI_A, miner);
 
         vm.warp(block.timestamp + 600);
-        timed.consumeSlot(TRI_A, miner);
+        // One mine per wallet per triangle: the second slot is a distinct miner.
+        timed.consumeSlot(TRI_A, makeAddr("timed-miner-2"));
         assertEq(timed.usedSlots(TRI_A), 2);
     }
 

@@ -198,6 +198,10 @@ contract MiningClaimVerifier is Parameterized, EIP712 {
             return (level, triangleIdHash, hasParent, bytes32(0));
         }
 
+        // Skip the '-' separator between the face and the base-4 path.
+        if (value[cursor] != 0x2d) revert TriangleIdMalformed(keccak256(bytes(triangleId)));
+        cursor++;
+
         uint256 pathLen = value.length - cursor;
         if (pathLen != (uint256(level) - 1)) {
             revert TriangleIdMalformed(keccak256(bytes(triangleId)));
