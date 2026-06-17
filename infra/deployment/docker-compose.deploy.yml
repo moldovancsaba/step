@@ -137,6 +137,32 @@ services:
       EVIDENCE_MASTER_KEY: ${EVIDENCE_MASTER_KEY}
       FOUNDATION_API_TOKEN: ${FOUNDATION_API_TOKEN}
 
+  # account-api (#12): zero-knowledge encrypted wallet vault + login wall.
+  account-api:
+    build: { <<: *ts-build, args: { SERVICE: account-api } }
+    ports: ["8091:8091"]
+    environment:
+      ACCOUNT_PORT: 8091
+      SESSION_SIGNING_KEY: ${SESSION_SIGNING_KEY}
+      SESSION_TTL_SECONDS: ${SESSION_TTL_SECONDS:-86400}
+      SECURE_COOKIES: ${SECURE_COOKIES:-true}
+      DATABASE_URL: ${ACCOUNT_DATABASE_URL:-}
+      NODE_ENV: production
+
+  # nft-indexer (#6/#7/#10): NFT ownership/provenance, metadata, marketplace.
+  nft-indexer:
+    build: { <<: *ts-build, args: { SERVICE: nft-indexer } }
+    depends_on: [chain]
+    ports: ["8092:8092"]
+    volumes: *deployments-vol
+    environment:
+      NFT_INDEXER_PORT: 8092
+      STEP_CHAIN_ID: 31337
+      STEP_RPC_URL: http://chain:8545
+      STEP_DEPLOYMENTS_FILE: /shared/31337.json
+      NFT_METADATA_BASE_URL: ${NFT_METADATA_BASE_URL:-}
+      STEP_CORS_ORIGINS: ${STEP_CORS_ORIGINS:-}
+
   merchant-api:
     build: { <<: *ts-build, args: { SERVICE: merchant-api } }
     depends_on: [validator-1]

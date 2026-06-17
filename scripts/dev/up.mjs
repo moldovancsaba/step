@@ -54,6 +54,8 @@ const PORTS = {
   proofStorage: 8095,
   exchange: 8096,
   merchant: 8097,
+  account: 8091,
+  nftIndexer: 8092,
 };
 
 const procs = [];
@@ -244,6 +246,23 @@ async function main() {
     WORKER_INTERVAL_MS: "15000",
   });
 
+  // account-api (#12): zero-knowledge wallet vault + login wall backend.
+  start("account-api", "pnpm", ["--filter", "@step/account-api", "exec", "tsx", "src/index.ts"], {
+    ...envLines,
+    ACCOUNT_PORT: String(PORTS.account),
+    SECURE_COOKIES: "false", // local http dev
+  });
+  await httpOk(`http://127.0.0.1:${PORTS.account}/healthz`);
+
+  // nft-indexer (#7/#10/#6): NFT ownership/provenance, listings, metadata.
+  // Watches TriangleSlotNFT/TriangleMarketplace; serves an empty projection
+  // until those contracts are deployed (#5 wiring).
+  start("nft-indexer", "pnpm", ["--filter", "@step/nft-indexer", "exec", "tsx", "src/index.ts"], {
+    ...envLines,
+    NFT_INDEXER_PORT: String(PORTS.nftIndexer),
+  });
+  await httpOk(`http://127.0.0.1:${PORTS.nftIndexer}/healthz`);
+
   writeFileSync(PID_FILE, JSON.stringify(procs, null, 2));
 
   log("");
@@ -254,6 +273,8 @@ async function main() {
   log(`  mesh API  http://127.0.0.1:${PORTS.validators[0]}/v1/mesh/resolve`);
   log(`  merchant  http://127.0.0.1:${PORTS.merchant}`);
   log(`  exchange  http://127.0.0.1:${PORTS.exchange}`);
+  log(`  account   http://127.0.0.1:${PORTS.account}  (wallet vault / login)`);
+  log(`  nft-index http://127.0.0.1:${PORTS.nftIndexer}  (NFT + marketplace)`);
   log("");
   log("verify:  node scripts/dev/smoke.mjs");
   log("stop:    node scripts/dev/down.mjs");
