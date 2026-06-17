@@ -3,6 +3,7 @@ packages:
   - "packages/api-client"
   - "packages/proof-protocol"
   - "services/gateway-api"
+  - "services/account-api"
   - "services/online-gateway"
   - "services/indexer"
   - "services/merchant-api"
