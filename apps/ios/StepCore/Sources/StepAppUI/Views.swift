@@ -111,13 +111,31 @@ struct MarketTabView: View {
     }
 }
 
-/// Wallet tab: address + (later) owned NFTs (#29), with links to claim history
-/// and privacy settings folded in so the shell stays at four tabs.
+/// Wallet tab: address + owned slot NFTs (#29) with provenance, plus links to
+/// claim history and privacy settings (folded in so the shell stays at 4 tabs).
 struct WalletTabView: View {
     @ObservedObject var model: AppModel
     var body: some View {
         List {
             Section { WalletView(model: model) }
+            Section("Your triangles") {
+                switch model.ownedNfts {
+                case .idle, .loading:
+                    HStack { ProgressView(); Text("Loading your triangles…") }
+                        .foregroundStyle(StepColor.textMuted)
+                        .accessibilityLabel("Loading your triangles")
+                case .empty:
+                    Text("No triangles yet — mine one to earn its slot NFT.")
+                        .font(.callout).foregroundStyle(StepColor.textMuted)
+                case .failed(let message):
+                    VStack(alignment: .leading, spacing: StepSpacing.sm) {
+                        Text(message).font(.callout).foregroundStyle(StepColor.danger)
+                        Button("Try again") { Task { await model.loadOwnedNfts() } }
+                    }
+                case .loaded(let tokens):
+                    ForEach(tokens) { NftRow(token: $0) }
+                }
+            }
             Section {
                 NavigationLink { HistoryView(model: model).navigationTitle("Claims") } label: {
                     Label("Claim history", systemImage: "clock")
@@ -127,6 +145,39 @@ struct WalletTabView: View {
                 }
             }
         }
+        .task { await model.loadOwnedNfts() }
+        .refreshable { await model.loadOwnedNfts() }
+    }
+}
+
+/// One owned slot NFT with provenance; landlord conveyed in text + badge (never
+/// colour alone) for accessibility.
+struct NftRow: View {
+    let token: NftToken
+    var body: some View {
+        VStack(alignment: .leading, spacing: StepSpacing.xs) {
+            HStack {
+                Text(token.triangleIdHash.prefix(14) + "…")
+                    .font(.system(.footnote, design: .monospaced))
+                    .foregroundStyle(StepColor.text)
+                Spacer()
+                if token.isLandlord {
+                    Text("Landlord")
+                        .font(.caption2.weight(.bold))
+                        .padding(.horizontal, StepSpacing.sm).padding(.vertical, 2)
+                        .background(StepColor.primary.opacity(0.15))
+                        .foregroundStyle(StepColor.primary)
+                        .clipShape(Capsule())
+                }
+            }
+            Text("Level \(token.level) · slot \(token.slot) · miner #\(token.miningOrder)")
+                .font(.caption).foregroundStyle(StepColor.textMuted)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            "Triangle \(token.triangleIdHash.prefix(10)), level \(token.level), slot \(token.slot)"
+                + (token.isLandlord ? ", landlord" : "")
+        )
     }
 }
 

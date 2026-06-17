@@ -42,18 +42,25 @@ public final class AppModel: ObservableObject {
     /// account-api client; when present the login wall (#27) gates the app with
     /// a zero-knowledge vault instead of the device-local-key onboarding.
     let account: AccountClient?
+    /// nft-indexer client for the Wallet tab's owned slot NFTs (#29).
+    let nft: NftClient?
     var wallet: Wallet?
+
+    /// Owned slot NFTs for the Wallet tab (#29).
+    @Published public private(set) var ownedNfts: LoadPhase<[NftToken]> = .idle
 
     public init(
         keyStore: KeyStore,
         client: GatewayClient,
         stateProvider: TriangleStateProviding? = nil,
-        account: AccountClient? = nil
+        account: AccountClient? = nil,
+        nft: NftClient? = nil
     ) {
         self.keyStore = keyStore
         self.client = client
         self.stateProvider = stateProvider
         self.account = account
+        self.nft = nft
         if let existing = try? Wallet.load(store: keyStore) {
             wallet = existing
             walletAddress = existing.address
@@ -102,6 +109,18 @@ public final class AppModel: ObservableObject {
     @Published public private(set) var authError: String?
 
     public func clearAuthError() { authError = nil }
+
+    /// Load the wallet's owned slot NFTs (#29) into `ownedNfts`.
+    public func loadOwnedNfts() async {
+        guard let nft, let address = walletAddress else { ownedNfts = .empty; return }
+        ownedNfts = .loading
+        do {
+            let tokens = try await nft.owned(address: address)
+            ownedNfts = tokens.isEmpty ? .empty : .loaded(tokens)
+        } catch {
+            ownedNfts = .failed("Couldn't load your triangles. Pull to retry.")
+        }
+    }
 
     /// Login wall (#27) — register: derive keys client-side, encrypt the wallet
     /// (existing key or a fresh one), POST the verifier + ciphertext, then sign
