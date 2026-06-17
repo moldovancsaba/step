@@ -23,7 +23,7 @@ function makeApp() {
   let store = new InMemoryAccountStore(() => "2026-06-17T00:00:00.000Z");
   const deps: AccountDeps = {
     store,
-    sessionSecret: "test-secret-0123456789",
+    sessionSecret: "test-secret-0123456789", // gitleaks:allow — unit-test fixture, not a real secret
     sessionTtlSeconds: 3600,
     secureCookies: false,
     nowUnix: () => 1_750_000_000,
@@ -174,7 +174,7 @@ describe("account api", () => {
   });
 
   it("stored row contains ONLY a verifier + opaque ciphertext + address (no key, no password)", async () => {
-    const password = "super-secret-password-123";
+    const password = "super-secret-password-123"; // gitleaks:allow — unit-test fixture
     const reg = buildRegistration(password, walletKey, address);
     await app.request("/v1/register", {
       method: "POST",
