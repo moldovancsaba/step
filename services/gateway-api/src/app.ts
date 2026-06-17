@@ -50,6 +50,11 @@ function extractRevertReason(error: unknown): string {
   const direct = raw.match(/reverted with the following reason: ([^\n]+)/);
   if (direct && direct[1]) return direct[1].trim();
 
+  // viem custom-error format: "...reverted with the following signature:" or
+  // "...custom error 'ErrorName(args)'". Capture the error name directly.
+  const custom = raw.match(/custom error ['"`]?([A-Za-z_][A-Za-z0-9_]*)/);
+  if (custom && custom[1]) return custom[1];
+
   const known = raw.match(
     /\b(ClaimAlreadyFinalised|TriangleIdMalformed|TriangleLevelMismatch|ParentTriangleNotExhausted|TriangleBlocked|AccuracyTooLow|BoundaryAmbiguous|NonceRejected|WalletAlreadyMined|TriangleNotOpen|ParentNotExhausted|ClaimNotFound)\b/,
   );

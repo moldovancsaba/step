@@ -19,7 +19,37 @@ import {
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { parseProtocolParams, type Address, type Claim, type Hex } from "@step/shared-types";
-import { MiningClaimVerifierAbi, ValidatorRegistryAbi } from "@step/shared-types/abis";
+import {
+  MiningClaimVerifierAbi,
+  ValidatorRegistryAbi,
+  TriangleMiningStateAbi,
+  FoundationTreasuryAbi,
+  ProofRegistryAbi,
+  RewardPoolAbi,
+  TrinityTokenAbi,
+  SafetyRegistryAbi,
+  StepAccessAbi,
+} from "@step/shared-types/abis";
+
+// finaliseNaturalClaim/Sponsored call into sub-contracts; a revert there carries
+// that contract's error selector, which MiningClaimVerifierAbi alone can't
+// decode (viem then reports an opaque undecodable selector). Merge every
+// contract's error fragments so simulate reverts always decode to the real
+// error name.
+const FINALISE_ABI = [
+  ...MiningClaimVerifierAbi,
+  ...[
+    TriangleMiningStateAbi,
+    FoundationTreasuryAbi,
+    ProofRegistryAbi,
+    RewardPoolAbi,
+    TrinityTokenAbi,
+    SafetyRegistryAbi,
+    StepAccessAbi,
+  ]
+    .flat()
+    .filter((f) => (f as { type?: string }).type === "error"),
+] as const;
 import { createApp, type GatewayDeps } from "./app.js";
 
 function env(key: string): string {
@@ -52,7 +82,7 @@ async function submitFinalise(
   // simulate first: surfaces revert reasons without burning gas.
   const { request } = await publicClient.simulateContract({
     address: verifierAddress,
-    abi: MiningClaimVerifierAbi,
+    abi: FINALISE_ABI,
     functionName,
     args: args as never,
     account: relayer,
@@ -89,10 +119,12 @@ const deps: GatewayDeps = {
   },
 
   async submitNatural(a) {
+    // finaliseNaturalClaim(claimHash, triangleId, meshLevel, miner, proofCidHash,
+    // sigs) — the contract derives triangleIdHash from triangleId, so it is NOT
+    // a parameter.
     return submitFinalise("finaliseNaturalClaim", [
       a.claimHash,
       a.triangleId,
-      a.triangleIdHash,
       a.meshLevel,
       a.miner,
       a.proofCidHash,

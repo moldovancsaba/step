@@ -251,9 +251,11 @@ describe("E2E full system on real components", () => {
 
   it("E2E-3b: replayed nonce is rejected", async () => {
     const { nonce } = await gw.nonce(miner2.address);
-    // Distinct triangle: E2E-1's triangle is in post-claim cooldown (correct
-    // contract behaviour, COOLDOWN=3600 in the deploy script).
-    const spot = { lat: 47.499, lon: 19.042 };
+    // Distinct base face from E2E-1: at genesis level 1 the 20 icosahedron
+    // faces are continental, so Budapest (face 1) is in post-claim cooldown for
+    // the whole face (COOLDOWN=3600). Tokyo is on a different north-cap face, so
+    // this claim can finalise fresh.
+    const spot = { lat: 35.6762, lon: 139.6503 };
     const triangle = await mesh.resolve(spot.lat, spot.lon, 1);
     const make = async (ts: string) =>
       signClaim(
