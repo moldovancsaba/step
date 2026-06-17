@@ -12,6 +12,7 @@ packages:
   - "services/exchange-service"
   - "services/campaign-worker"
   - "apps/web"
+  - "apps/web-app"
   - "apps/web-miner"
   - "apps/static-frontend"
   - "apps/merchant-dashboard"

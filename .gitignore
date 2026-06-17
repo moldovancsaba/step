@@ -28,6 +28,7 @@ out/
 
 # Static frontend build output
 apps/static-frontend/dist/
+apps/web-app/dist/
 
 # OS noise
 .DS_Store
