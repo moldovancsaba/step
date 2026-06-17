@@ -4,6 +4,8 @@
 
 STEP divides the Earth into a deterministic hierarchy of spherical triangles (the MESH). A miner mines by **physically visiting or touching any valid part of a mineable triangle** and submitting a verifiable, signed proof-of-presence. The smallest blockchain unit is **Trinity**. Businesses buy Trinity and place it into stores, front doors, venues, and points of interest — creating **Trinity oases** that attract verified real-world visitors. Heavily-mined areas become **Trinity deserts** until re-seeded by sponsored campaigns.
 
+> **Contributing:** [`CLAUDE.md`](CLAUDE.md) defines the non-negotiable quality gates — **no obsolete, no deprecated, no warnings, no errors, no unwanted dependencies** — and the exact build/lint/test gate to run before every commit. Read it first.
+
 STEP is **not** a walking app, not a fitness app, and not move-to-earn. Step counts, health-app data, and distance are never protocol inputs. The only protocol question is:
 
 > Was this miner physically present inside this spherical triangle at this time?
