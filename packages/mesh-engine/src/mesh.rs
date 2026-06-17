@@ -30,20 +30,13 @@ fn icosahedron_faces() -> &'static [[Vec3; 3]; 20] {
         let ring_lat = 0.5_f64.atan(); // atan(1/2) ≈ 26.565°
         let upper: Vec<Vec3> = (0..5)
             .map(|i| {
-                LatLon {
-                    lat_deg: ring_lat.to_degrees(),
-                    lon_deg: 72.0 * i as f64,
-                }
-                .to_unit_vector()
+                LatLon { lat_deg: ring_lat.to_degrees(), lon_deg: 72.0 * i as f64 }.to_unit_vector()
             })
             .collect();
         let lower: Vec<Vec3> = (0..5)
             .map(|i| {
-                LatLon {
-                    lat_deg: -ring_lat.to_degrees(),
-                    lon_deg: 36.0 + 72.0 * i as f64,
-                }
-                .to_unit_vector()
+                LatLon { lat_deg: -ring_lat.to_degrees(), lon_deg: 36.0 + 72.0 * i as f64 }
+                    .to_unit_vector()
             })
             .collect();
 
@@ -160,11 +153,7 @@ pub fn lat_lon_to_triangle(lat_deg: f64, lon_deg: f64, level: u8) -> Result<Tria
 /// Spherical triangle vertices (A, B, C) in degrees.
 pub fn triangle_to_vertices(id: &TriangleId) -> [LatLon; 3] {
     let [a, b, c] = vertices_of(id);
-    [
-        LatLon::from_unit_vector(a),
-        LatLon::from_unit_vector(b),
-        LatLon::from_unit_vector(c),
-    ]
+    [LatLon::from_unit_vector(a), LatLon::from_unit_vector(b), LatLon::from_unit_vector(c)]
 }
 
 /// True if the coordinate lies inside the triangle (within [`CONTAINS_EPS`]).
@@ -279,14 +268,10 @@ pub fn boundary_policy(
     // Angular distance to each edge plane; sin(d) = |p · n̂|. For points inside
     // the triangle this is the geodesic distance to the edge's great circle,
     // which lower-bounds the distance to the edge segment.
-    let dist_edge_m = [
-        a.cross(b).normalized(),
-        b.cross(c).normalized(),
-        c.cross(a).normalized(),
-    ]
-    .into_iter()
-    .map(|n| p.dot(n).clamp(-1.0, 1.0).asin().abs() * EARTH_RADIUS_M)
-    .fold(f64::INFINITY, f64::min);
+    let dist_edge_m = [a.cross(b).normalized(), b.cross(c).normalized(), c.cross(a).normalized()]
+        .into_iter()
+        .map(|n| p.dot(n).clamp(-1.0, 1.0).asin().abs() * EARTH_RADIUS_M)
+        .fold(f64::INFINITY, f64::min);
 
     let min_side_m = triangle_min_side_m(&id);
 
@@ -301,12 +286,7 @@ pub fn boundary_policy(
         BoundaryVerdict::Inside
     };
 
-    Ok(BoundaryDecision {
-        verdict,
-        triangle: id,
-        distance_to_edge_m: dist_edge_m,
-        min_side_m,
-    })
+    Ok(BoundaryDecision { verdict, triangle: id, distance_to_edge_m: dist_edge_m, min_side_m })
 }
 
 // ---------------------------------------------------------------------------
@@ -539,7 +519,11 @@ pub fn cover(
         let factor = (produced / max_triangles as f64).max(1.0);
         let k = (factor.log(4.0)).ceil() as i32;
         let suggested = (level as i32 - k.max(1)).max(1) as u8;
-        return Ok(CoverResult { triangles: Vec::new(), truncated: true, suggested_level: suggested });
+        return Ok(CoverResult {
+            triangles: Vec::new(),
+            truncated: true,
+            suggested_level: suggested,
+        });
     }
 
     let triangles = ids
@@ -570,25 +554,12 @@ mod tests {
         // at least one face (within numeric tolerance).
         let mut rng = 0x5DEECE66Du64;
         for _ in 0..2000 {
-            rng = rng
-                .wrapping_mul(6364136223846793005)
-                .wrapping_add(1442695040888963407);
-            let lat = ((rng >> 16) as f64 / u64::MAX as f64 * 2.0 - 1.0)
-                .asin()
-                .to_degrees();
-            rng = rng
-                .wrapping_mul(6364136223846793005)
-                .wrapping_add(1442695040888963407);
+            rng = rng.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            let lat = ((rng >> 16) as f64 / u64::MAX as f64 * 2.0 - 1.0).asin().to_degrees();
+            rng = rng.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
             let lon = (rng >> 16) as f64 / (u64::MAX >> 16) as f64 * 360.0 - 180.0;
-            let p = LatLon {
-                lat_deg: lat,
-                lon_deg: lon,
-            }
-            .to_unit_vector();
-            let best = faces
-                .iter()
-                .map(|f| margin(p, f))
-                .fold(f64::NEG_INFINITY, f64::max);
+            let p = LatLon { lat_deg: lat, lon_deg: lon }.to_unit_vector();
+            let best = faces.iter().map(|f| margin(p, f)).fold(f64::NEG_INFINITY, f64::max);
             assert!(best > -1e-9, "sphere coverage gap at lat={lat} lon={lon}");
         }
     }

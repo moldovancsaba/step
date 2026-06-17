@@ -22,21 +22,11 @@ fn golden_vectors_replay() {
             cols[4],
         );
         let got = lat_lon_to_triangle(lat, lon, level).unwrap();
-        assert_eq!(
-            got.to_string(),
-            expected,
-            "golden mismatch for {name} at level {level}"
-        );
+        assert_eq!(got.to_string(), expected, "golden mismatch for {name} at level {level}");
         // The resolved triangle must also contain its own resolving point.
         let id = TriangleId::from_str(expected).unwrap();
-        assert!(
-            contains_point(&id, lat, lon),
-            "containment failed for {name} at level {level}"
-        );
+        assert!(contains_point(&id, lat, lon), "containment failed for {name} at level {level}");
         checked += 1;
     }
-    assert!(
-        checked >= 300,
-        "golden file unexpectedly small: {checked} rows"
-    );
+    assert!(checked >= 300, "golden file unexpectedly small: {checked} rows");
 }

@@ -77,9 +77,6 @@ impl LatLon {
 
     pub fn from_unit_vector(v: Vec3) -> Self {
         let v = v.normalized();
-        LatLon {
-            lat_deg: v.z.asin().to_degrees(),
-            lon_deg: v.y.atan2(v.x).to_degrees(),
-        }
+        LatLon { lat_deg: v.z.asin().to_degrees(), lon_deg: v.y.atan2(v.x).to_degrees() }
     }
 }

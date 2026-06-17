@@ -14,10 +14,7 @@ use step_mesh_engine::{lat_lon_to_triangle, MESH_SPEC_VERSION};
 struct Lcg(u64);
 impl Lcg {
     fn next_f64(&mut self) -> f64 {
-        self.0 = self
-            .0
-            .wrapping_mul(6364136223846793005)
-            .wrapping_add(1442695040888963407);
+        self.0 = self.0.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
         (self.0 >> 11) as f64 / (1u64 << 53) as f64
     }
 }
@@ -53,11 +50,7 @@ fn main() {
     let mut out = String::new();
     writeln!(out, "# STEP golden vectors — mesh spec {MESH_SPEC_VERSION}").unwrap();
     writeln!(out, "# columns: name\tlat_deg\tlon_deg\tlevel\ttriangle_id").unwrap();
-    writeln!(
-        out,
-        "# DO NOT EDIT BY HAND; regenerate via golden-gen on spec change only"
-    )
-    .unwrap();
+    writeln!(out, "# DO NOT EDIT BY HAND; regenerate via golden-gen on spec change only").unwrap();
 
     for (name, lat, lon) in named {
         for &level in levels {

@@ -8,10 +8,7 @@ use step_mesh_engine::*;
 struct Lcg(u64);
 impl Lcg {
     fn next_f64(&mut self) -> f64 {
-        self.0 = self
-            .0
-            .wrapping_mul(6364136223846793005)
-            .wrapping_add(1442695040888963407);
+        self.0 = self.0.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
         (self.0 >> 11) as f64 / (1u64 << 53) as f64
     }
     /// Area-uniform random point on the sphere.
@@ -55,10 +52,7 @@ fn hierarchy_is_consistent() {
             // and a direct resolve only within the tie band; for random points
             // this is measure-zero, so require equality and rely on the seed
             // being fixed (failures here mean real nondeterminism).
-            assert_eq!(
-                cur, direct,
-                "ancestor mismatch at level {level} for {lat},{lon}"
-            );
+            assert_eq!(cur, direct, "ancestor mismatch at level {level} for {lat},{lon}");
         }
         // children(parent) contains the triangle itself.
         let parent = parent_triangle(&deep).unwrap();
@@ -91,10 +85,7 @@ fn poles_resolve_at_all_levels() {
         for level in [1u8, 5, 10, 21] {
             let id = lat_lon_to_triangle(lat, lon, level)
                 .unwrap_or_else(|e| panic!("{tag} failed at L{level}: {e}"));
-            assert!(
-                contains_point(&id, lat, lon),
-                "{tag} containment at L{level}"
-            );
+            assert!(contains_point(&id, lat, lon), "{tag} containment at L{level}");
         }
     }
     // The exact pole is a 5-face boundary point: all longitudes must resolve to
@@ -139,24 +130,13 @@ fn boundary_points_are_deterministic() {
         let (lat, lon) = rng.point();
         let id = lat_lon_to_triangle(lat, lon, 10).unwrap();
         let [va, vb, _vc] = triangle_to_vertices(&id);
-        let a = LatLon {
-            lat_deg: va.lat_deg,
-            lon_deg: va.lon_deg,
-        }
-        .to_unit_vector();
-        let b = LatLon {
-            lat_deg: vb.lat_deg,
-            lon_deg: vb.lon_deg,
-        }
-        .to_unit_vector();
+        let a = LatLon { lat_deg: va.lat_deg, lon_deg: va.lon_deg }.to_unit_vector();
+        let b = LatLon { lat_deg: vb.lat_deg, lon_deg: vb.lon_deg }.to_unit_vector();
         let mid = LatLon::from_unit_vector((a + b).normalized());
 
         let first = lat_lon_to_triangle(mid.lat_deg, mid.lon_deg, 10).unwrap();
         for _ in 0..3 {
-            assert_eq!(
-                first,
-                lat_lon_to_triangle(mid.lat_deg, mid.lon_deg, 10).unwrap()
-            );
+            assert_eq!(first, lat_lon_to_triangle(mid.lat_deg, mid.lon_deg, 10).unwrap());
         }
         assert!(contains_point(&first, mid.lat_deg, mid.lon_deg));
     }
@@ -189,9 +169,7 @@ fn neighbours_are_sane() {
 fn areas_and_sides_match_theory() {
     // Sum of the 20 base faces ≈ sphere surface.
     let sphere = 4.0 * std::f64::consts::PI * EARTH_RADIUS_M * EARTH_RADIUS_M;
-    let total: f64 = (0..20)
-        .map(|f| triangle_area_m2(&TriangleId::base_face(f).unwrap()))
-        .sum();
+    let total: f64 = (0..20).map(|f| triangle_area_m2(&TriangleId::base_face(f).unwrap())).sum();
     assert!(
         (total - sphere).abs() / sphere < 1e-9,
         "face areas sum to {total}, sphere is {sphere}"
@@ -220,10 +198,7 @@ fn areas_and_sides_match_theory() {
     // Level 21 is in the documented ~metres range (SYS §6.4 table: ≈7.6 m sides).
     let l21 = lat_lon_to_triangle(47.4979, 19.0402, 21).unwrap();
     let side = triangle_min_side_m(&l21);
-    assert!(
-        (2.0..=20.0).contains(&side),
-        "level-21 side {side} m outside expected human scale"
-    );
+    assert!((2.0..=20.0).contains(&side), "level-21 side {side} m outside expected human scale");
 }
 
 #[test]
@@ -267,10 +242,7 @@ fn level21_resolution_is_fast_enough() {
         let _ = lat_lon_to_triangle(*lat, *lon, 21).unwrap();
     }
     let elapsed = start.elapsed();
-    assert!(
-        elapsed.as_secs_f64() < 2.0,
-        "1000 level-21 resolutions took {elapsed:?}"
-    );
+    assert!(elapsed.as_secs_f64() < 2.0, "1000 level-21 resolutions took {elapsed:?}");
 }
 
 #[test]
@@ -280,9 +252,5 @@ fn invalid_inputs_are_rejected() {
     assert!(lat_lon_to_triangle(f64::NAN, 0.0, 5).is_err());
     assert!(lat_lon_to_triangle(0.0, 0.0, 0).is_err());
     assert!(lat_lon_to_triangle(0.0, 0.0, MAX_LEVEL + 1).is_err());
-    assert!(!contains_point(
-        &TriangleId::base_face(0).unwrap(),
-        f64::INFINITY,
-        0.0
-    ));
+    assert!(!contains_point(&TriangleId::base_face(0).unwrap(), f64::INFINITY, 0.0));
 }

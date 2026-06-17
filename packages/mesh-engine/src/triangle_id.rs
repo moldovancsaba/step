@@ -34,10 +34,7 @@ impl TriangleId {
             return Err(MeshError::InvalidLevel(level));
         }
         if path.len() != (level - 1) as usize {
-            return Err(MeshError::InvalidPathLength {
-                level,
-                got: path.len(),
-            });
+            return Err(MeshError::InvalidPathLength { level, got: path.len() });
         }
         if path.iter().any(|&d| d > 3) {
             return Err(MeshError::InvalidPathDigit);
@@ -67,11 +64,7 @@ impl TriangleId {
         }
         let mut p = self.path.clone();
         p.pop();
-        Some(TriangleId {
-            level: self.level - 1,
-            face: self.face,
-            path: p,
-        })
+        Some(TriangleId { level: self.level - 1, face: self.face, path: p })
     }
 
     pub fn child(&self, digit: u8) -> Result<TriangleId, MeshError> {
@@ -83,20 +76,11 @@ impl TriangleId {
         }
         let mut p = self.path.clone();
         p.push(digit);
-        Ok(TriangleId {
-            level: self.level + 1,
-            face: self.face,
-            path: p,
-        })
+        Ok(TriangleId { level: self.level + 1, face: self.face, path: p })
     }
 
     pub fn children(&self) -> Result<[TriangleId; 4], MeshError> {
-        Ok([
-            self.child(0)?,
-            self.child(1)?,
-            self.child(2)?,
-            self.child(3)?,
-        ])
+        Ok([self.child(0)?, self.child(1)?, self.child(2)?, self.child(3)?])
     }
 }
 
@@ -122,17 +106,10 @@ impl FromStr for TriangleId {
         if parts.next() != Some("STEP") {
             return Err(parse_err());
         }
-        let level: u8 = parts
-            .next()
-            .ok_or_else(parse_err)?
-            .parse()
-            .map_err(|_| parse_err())?;
+        let level: u8 = parts.next().ok_or_else(parse_err)?.parse().map_err(|_| parse_err())?;
         let face_part = parts.next().ok_or_else(parse_err)?;
-        let face: u8 = face_part
-            .strip_prefix('F')
-            .ok_or_else(parse_err)?
-            .parse()
-            .map_err(|_| parse_err())?;
+        let face: u8 =
+            face_part.strip_prefix('F').ok_or_else(parse_err)?.parse().map_err(|_| parse_err())?;
         let path: Vec<u8> = match parts.next() {
             None => Vec::new(),
             Some(p) => p

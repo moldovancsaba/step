@@ -90,13 +90,8 @@ pub unsafe extern "C" fn step_mesh_boundary_policy(
     out_edge_m: *mut f64,
     out_side_m: *mut f64,
 ) -> i32 {
-    match boundary_policy(
-        lat_deg,
-        lon_deg,
-        accuracy_radius_m,
-        level,
-        max_accuracy_fraction_of_side,
-    ) {
+    match boundary_policy(lat_deg, lon_deg, accuracy_radius_m, level, max_accuracy_fraction_of_side)
+    {
         Ok(d) => {
             let n = write_str(&d.triangle.to_string(), buf, buf_len);
             if n < 0 {
