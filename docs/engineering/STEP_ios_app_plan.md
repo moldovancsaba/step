@@ -30,6 +30,30 @@ StepAppUI (SwiftUI)
 All new logic lands in `StepCore` (pure, macOS-testable) with thin `StepAppUI`
 views on top — same split that already keeps CI green without a simulator.
 
+## Delivery status (M7 — all phases delivered)
+
+All phases below are implemented, build-clean (`swift build`), and unit-tested
+(run on the `swift` CI job; device-only paths are guarded + field-verified).
+Issues #25–#33 on board #40 are done. The app target lives in [`../../apps/ios/App`](../../apps/ios/App).
+
+| Phase | Issues | Modules | Status |
+|---|---|---|---|
+| 1 — v2 mining | #26 | `MineableResolver`, `IndexerClient` | ✅ |
+| 1 — design system | #25 | `Theme`, `SessionContext`, `AsyncSurface`, shell | ✅ |
+| 2 — account/login | #27 | `AccountVault` (parity vector), `AccountClient`, `LoginWall` | ✅ |
+| 3 — oasis/desert map | #28 | `MeshCoverClient`, `MapView` | ✅ |
+| 4 — NFT wallet | #29 | `NftClient`, wallet tab | ✅ |
+| 4 — marketplace | #30 | `MarketplaceClient`, `Web3` (RLP/ABI/EIP-1559/JSON-RPC), `MarketplaceWriter`, `MarketplaceView` | ✅ (trading gated on #5 deploy) |
+| 5 — attestation | #31 | `Attestation` (`Attesting`/`UnattestedAttester`/`AppAttestAttester`) | ✅ (App Attest device-only) |
+| 5 — anchors | #32 | `Anchor`, `AnchorCapture`, `AnchorReaders` (BLE/NFC/QR) | ✅ (NFC/QR device-only) |
+| 6 — app target | #33 | `App/` XcodeGen project, Info.plist, entitlements, privacy manifest, XCUITests, CI `ios-app` job | ✅ |
+
+Remaining (external gates, not code): server-side App Attest verification,
+MapLibre Native basemap, TestFlight signing/distribution, on-device + field
+verification of device-only APIs, the marketplace on-chain round-trip after the
+#5 deploy, and the full-app accessibility ship-gate pass. See
+[`../../apps/ios/README.md`](../../apps/ios/README.md) for the honest gap list.
+
 ## Phases
 
 ### Phase 1 — v2 mining alignment (no new deps)
