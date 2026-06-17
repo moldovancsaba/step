@@ -43,3 +43,17 @@ See `docs/services/STEP_account_vault.md`.
 ```bash
 pnpm --filter @step/web-app dev   # http://localhost:3020
 ```
+
+## Deploy
+
+This app is the **primary STEP site** and deploys to the Cloudflare `step`
+worker at the short URL **https://step.moldovancsaba.workers.dev** via the repo
+root `wrangler.toml` (static assets + SPA fallback; the root `[build]` command
+builds this app). From the repo root:
+
+```bash
+pnpm dlx wrangler deploy            # builds apps/web-app + deploys the `step` worker
+```
+
+API base URLs are baked at build from `VITE_*` (see the table above); set them
+to public HTTPS backends for a functional non-sandbox deploy.

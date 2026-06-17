@@ -1,13 +1,14 @@
 name = "step"
 account_id = "66ce3adbb96f6715f8cc2b04991c30e4"
 compatibility_date = "2026-06-15"
-main = "./apps/static-frontend/worker.js"
 
+# The STEP mobile web app (GDS, Vite SPA) is the primary site at the short URL
+# https://step.<subdomain>.workers.dev — served as static assets with SPA
+# fallback for client-side routing. Build via the command below so Cloudflare
+# Workers Builds (git-connected) produces apps/web-app/dist before deploy.
 [assets]
-directory = "./apps/static-frontend/dist"
-binding = "ASSETS"
+directory = "./apps/web-app/dist"
 not_found_handling = "single-page-application"
 
-[vars]
-STEP_WEB_EXPLORER_URL = "/explorer"
-STEP_WEB_MINER_URL = "/miner"
+[build]
+command = "pnpm install --frozen-lockfile && pnpm --filter @step/web-app build"
