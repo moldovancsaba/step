@@ -20,7 +20,6 @@ fn params() -> ValidationParams {
         max_accuracy_fraction_of_side: 1.0,
         max_plausible_speed_mps: 69.4,
         fraud_score_reject_threshold: 0.7,
-        mineable_levels: vec![21],
         allow_dev_claims: true,
     }
 }
@@ -72,9 +71,9 @@ fn valid_claim_is_approved() {
         v.fraud.score, 0.4,
         "dev-unattested carries soft signal only"
     );
-    // At level 21 (≈6.7 m sides) a realistic GPS accuracy circle almost always
-    // overlaps an edge: BoundaryAmbiguous is the NORMAL state and does not
-    // block approval — the deterministic assignment stands (HARD §5.7).
+    // At the selected level (21 in this fixture), a realistic GPS accuracy
+    // circle often overlaps an edge: BoundaryAmbiguous is the NORMAL state and
+    // does not block approval.
     assert!(v.boundary == "inside" || v.boundary == "boundary_ambiguous");
 }
 
@@ -163,18 +162,6 @@ fn bad_accuracy_rejected() {
     c.signature = format!("0x{}", hex::encode(sign::sign_digest(&digest, &key)));
     let v = validate_claim(&c, &params(), &ctx());
     assert!(v.reject_reasons.contains(&RejectReason::AccuracyTooLow));
-}
-
-#[test]
-fn non_mineable_level_rejected() {
-    let mut c = signed_claim();
-    c.mesh_level = 15;
-    c.triangle_id = lat_lon_to_triangle(LAT, LON, 15).unwrap().to_string();
-    let key = miner_key();
-    let digest = sign::personal_digest(c.canonical_message().as_bytes());
-    c.signature = format!("0x{}", hex::encode(sign::sign_digest(&digest, &key)));
-    let v = validate_claim(&c, &params(), &ctx());
-    assert!(v.reject_reasons.contains(&RejectReason::LevelNotMineable));
 }
 
 #[test]

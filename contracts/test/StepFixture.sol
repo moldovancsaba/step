@@ -48,12 +48,14 @@ abstract contract StepFixture is Test {
     MiningClaimVerifier public verifier;
 
     // Mesh ID v2 dotted form (STEP_mesh_id_v2.md): face 1..20, children 1..4,
-    // level = segment count. Level-21 (terminal) = face + 20 children.
-    string internal constant TRI_A_STRING = "1.1.2.3.4.1.2.3.4.1.2.3.4.1.2.3.4.1.2.3.4";
-    string internal constant TRI_B_STRING = "8.4.3.2.1.4.3.2.1.4.3.2.1.4.3.2.1.4.3.2.1";
+    // level = segment count. Mining starts at genesis level 1 (a bare face),
+    // which has no parent — so it is mineable without ancestor exhaustion.
+    // Deeper levels require their parent Exhausted (tested via the lifecycle).
+    string internal constant TRI_A_STRING = "1";
+    string internal constant TRI_B_STRING = "8";
     bytes32 internal constant TRI_A = keccak256(bytes(TRI_A_STRING));
     bytes32 internal constant TRI_B = keccak256(bytes(TRI_B_STRING));
-    uint8 internal constant LEVEL = 21;
+    uint8 internal constant LEVEL = 1;
 
     function setUp() public virtual {
         access = new StepAccess(admin);

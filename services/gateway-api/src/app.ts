@@ -51,7 +51,7 @@ function extractRevertReason(error: unknown): string {
   if (direct && direct[1]) return direct[1].trim();
 
   const known = raw.match(
-    /\b(ClaimAlreadyFinalised|TriangleIdMalformed|TriangleLevelMismatch|ParentTriangleNotExhausted|TriangleBlocked|LevelNotMineable|AccuracyTooLow|BoundaryAmbiguous|ParentNotExhausted|NonceRejected|WalletAlreadyMined|TriangleNotOpen|ParentNotExhausted|ClaimNotFound)\b/,
+    /\b(ClaimAlreadyFinalised|TriangleIdMalformed|TriangleLevelMismatch|ParentTriangleNotExhausted|TriangleBlocked|AccuracyTooLow|BoundaryAmbiguous|NonceRejected|WalletAlreadyMined|TriangleNotOpen|ParentNotExhausted|ClaimNotFound)\b/,
   );
   if (known && known[1]) return known[1];
 

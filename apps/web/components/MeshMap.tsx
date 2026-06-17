@@ -17,7 +17,8 @@ const MESH_API =
 const INDEXER =
   process.env.NEXT_PUBLIC_INDEXER_URL ?? "http://127.0.0.1:8090";
 const PILOT_CENTER: [number, number] = [19.0402, 47.4979]; // pilot default (config)
-const LEVEL = 15; // display level for click-resolution at city zoom; level 21 at high zoom
+const MIN_LEVEL = 1;
+const MAX_LEVEL = 21;
 
 function triangleToFeature(t: TriangleInfo, state: { used_slots?: number; frozen?: boolean; oasis?: boolean }) {
   const ring = [...t.vertices, t.vertices[0]!].map((v) => [v.lon, v.lat]);
@@ -36,8 +37,16 @@ function triangleToFeature(t: TriangleInfo, state: { used_slots?: number; frozen
 export default function MeshMap() {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MlMap | null>(null);
+  const [meshLevel, setMeshLevel] = useState<number>(1);
+  const meshLevelRef = useRef(meshLevel);
   const [selected, setSelected] = useState<TriangleInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const resolvedLevel = selected?.level ?? meshLevel;
+
+  useEffect(() => {
+    meshLevelRef.current = meshLevel;
+  }, [meshLevel]);
 
   useEffect(() => {
     if (!container.current || mapRef.current) return;
@@ -69,11 +78,10 @@ export default function MeshMap() {
     });
 
     map.on("click", async (e) => {
-      const level = map.getZoom() >= 16 ? 21 : LEVEL;
       try {
         setError(null);
         const resp = await fetch(
-          `${MESH_API}/v1/mesh/resolve?lat=${e.lngLat.lat}&lon=${e.lngLat.lng}&level=${level}`,
+          `${MESH_API}/v1/mesh/resolve?lat=${e.lngLat.lat}&lon=${e.lngLat.lng}&level=${meshLevelRef.current}`,
         );
         if (!resp.ok) throw new Error(`mesh API ${resp.status}`);
         const tri: TriangleInfo = await resp.json();
@@ -155,9 +163,25 @@ export default function MeshMap() {
           </a>
         </div>
       )}
+      <label className="text-xs text-neutral-400">
+        Resolve level
+        <input
+          type="number"
+          min={MIN_LEVEL}
+          max={MAX_LEVEL}
+          value={meshLevel}
+          onChange={(event) => {
+            const value = Number(event.target.value);
+            if (!Number.isFinite(value)) return;
+            const next = Math.max(MIN_LEVEL, Math.min(MAX_LEVEL, Math.floor(value)));
+            setMeshLevel(next);
+          }}
+          className="ml-2 rounded border border-neutral-700 bg-neutral-900 px-2 py-1"
+        />
+      </label>
       <p className="text-xs text-neutral-500">
-        Click the map to resolve the spherical triangle at that point (level {LEVEL} at city
-        zoom, 21 at street zoom). Geometry is computed by the canonical Rust MESH engine.
+        Click the map to resolve the spherical triangle at that point (selected level {resolvedLevel}).
+        Geometry is computed by the canonical Rust MESH engine.
       </p>
     </div>
   );

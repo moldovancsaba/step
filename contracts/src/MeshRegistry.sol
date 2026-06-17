@@ -5,7 +5,7 @@ import {StepAccess, StepManaged} from "./StepAccess.sol";
 
 /// @title MeshRegistry — canonical MESH version and mineable levels (SC-002)
 /// @notice Commits the active mesh specification version and the set of levels
-///         that issue natural Trinity (ADR-003: alpha default [21], UNFROZEN).
+///         that issue natural Trinity (ADR-003: alpha default 1..21 (level 21 terminal), UNFROZEN).
 ///         Triangle identity on-chain is `keccak256(utf8(triangleIdString))`
 ///         where the string follows step-mesh-v1 (docs/geography).
 contract MeshRegistry is StepManaged {

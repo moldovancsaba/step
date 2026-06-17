@@ -27,7 +27,6 @@ pub enum RejectReason {
     SignatureInvalid,
     SignerMismatch,
     TriangleMismatch,
-    LevelNotMineable,
     AccuracyTooLow,
     FraudScoreTooHigh,
 }
@@ -40,7 +39,6 @@ pub struct ValidationParams {
     pub max_accuracy_fraction_of_side: f64,
     pub max_plausible_speed_mps: f64,
     pub fraud_score_reject_threshold: f64,
-    pub mineable_levels: Vec<u8>,
     pub allow_dev_claims: bool,
 }
 
@@ -149,12 +147,7 @@ pub fn validate_claim(
         _ => reasons.push(RejectReason::SignatureInvalid),
     }
 
-    // 7. Mineable level (natural claims; sponsored campaigns pin triangles).
-    if claim.campaign_id.is_none() && !params.mineable_levels.contains(&claim.mesh_level) {
-        reasons.push(RejectReason::LevelNotMineable);
-    }
-
-    // 8. Geometry: independent containment recomputation (the heart of the
+    // 7. Geometry: independent containment recomputation (the heart of the
     //    protocol — validators NEVER trust the client's triangle claim).
     let mut boundary = "unresolved".to_string();
     match boundary_policy(
@@ -180,14 +173,14 @@ pub fn validate_claim(
         Err(_) => reasons.push(RejectReason::FieldOutOfRange),
     }
 
-    // 9. Hard accuracy ceiling for the proof tier.
+    // 8. Hard accuracy ceiling for the proof tier.
     if claim.horizontal_accuracy_m > params.max_accuracy_radius_m
         && !reasons.contains(&RejectReason::AccuracyTooLow)
     {
         reasons.push(RejectReason::AccuracyTooLow);
     }
 
-    // 10. Fraud scoring (speed/teleport/accuracy-anomaly/unattested).
+    // 9. Fraud scoring (speed/teleport/accuracy-anomaly/unattested).
     let fraud = score_claim(
         claim.latitude,
         claim.longitude,

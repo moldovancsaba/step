@@ -99,12 +99,6 @@ pub fn load_params(path: &str, allow_dev_claims: bool) -> Result<ValidationParam
         fraud_score_reject_threshold: g("proof", "fraud_score_reject_threshold")?
             .as_f64()
             .ok_or("bad threshold")?,
-        mineable_levels: g("mesh", "mineable_levels")?
-            .as_array()
-            .ok_or("bad levels")?
-            .iter()
-            .filter_map(|x| x.as_u64().map(|n| n as u8))
-            .collect(),
         allow_dev_claims,
     })
 }

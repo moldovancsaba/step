@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import type { Account } from "viem";
 import { buildUnsignedClaim, signClaim } from "@step/proof-protocol";
-import type { GatewayClaimRecord, IndexerStats } from "@step/api-client";
+import type { GatewayClaimRecord, IndexerStats, IndexerTriangle } from "@step/api-client";
 import type { Hex } from "@step/shared-types";
 import MeshMap from "./MeshMap";
 
@@ -41,31 +41,24 @@ interface WalletFilePayload {
   createdAt: string;
 }
 
-const DEFAULT_MESH_LEVEL = 21;
 const DEFAULT_WALLET_ALIAS = "Local wallet";
 const DEFAULT_WALLET_FILE_NAME = "step-wallet-profile";
 const ALPHA_ACCURACY_CAP_M = 25;
 const MESH_ACCURACY_FRACTION_FOR_LEVEL = 10;
-
-const MESH_LEVEL_BY_ACCURACY = [
-  { maxAccuracy: 25, level: 21 },
-  { maxAccuracy: Infinity, level: 21 },
-] as const;
-
-const NATURAL_MINEABLE_LEVELS = [21] as const;
-const MESH_LEVEL_FALLBACK_ORDER = [...NATURAL_MINEABLE_LEVELS] as const;
+const DEFAULT_TRIANGLE_SLOT_LIMIT = 27;
+const MAX_MESH_LEVEL = 21;
 
 const MESH_ACCURACY_GUIDE = [
-  "Pilot mineable level is 21 only (all lower levels are non-mineable in alpha).",
-  `Keep location accuracy around ${ALPHA_ACCURACY_CAP_M}m or better for level 21.`,
-  "If your level is not mineable, we stop immediately and do not auto-fall into lower levels.",
-  "Backend validation uses the configured accuracy threshold and boundary policy in the same request.",
+  "Mining always starts at level 1 for first visits.",
+  "A deeper level opens only after its parent triangle is fully mined and exhausted.",
+  `Keep location accuracy near the configured threshold (cap ${ALPHA_ACCURACY_CAP_M}m).`,
+  "No global fallback levels are used; mineability is location-specific and ancestor-gated.",
 ];
 
 const REJECT_REASON_HINTS: Record<string, string> = {
   nonce_rejected: "Your one-time nonce was rejected. Refreshing with a fresh nonce.",
-  accuracy_too_low: "Your location accuracy was too low for level 21. Open sky and retry.",
-  level_not_mineable: "Your location resolved to a non-mineable level. Current network rule is level 21 only.",
+  accuracy_too_low:
+    "Your location accuracy was too low for this mineable rule. Open sky and retry.",
   geometry_mismatch: "Geometry verification rejected the claimed triangle.",
   geometry_rejected: "Geometry verification rejected the claimed triangle.",
   boundary_ambiguous: "Your location overlaps an edge. Move a few meters and retry from a safer point.",
@@ -250,19 +243,6 @@ async function json<T>(url: string, init?: RequestInit): Promise<T> {
   return body as T;
 }
 
-function chooseMeshLevelForAccuracy(accuracyM: number) {
-  const best = MESH_LEVEL_BY_ACCURACY.find((entry) => accuracyM <= entry.maxAccuracy)?.level ?? DEFAULT_MESH_LEVEL;
-  if (MESH_LEVEL_FALLBACK_ORDER.includes(best as (typeof MESH_LEVEL_FALLBACK_ORDER)[number])) return best;
-  return MESH_LEVEL_FALLBACK_ORDER[0]!;
-}
-
-function buildMeshAttemptLevels(startLevel: number) {
-  const chosen = MESH_LEVEL_FALLBACK_ORDER.includes(startLevel as (typeof MESH_LEVEL_FALLBACK_ORDER)[number])
-    ? startLevel
-    : MESH_LEVEL_FALLBACK_ORDER[0];
-  return [chosen];
-}
-
 function normalizeChainReason(reason: string) {
   if (!reason) return reason;
   return reason.trim();
@@ -300,19 +280,8 @@ function isAccuracyTooLowReason(rejectReasons: string[]) {
   return rejectReasons.includes("accuracy_too_low");
 }
 
-function isLevelNotMineableReason(rejectReasons: string[]) {
-  return (
-    rejectReasons.includes("level_not_mineable") ||
-    rejectReasons.some((reason) => reason.includes("LevelNotMineable"))
-  );
-}
-
 function isRetryableReason(rejectReasons: string[]) {
-  return (
-    isAccuracyTooLowReason(rejectReasons) ||
-    isLevelNotMineableReason(rejectReasons) ||
-    rejectReasons.includes("nonce_rejected")
-  );
+  return rejectReasons.includes("nonce_rejected") || isAccuracyTooLowReason(rejectReasons);
 }
 
 function short(value: string, left = 10, right = 6) {
@@ -671,6 +640,57 @@ function Miner({
     });
   }
 
+  const readTriangleState = async (triangleIdHash: Hex) => {
+    try {
+      const response = await fetch(`${config.indexerUrl}/v1/triangles/${triangleIdHash}`);
+      if (!response.ok) return null;
+      return (await response.json().catch(() => null)) as IndexerTriangle | null;
+    } catch {
+      return null;
+    }
+  };
+
+  async function resolveMineableTriangle(loc: { lat: number; lon: number }) {
+    let indexerHealthy = true;
+    try {
+      const indexerHealth = await fetch(`${config.indexerUrl}/healthz`);
+      if (!indexerHealth.ok) indexerHealthy = false;
+    } catch {
+      indexerHealthy = false;
+    }
+
+    for (let level = 1; level <= MAX_MESH_LEVEL; level += 1) {
+      const resolutionHint = `Resolving your triangle at level ${level}.`;
+      setMessage(resolutionHint);
+      setPhase("resolving");
+
+      const tri = await json<TriangleInfo>(
+        `${config.gatewayUrl}/v1/mesh/resolve?lat=${loc.lat}&lon=${loc.lon}&level=${level}`,
+      );
+
+      if (!indexerHealthy) {
+        return { triangle: tri, level };
+      }
+
+      const state = await readTriangleState(tri.triangle_id_hash);
+      if (state?.frozen) {
+        throw new Error(`Resolved triangle ${tri.triangle_id} is frozen by safety policy.`);
+      }
+
+      if (!state || state.used_slots < DEFAULT_TRIANGLE_SLOT_LIMIT) {
+        return { triangle: tri, level };
+      }
+
+      if (level === MAX_MESH_LEVEL) {
+        throw new Error(
+          `Levels 1-${MAX_MESH_LEVEL} at this location are exhausted. A reset/reseed path is required.`,
+        );
+      }
+    }
+
+    throw new Error(`No mineable triangle found for this location up to level ${MAX_MESH_LEVEL}.`);
+  }
+
   async function mine() {
     setRecord(null);
     setTriangle(null);
@@ -686,90 +706,80 @@ function Miner({
       }
 
       const loc = await getLocation();
-      const startLevel = chooseMeshLevelForAccuracy(loc.acc);
-      const levelSequence = buildMeshAttemptLevels(startLevel);
 
-      for (let i = 0; i < levelSequence.length; i++) {
-        const attemptLevel = levelSequence[i] as number;
-        const resolutionHint =
-          attemptLevel < DEFAULT_MESH_LEVEL
-            ? `Trying level ${attemptLevel} because location accuracy is ${loc.acc.toFixed(1)}m.`
-            : `Trying level ${attemptLevel}.`;
-        setMessage(resolutionHint);
-        setPhase("resolving");
-        const tri = await json<TriangleInfo>(
-          `${config.gatewayUrl}/v1/mesh/resolve?lat=${loc.lat}&lon=${loc.lon}&level=${attemptLevel}`,
+      const gatewayHealth = await fetch(`${config.gatewayUrl}/healthz`);
+      if (!gatewayHealth.ok) {
+        throw new Error("Gateway is not reachable (/api/gateway). Set STEP_BACKEND_GATEWAY_URL before continuing.");
+      }
+
+      const { triangle: tri, level: attemptLevel } = await resolveMineableTriangle(loc);
+      const resolutionHint = `Resolved at level ${attemptLevel}.`;
+      setMessage(resolutionHint);
+      const maxAcceptableAccuracy = Math.min(
+        ALPHA_ACCURACY_CAP_M,
+        tri.min_side_m * MESH_ACCURACY_FRACTION_FOR_LEVEL,
+      );
+      setMeshAdvice(
+        `${resolutionHint} Triangle side is ${tri.min_side_m.toFixed(1)}m at this location. Max accepted accuracy ${maxAcceptableAccuracy.toFixed(1)}m.`
+      );
+      setTriangle(tri);
+
+      let nonceAttempts = 1;
+      while (true) {
+        setMessage("Requesting nonce and signing claim locally...");
+        setPhase("signing");
+        const nonce = await json<{ nonce: string }>(`${config.gatewayUrl}/v1/nonce`, {
+          method: "POST",
+          body: JSON.stringify({ wallet: account.address }),
+        });
+        const claim = await signClaim(
+          buildUnsignedClaim({
+            wallet: account.address,
+            triangleId: tri.triangle_id,
+            meshLevel: attemptLevel,
+            latitude: loc.lat,
+            longitude: loc.lon,
+            horizontalAccuracyM: loc.acc,
+            nonce: nonce.nonce,
+          }),
+          account,
         );
-        const maxAcceptableAccuracy = Math.min(
-          ALPHA_ACCURACY_CAP_M,
-          tri.min_side_m * MESH_ACCURACY_FRACTION_FOR_LEVEL,
-        );
-        setMeshAdvice(
-          `${resolutionHint} Level ${attemptLevel} triangle side is ${tri.min_side_m.toFixed(1)}m at this location. Max accepted accuracy ${maxAcceptableAccuracy.toFixed(1)}m.`
-        );
-        setTriangle(tri);
 
-        let nonceAttempts = 1;
-        while (true) {
-          setMessage("Requesting nonce and signing claim locally...");
-          setPhase("signing");
-          const nonce = await json<{ nonce: string }>(`${config.gatewayUrl}/v1/nonce`, {
-            method: "POST",
-            body: JSON.stringify({ wallet: account.address }),
-          });
-          const claim = await signClaim(
-            buildUnsignedClaim({
-              wallet: account.address,
-              triangleId: tri.triangle_id,
-              meshLevel: attemptLevel,
-              latitude: loc.lat,
-              longitude: loc.lon,
-              horizontalAccuracyM: loc.acc,
-              nonce: nonce.nonce,
-            }),
-            account,
-          );
+        setPhase("submitting");
+        setMessage("Submitting claim to gateway and validators...");
+        const submitted = await json<GatewayClaimRecord>(`${config.gatewayUrl}/v1/claims`, {
+          method: "POST",
+          body: JSON.stringify({ claim }),
+        });
+        setRecord(submitted);
 
-          setPhase("submitting");
-          setMessage("Submitting claim to gateway and validators...");
-          const submitted = await json<GatewayClaimRecord>(`${config.gatewayUrl}/v1/claims`, {
-            method: "POST",
-            body: JSON.stringify({ claim }),
-          });
-          setRecord(submitted);
-
-          const reasons = submitted.reject_reasons ?? [];
-          if (submitted.status === "finalised") {
-            setPhase("done");
-            setMessage("Claim finalised. Trinity mined on the internal testnet.");
-            return;
-          }
-
-          if (submitted.status === "rejected") {
-            if (
-              reasons.includes("nonce_rejected") &&
-              !isAccuracyTooLowReason(reasons) &&
-              nonceAttempts > 0
-            ) {
-              nonceAttempts -= 1;
-              setPhase("signing");
-              setMessage("Nonce was rejected. Refreshing and retrying with a new nonce.");
-              continue;
-            }
-            setPhase("error");
-            const humanReason = describeRejectReasons(reasons);
-            const hint =
-              isRetryableReason(reasons) && isAccuracyTooLowReason(reasons)
-                ? `${humanReason} Move to open area and retry manually.`
-                : humanReason;
-            setMessage(`Rejected: ${hint}`);
-            return;
-          }
-
-          setPhase("error");
-          setMessage(`Claim ${submitted.status}: ${submitted.reject_reasons.join(", ") || "processing"}`);
+        const reasons = submitted.reject_reasons ?? [];
+        if (submitted.status === "finalised") {
+          setPhase("done");
+          setMessage("Claim finalised. Trinity mined on the internal testnet.");
           return;
         }
+
+        if (submitted.status === "rejected") {
+          if (reasons.includes("nonce_rejected") && !isAccuracyTooLowReason(reasons) && nonceAttempts > 0) {
+            nonceAttempts -= 1;
+            setPhase("signing");
+            setMessage("Nonce was rejected. Refreshing and retrying with a new nonce.");
+            continue;
+          }
+          setPhase("error");
+          const humanReason = describeRejectReasons(reasons);
+          const hint =
+            isRetryableReason(reasons) && isAccuracyTooLowReason(reasons)
+              ? `${humanReason} Move to open area and retry manually.`
+              : humanReason;
+          setMessage(`Rejected: ${hint}`);
+          return;
+        }
+
+        setPhase("error");
+        setMessage(`Claim ${submitted.status}: ${submitted.reject_reasons.join(", ") || "processing"}`);
+        return;
       }
     } catch (err) {
       setPhase("error");

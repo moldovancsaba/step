@@ -58,7 +58,6 @@ contract MiningClaimVerifier is Parameterized, EIP712 {
     );
 
     error ClaimAlreadyFinalised(bytes32 claimHash);
-    error LevelNotMineable(uint8 level);
     error TriangleLevelMismatch(uint8 claimLevel, uint8 parsedLevel);
     error TriangleIdMalformed(bytes32 triangleIdHash);
     error ParentTriangleNotExhausted(bytes32 parentTriangleId);
@@ -202,14 +201,18 @@ contract MiningClaimVerifier is Parameterized, EIP712 {
             _parseTriangleId(triangleId);
 
         if (parsedLevel != meshLevel) revert TriangleLevelMismatch(meshLevel, parsedLevel);
-        if (hasParent && MESH.isMineableLevel(parsedLevel - 1)) {
+        // Mesh ID v2: there is no "non-mineable level" — every level 1..21 is
+        // structurally mineable; availability is gated purely by parent
+        // exhaustion (genesis level 1 has no parent). A triangle at level N>1
+        // is mineable only once its parent (the level it broke down from) is
+        // Exhausted. See docs/geography/STEP_mesh_id_v2.md.
+        if (hasParent) {
             if (STATE.status(parentTriangleId) != TriangleMiningState.TriangleStatus.Exhausted) {
                 revert ParentTriangleNotExhausted(parentTriangleId);
             }
         }
 
         _beginFinalise(claimHash, triangleIdHash);
-        if (!MESH.isMineableLevel(meshLevel)) revert LevelNotMineable(meshLevel);
         _checkQuorum(claimHash, triangleIdHash, miner, sigs);
 
         _mintToMiner(claimHash, triangleIdHash, miner, proofCidHash);

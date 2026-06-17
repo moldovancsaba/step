@@ -57,8 +57,10 @@ contract Deploy is Script {
 
         access = new StepAccess(admin);
         token = new TrinityToken(access);
-        uint8[] memory levels = new uint8[](1);
-        levels[0] = 21;
+        uint8[] memory levels = new uint8[](21);
+        for (uint8 i = 0; i < 21; i++) {
+            levels[i] = i + 1;
+        }
         mesh = new MeshRegistry(access, "step-mesh-v1", levels);
         safety = new SafetyRegistry(access);
         validators = new ValidatorRegistry(access);

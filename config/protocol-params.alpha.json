@@ -3,7 +3,7 @@
   "registry_version": "alpha.1",
   "mesh": {
     "mesh_spec_version": "step-mesh-v1",
-    "mineable_levels": { "value": [21], "status": "UNFROZEN", "adr": "ADR-003" },
+    "mineable_levels": { "value": [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21], "status": "UNFROZEN", "adr": "ADR-003", "comment": "retained for compatibility; level availability is enforced by parent-exhaustion hierarchy at claim time" },
     "boundary_tie_eps": { "value": 1e-12, "status": "FROZEN-ALPHA", "adr": "ADR-002", "comment": "unit-sphere edge-plane tolerance band for lowest-ID tie-break" },
     "max_accuracy_fraction_of_side": { "value": 10.0, "status": "UNFROZEN", "requirement": "MESH-008", "comment": "alpha allows practical GNSS at level-21; 25m is the effective ceiling at that side scale" }
   },

@@ -35,3 +35,6 @@ apps/web-app/dist/
 
 # Local pilot runtime (up.mjs)
 .runtime/
+
+# TypeScript incremental build artifacts
+*.tsbuildinfo

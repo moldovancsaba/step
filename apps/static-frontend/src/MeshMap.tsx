@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { TriangleInfo } from "@step/shared-types";
 
-const MESH_LEVEL = 21;
+const MIN_MESH_LEVEL = 1;
+const MAX_MESH_LEVEL = 21;
 const PILOT_CENTER: [number, number] = [19.0402, 47.4979];
 
 interface MeshState {
@@ -17,6 +18,11 @@ interface MeshState {
 interface MeshMapProps {
   gatewayUrl: string;
   indexerUrl: string;
+}
+
+interface MeshCursor {
+  lat: number;
+  lon: number;
 }
 
 function triangleToFeature(
@@ -48,7 +54,54 @@ export default function MeshMap({ gatewayUrl, indexerUrl }: MeshMapProps) {
   const mapRef = useRef<maplibregl.Map | null>(null);
   const [selected, setSelected] = useState<TriangleInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [status, setStatus] = useState("");
+  const [meshLevel, setMeshLevel] = useState(MIN_MESH_LEVEL);
+  const [meshLevelInput, setMeshLevelInput] = useState(String(MIN_MESH_LEVEL));
+  const [cursor, setCursor] = useState<MeshCursor | null>(null);
+  const meshLevelRef = useRef(meshLevel);
+  meshLevelRef.current = meshLevel;
+
+  const refreshFromCoordinates = useCallback(
+      async (lat: number, lon: number, level: number) => {
+      const targetLevel = Math.min(MAX_MESH_LEVEL, Math.max(MIN_MESH_LEVEL, Math.floor(level)));
+      setError(null);
+      try {
+        const resolved = await fetchJson<TriangleInfo>(
+          `${gatewayUrl}/v1/mesh/resolve?lat=${lat}&lon=${lon}&level=${targetLevel}`,
+        );
+        if (!resolved) throw new Error("mesh API unreachable");
+        setSelected(resolved);
+        setMeshLevel(targetLevel);
+        setMeshLevelInput(String(targetLevel));
+
+        const state = await (async () => {
+          const row = await fetchJson<{ used_slots?: number; frozen?: boolean; oasis_campaigns?: unknown[] }>(
+            `${indexerUrl}/v1/triangles/${resolved.triangle_id_hash}`,
+          );
+          if (!row) return {};
+          return {
+            used_slots: row.used_slots,
+            frozen: row.frozen,
+            oasis: Array.isArray(row.oasis_campaigns) && row.oasis_campaigns.length > 0,
+          };
+        })();
+
+        const neighbours = await Promise.all(
+          resolved.neighbours.map(async (id) =>
+            fetchJson<TriangleInfo>(`${gatewayUrl}/v1/mesh/triangle/${id}`),
+          ),
+        );
+        const features = [
+          triangleToFeature(resolved, state),
+          ...neighbours.filter((n): n is TriangleInfo => n !== null).map((n) => triangleToFeature(n)),
+        ];
+        const src = mapRef.current?.getSource("mesh") as maplibregl.GeoJSONSource | undefined;
+        src?.setData({ type: "FeatureCollection", features });
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "mesh API unreachable");
+      }
+    },
+    [gatewayUrl, indexerUrl],
+  );
 
   useEffect(() => {
     if (!container.current || mapRef.current) return;
@@ -80,47 +133,6 @@ export default function MeshMap({ gatewayUrl, indexerUrl }: MeshMapProps) {
         );
       }
 
-      const refreshFromCoordinates = async (lat: number, lon: number) => {
-        const level = MESH_LEVEL;
-        setStatus("Resolving current position...");
-        setError(null);
-        try {
-          const resolved = await fetchJson<TriangleInfo>(
-            `${gatewayUrl}/v1/mesh/resolve?lat=${lat}&lon=${lon}&level=${level}`,
-          );
-          if (!resolved) throw new Error("mesh API unreachable");
-          setSelected(resolved);
-          setStatus(`Resolved triangle ${resolved.triangle_id}`);
-
-          const state = await (async () => {
-            const row = await fetchJson<{ used_slots?: number; frozen?: boolean; oasis_campaigns?: unknown[] }>(
-              `${indexerUrl}/v1/triangles/${resolved.triangle_id_hash}`,
-            );
-            if (!row) return {};
-            return {
-              used_slots: row.used_slots,
-              frozen: row.frozen,
-              oasis: Array.isArray(row.oasis_campaigns) && row.oasis_campaigns.length > 0,
-            };
-          })();
-
-          const neighbours = await Promise.all(
-            resolved.neighbours.map(async (id) =>
-              fetchJson<TriangleInfo>(`${gatewayUrl}/v1/mesh/triangle/${id}`)
-            ),
-          );
-          const features = [
-            triangleToFeature(resolved, state),
-            ...neighbours.filter((n): n is TriangleInfo => n !== null).map((n) => triangleToFeature(n)),
-          ];
-          const src = map.getSource("mesh") as maplibregl.GeoJSONSource | undefined;
-          src?.setData({ type: "FeatureCollection", features });
-        } catch (err) {
-          setError(err instanceof Error ? err.message : "mesh API unreachable");
-          setStatus("");
-        }
-      };
-
       map.addSource("mesh", {
         type: "geojson",
         data: { type: "FeatureCollection", features: [] },
@@ -137,23 +149,30 @@ export default function MeshMap({ gatewayUrl, indexerUrl }: MeshMapProps) {
         source: "mesh",
         paint: { "line-color": "#10b981", "line-width": 1.5 },
       });
+
       map.on("geolocate", (event: unknown) => {
         const anyEvent = event as { coords: { latitude: number; longitude: number } };
-        void refreshFromCoordinates(anyEvent.coords.latitude, anyEvent.coords.longitude);
+        const location = { lat: anyEvent.coords.latitude, lon: anyEvent.coords.longitude };
+        setCursor(location);
+        void refreshFromCoordinates(location.lat, location.lon, meshLevelRef.current);
       });
 
       map.on("click", (event: unknown) => {
         const anyEvent = event as { lngLat: { lat: number; lng: number } };
-        void refreshFromCoordinates(anyEvent.lngLat.lat, anyEvent.lngLat.lng);
+        const location = { lat: anyEvent.lngLat.lat, lon: anyEvent.lngLat.lng };
+        setCursor(location);
+        void refreshFromCoordinates(location.lat, location.lon, meshLevelRef.current);
       });
 
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
           (position) => {
-            void refreshFromCoordinates(position.coords.latitude, position.coords.longitude);
+            const location = { lat: position.coords.latitude, lon: position.coords.longitude };
+            setCursor(location);
+            void refreshFromCoordinates(location.lat, location.lon, meshLevelRef.current);
           },
           () => {
-            setStatus("No location permission. Click map to resolve manually.");
+            setError("No location permission. Click map to resolve manually.");
           },
           { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 },
         );
@@ -164,10 +183,69 @@ export default function MeshMap({ gatewayUrl, indexerUrl }: MeshMapProps) {
       map.remove();
       mapRef.current = null;
     };
-  }, [gatewayUrl, indexerUrl]);
+  }, [gatewayUrl, indexerUrl, refreshFromCoordinates]);
+
+  useEffect(() => {
+    if (!cursor) return;
+    void refreshFromCoordinates(cursor.lat, cursor.lon, meshLevel);
+  }, [cursor, meshLevel, refreshFromCoordinates]);
 
   return (
     <div className="space-y-4">
+      <article className="panel">
+        <div className="row">
+          <label htmlFor="mesh-level">Mesh depth level</label>
+          <input
+            id="mesh-level"
+            type="number"
+            min={MIN_MESH_LEVEL}
+            max={MAX_MESH_LEVEL}
+            value={meshLevelInput}
+            onChange={(event) => setMeshLevelInput(event.target.value)}
+            onBlur={() => {
+              const next = Number.parseInt(meshLevelInput, 10);
+              const bounded = Number.isNaN(next)
+                ? meshLevel
+                : Math.min(MAX_MESH_LEVEL, Math.max(MIN_MESH_LEVEL, next));
+              setMeshLevel(bounded);
+              setMeshLevelInput(String(bounded));
+            }}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter") return;
+              const next = Number.parseInt(meshLevelInput, 10);
+              const bounded = Number.isNaN(next)
+                ? meshLevel
+                : Math.min(MAX_MESH_LEVEL, Math.max(MIN_MESH_LEVEL, next));
+              setMeshLevel(bounded);
+              setMeshLevelInput(String(bounded));
+              if (cursor) {
+                void refreshFromCoordinates(cursor.lat, cursor.lon, bounded);
+              }
+              event.preventDefault();
+            }}
+          />
+          <button
+            type="button"
+            className="primary"
+            onClick={() => {
+              const next = Number.parseInt(meshLevelInput, 10);
+              const bounded = Number.isNaN(next)
+                ? meshLevel
+                : Math.min(MAX_MESH_LEVEL, Math.max(MIN_MESH_LEVEL, next));
+              setMeshLevel(bounded);
+              setMeshLevelInput(String(bounded));
+              if (cursor) {
+                void refreshFromCoordinates(cursor.lat, cursor.lon, bounded);
+              }
+            }}
+          >
+            Apply
+          </button>
+        </div>
+        <p className="mesh-hint">
+          Current level: {meshLevel}. Resolution is always ancestor-gated by triangle state.
+        </p>
+      </article>
       <div ref={container} className="mesh-map-canvas" />
       {error && (
         <p className="mesh-error">

@@ -71,7 +71,7 @@ public final class AppModel: ObservableObject {
     }
 
     /// Flow B steps 1–3: resolve the current triangle from a location sample.
-    public func updateLocation(_ sample: LocationSample, level: Int = 21) async {
+    public func updateLocation(_ sample: LocationSample, level: Int = 1) async {
         status = .resolvingTriangle
         do {
             let triangle = try await client.resolveTriangle(

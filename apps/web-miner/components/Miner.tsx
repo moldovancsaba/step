@@ -141,9 +141,16 @@ export function Miner() {
 
       setPhase("resolving");
       setMessage("Resolving your spherical triangle…");
-      const triRes = await fetch(`/api/resolve?lat=${loc.lat}&lon=${loc.lon}&level=21`);
-      if (!triRes.ok) throw new Error("could not resolve triangle (is the stack running?)");
-      const tri: TriangleInfo = await triRes.json();
+      const triRes = await fetch(`/api/resolve?lat=${loc.lat}&lon=${loc.lon}`);
+      const triPayload = await triRes.json();
+      if (!triRes.ok) {
+        throw new Error(
+          triPayload && typeof triPayload === "object" && "error" in triPayload
+            ? String((triPayload as { error: unknown }).error)
+            : "could not resolve triangle (is the stack running?)",
+        );
+      }
+      const tri: TriangleInfo = triPayload;
       setTriangle(tri);
 
       setPhase("signing");
@@ -160,7 +167,7 @@ export function Miner() {
         buildUnsignedClaim({
           wallet: account.address,
           triangleId: tri.triangle_id,
-          meshLevel: 21,
+          meshLevel: tri.level,
           latitude: loc.lat,
           longitude: loc.lon,
           horizontalAccuracyM: loc.acc,

@@ -36,8 +36,7 @@
 ### Natural (SYS §23.1 steps 11–15)
 `finaliseNaturalClaim(claimHash, triangleId, meshLevel, miner, proofCidHash, sigs[])`:
 1. replay check (`finalisedClaims[claimHash]`, shared across both paths);
-2. `MeshRegistry.isMineableLevel(meshLevel)`;
-3. `SafetyRegistry.isTriangleBlocked` → revert if frozen;
+2. `SafetyRegistry.isTriangleBlocked` → revert if frozen;
 4. quorum: signatures must be strictly ascending by validator address (dedup); each recovers against the EIP-712 vote digest `StepValidatorVote(claimHash, triangleId, miner, approve=true)`; only `Active` validators contribute `weight`; `Σweights ≥ P_QUORUM_WEIGHT`;
 5. `TriangleMiningState.consumeSlot` (checks Open/Locked/Cooldown/Exhausted, returns slot + halving reward ≥ 1);
 6. `TrinityToken.mint(miner, reward)`;
@@ -68,7 +67,7 @@ The ≥1-Trinity curve floor is enforced three times: at parameter validation, r
 
 ## 6. Test status (verified 2026-06-12)
 
-`forge test`: **31/31 passing** — 28 unit/integration (happy paths, replay across both paths, quorum shortfalls, suspended validators, duplicate/unsorted signatures, signature-over-wrong-claim, rejection votes, non-mineable level, freeze/unfreeze, exhaustion incl. exact 1-Trinity final slot, emergency pause round-trip, campaign lifecycle with both refund policies, per-wallet limits, pre-funding enforcement, param timelock, twin bps fuzz across 0–10000, twin cap clamp, opening delay/cooldown timing), 1 fuzz (512 runs), 2 invariants (64 runs × 32 depth: `totalSupply == minerMints + twinMints`, treasury holds all twin).
+`forge test`: **31/31 passing** — 28 unit/integration (happy paths, replay across both paths, quorum shortfalls, suspended validators, duplicate/unsorted signatures, signature-over-wrong-claim, rejection votes, freeze/unfreeze, exhaustion incl. exact 1-Trinity final slot, emergency pause round-trip, campaign lifecycle with both refund policies, per-wallet limits, pre-funding enforcement, param timelock, twin bps fuzz across 0–10000, twin cap clamp, opening delay/cooldown timing), 1 fuzz (512 runs), 2 invariants (64 runs × 32 depth: `totalSupply == minerMints + twinMints`, treasury holds all twin).
 
 Deployment: `script/Deploy.s.sol` executed successfully against live Anvil (chain 31337); address book at [`contracts/deployments/31337.json`](../../contracts/deployments/31337.json). Production wiring grants `MINTER_ROLE` only to the verifier and treasury contracts.
 

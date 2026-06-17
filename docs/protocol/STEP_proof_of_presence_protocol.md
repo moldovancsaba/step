@@ -23,11 +23,11 @@ Gateway-issued: `wallethex:expiryUnix:random.tag16` where `tag = keccak256(secre
 
 ## 3. Acceptance rule (POP-003, all ANDed — every condition has a rejection test)
 
-valid signature ∧ fresh single-use nonce ∧ timestamp within window ∧ fields in bounds ∧ integrity-mode policy satisfied (attested tokens present, or dev mode explicitly allowed off-pilot) ∧ **independently recomputed** triangle == claimed triangle ∧ accuracy within tier ceiling and boundary policy ∧ mineable level (natural) ∧ fraud score < threshold ∧ validator quorum weight ≥ threshold ∧ triangle open on-chain (not Locked/Cooldown/Exhausted/Frozen) ∧ claim hash never finalised before.
+valid signature ∧ fresh single-use nonce ∧ timestamp within window ∧ fields in bounds ∧ integrity-mode policy satisfied (attested tokens present, or dev mode explicitly allowed off-pilot) ∧ **independently recomputed** triangle == claimed triangle ∧ accuracy within tier ceiling and boundary policy ∧ fraud score < threshold ∧ validator quorum weight ≥ threshold ∧ triangle open on-chain (not Locked/Cooldown/Exhausted/Frozen) ∧ claim hash never finalised before.
 
-Alpha currently mines only level 21, and the app does not auto-downgrade to lower levels. If your resolved `mesh_level` is not mineable, the claim is rejected as `level_not_mineable`. Child triangles (21+1, etc.) are only mineable after the parent triangle is fully exhausted.
+All triangle levels are accepted structurally, and the only on-chain availability gate for deeper levels is parent exhaustion. The client does not do level fallback. If a location is still at first mining depth, the claim will be rejected by chain state via `parent_not_exhausted` until the parent triangle is fully mined and exhausted. No `level_not_mineable` rejections are emitted in normal alpha.
 
-Boundary semantics at level 21 (≈6.7 m sides): with the alpha threshold this level is intentionally tuned for real GNSS hardware. `boundary_ambiguous` still applies when the accuracy circle intersects an edge, but only `reject_accuracy` blocks submission once the configured radius cap is exceeded.
+Boundary semantics are evaluated at the target level: `boundary_ambiguous` still applies when the accuracy circle intersects an edge, but only `reject_accuracy` blocks submission once the configured radius cap is exceeded. This keeps the check level-agnostic while preserving strictness at finer levels (for example, level-21 with ≈6.7 m sides).
 
 ## 4. Fraud scoring v1 (implemented signals)
 
@@ -54,4 +54,4 @@ Off-chain: the full claim + validator signatures + fraud score as a `step.eviden
 
 ## 8. Parameters (all from the registry, never hardcoded)
 
-`claim_timestamp_window_seconds` 300 · `nonce_ttl_seconds` 120 · `max_accuracy_radius_m_l1` 25 · `max_accuracy_fraction_of_side` 10.0 · `max_plausible_speed_mps` 69.4 · `fraud_score_reject_threshold` 0.7 · `mineable_levels` [21] — all UNFROZEN alpha defaults pending the tokenomics constitution and field data.
+`claim_timestamp_window_seconds` 300 · `nonce_ttl_seconds` 120 · `max_accuracy_radius_m_l1` 25 · `max_accuracy_fraction_of_side` 10.0 · `max_plausible_speed_mps` 69.4 · `fraud_score_reject_threshold` 0.7 — all UNFROZEN alpha defaults pending the tokenomics constitution and field data.

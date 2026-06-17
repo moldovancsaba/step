@@ -21,6 +21,12 @@ if [ -z "${STEP_BACKEND_GATEWAY_URL:-}" ] || [ -z "${STEP_BACKEND_INDEXER_URL:-}
   exit 1
 fi
 
+if [[ "${STEP_BACKEND_GATEWAY_URL}" == *"127.0.0.1"* ]] || [[ "${STEP_BACKEND_GATEWAY_URL}" == *"localhost"* ]] ||
+   [[ "${STEP_BACKEND_INDEXER_URL}" == *"127.0.0.1"* ]] || [[ "${STEP_BACKEND_INDEXER_URL}" == *"localhost"* ]]; then
+  echo "Warning: backend endpoints still point to localhost, which is only valid from the host machine."
+  echo "For public non-sandbox deployment, set these to public HTTPS endpoints."
+fi
+
 echo "Using Cloudflare deployment target account ${CLOUDFLARE_ACCOUNT_ID:+(account set)}"
 
 echo "Cloudflare backend config:"
