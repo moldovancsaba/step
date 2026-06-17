@@ -54,6 +54,16 @@ export interface TreasuryRow {
   withdrawals: { to: Address; amount: bigint; purpose: Hex; tx_hash: Hex }[];
 }
 
+export interface MeshState {
+  triangle_id_hash: Hex;
+  used_slots: number;
+  total_slots: number;
+  depletion: number; // 0 (oasis) .. 1 (desert)
+  state: "oasis" | "filling" | "desert";
+  frozen: boolean;
+  last_mined_at: string | null;
+}
+
 export interface Stats {
   total_supply: bigint;
   claims_finalised: number;
@@ -105,6 +115,30 @@ export class MemoryStore {
       this.campaigns.set(key, row);
     }
     return row;
+  }
+
+  /**
+   * Oasis/desert state for one triangle (issue #16). Depletion = used / total
+   * slots in [0,1]; drives the viewport heat overlay (green oasis → red desert,
+   * #17). Triangles never mined (absent from the projection) report depletion 0
+   * = full oasis. `frozen` triangles are surfaced so the UI can mark them.
+   */
+  meshState(idHash: Hex, totalSlots: number): MeshState {
+    const row = this.triangles.get(idHash.toLowerCase());
+    const used = row ? row.used_slots : 0;
+    const total = Math.max(totalSlots, 1);
+    const depletion = Math.min(used / total, 1);
+    const state: MeshState["state"] =
+      used >= total ? "desert" : depletion >= 0.5 ? "filling" : "oasis";
+    return {
+      triangle_id_hash: idHash,
+      used_slots: used,
+      total_slots: total,
+      depletion,
+      state,
+      frozen: row?.frozen ?? false,
+      last_mined_at: row?.last_mined_at ?? null,
+    };
   }
 
   stats(): Stats {

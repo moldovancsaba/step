@@ -141,3 +141,73 @@ describe("explorer API", () => {
     expect(stats.claims_finalised).toBe(1);
   });
 });
+
+describe("mesh oasis/desert states (#16)", () => {
+  const TRI2 = ("0x" + "cd".repeat(32)) as Hex;
+
+  it("classifies oasis / filling / desert by slot depletion", async () => {
+    const store = new MemoryStore();
+    // TRI: 2 of 4 slots used → filling (depletion 0.5).
+    applyEvent(store, mined(0, 100n, "01"));
+    applyEvent(store, mined(1, 50n, "02"));
+    const api = createApi(store, [], { totalSlots: 4 });
+
+    const single = await (await api.request(`/v1/mesh-states/${TRI}`)).json() as any;
+    expect(single.used_slots).toBe(2);
+    expect(single.total_slots).toBe(4);
+    expect(single.depletion).toBe(0.5);
+    expect(single.state).toBe("filling");
+
+    // Unmined triangle → full oasis, 200 (not 404).
+    const oasisResp = await api.request(`/v1/mesh-states/${TRI2}`);
+    expect(oasisResp.status).toBe(200);
+    const oasis = await oasisResp.json() as any;
+    expect(oasis.used_slots).toBe(0);
+    expect(oasis.depletion).toBe(0);
+    expect(oasis.state).toBe("oasis");
+  });
+
+  it("marks a fully-mined triangle as desert and caps depletion at 1", async () => {
+    const store = new MemoryStore();
+    for (let s = 0; s < 4; s++) applyEvent(store, mined(s, 10n, String(s + 1)));
+    const api = createApi(store, [], { totalSlots: 4 });
+    const d = await (await api.request(`/v1/mesh-states/${TRI}`)).json() as any;
+    expect(d.used_slots).toBe(4);
+    expect(d.depletion).toBe(1);
+    expect(d.state).toBe("desert");
+  });
+
+  it("returns batch states for a viewport and validates input", async () => {
+    const store = new MemoryStore();
+    applyEvent(store, mined(0, 100n, "01"));
+    const api = createApi(store, [], { totalSlots: 27 });
+
+    const ok = await api.request("/v1/mesh-states", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ triangle_id_hashes: [TRI, TRI2] }),
+    });
+    expect(ok.status).toBe(200);
+    const body = await ok.json() as any;
+    expect(body.total_slots).toBe(27);
+    expect(body.states).toHaveLength(2);
+    expect(body.states[0].triangle_id_hash.toLowerCase()).toBe(TRI.toLowerCase());
+    expect(body.states[1].state).toBe("oasis");
+
+    // Bad hash → 400.
+    const bad = await api.request("/v1/mesh-states", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ triangle_id_hashes: ["0xnothex"] }),
+    });
+    expect(bad.status).toBe(400);
+
+    // Non-array → 400.
+    const bad2 = await api.request("/v1/mesh-states", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ triangle_id_hashes: "nope" }),
+    });
+    expect(bad2.status).toBe(400);
+  });
+});

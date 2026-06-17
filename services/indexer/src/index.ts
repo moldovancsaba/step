@@ -58,7 +58,21 @@ const port = Number(process.env.INDEXER_PORT ?? 8090);
 const corsOrigins = process.env.STEP_CORS_ORIGINS
   ? process.env.STEP_CORS_ORIGINS.split(",").map((s) => s.trim()).filter(Boolean)
   : [];
+// Mineable slots per triangle for the oasis/desert overlay (#16). Read from the
+// protocol params file when present; otherwise the contract default (27).
+let totalSlots = 27;
+const paramsFile = process.env.STEP_PROTOCOL_PARAMS;
+if (paramsFile) {
+  try {
+    const raw = JSON.parse(readFileSync(paramsFile, "utf8"));
+    const v = raw?.mining?.collector_slots_per_triangle?.value;
+    if (typeof v === "number" && v > 0) totalSlots = v;
+  } catch (err) {
+    console.warn("could not read collector_slots_per_triangle; using 27:", err);
+  }
+}
+
 console.log(`indexer listening on :${port}, watching ${watched.length} contracts`);
-serve({ fetch: createApi(store, corsOrigins).fetch, port });
+serve({ fetch: createApi(store, corsOrigins, { totalSlots }).fetch, port });
 setInterval(poll, 2000);
 void poll();
