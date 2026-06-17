@@ -274,7 +274,7 @@ public struct MineView: View {
             .font(.system(.footnote, design: .monospaced))
 
             Button {
-                Task { await model.mine(at: sample, attestation: .devUnattested) }
+                Task { await model.mine(at: sample) }
             } label: {
                 Text("Mine triangle").frame(maxWidth: .infinity)
             }

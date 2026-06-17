@@ -46,6 +46,9 @@ public final class AppModel: ObservableObject {
     let nft: NftClient?
     /// Viewport cover + depletion client for the oasis/desert map (#28).
     public let cover: MeshCoverClient?
+    /// Device attestation provider (#31). Defaults to the honest unattested
+    /// fallback; the app wires `AppAttestAttester()` on a real iOS device.
+    let attester: Attesting
     var wallet: Wallet?
 
     /// Owned slot NFTs for the Wallet tab (#29).
@@ -57,7 +60,8 @@ public final class AppModel: ObservableObject {
         stateProvider: TriangleStateProviding? = nil,
         account: AccountClient? = nil,
         nft: NftClient? = nil,
-        cover: MeshCoverClient? = nil
+        cover: MeshCoverClient? = nil,
+        attester: Attesting = UnattestedAttester()
     ) {
         self.keyStore = keyStore
         self.client = client
@@ -65,6 +69,7 @@ public final class AppModel: ObservableObject {
         self.account = account
         self.nft = nft
         self.cover = cover
+        self.attester = attester
         if let existing = try? Wallet.load(store: keyStore) {
             wallet = existing
             walletAddress = existing.address
@@ -246,7 +251,10 @@ public final class AppModel: ObservableObject {
     }
 
     /// Flow B steps 6–10: nonce → signed claim → submit → status.
-    public func mine(at sample: LocationSample, attestation: AttestationEvidence) async {
+    /// Submit a mining claim for the current triangle. Device attestation (#31)
+    /// is produced by the configured `attester` and bound to the claim hash; on
+    /// Simulator / unsupported devices it degrades to the honest unattested tier.
+    public func mine(at sample: LocationSample) async {
         guard let wallet, let triangle = currentTriangle else {
             status = .error("wallet and triangle required")
             return
@@ -254,12 +262,12 @@ public final class AppModel: ObservableObject {
         status = .submitting
         do {
             let nonce = try await client.requestNonce(wallet: wallet.address)
-            let claim = try ClaimBuilder.makeClaim(
+            let claim = try await ClaimBuilder.makeAttestedClaim(
                 wallet: wallet,
                 triangle: triangle,
                 location: sample,
                 nonce: nonce.nonce,
-                attestation: attestation
+                attester: attester
             )
             status = .validating
             let record = try await client.submit(claim: claim)

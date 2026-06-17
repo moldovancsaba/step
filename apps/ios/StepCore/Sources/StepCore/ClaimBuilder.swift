@@ -72,4 +72,47 @@ public enum ClaimBuilder {
         try wallet.sign(claim: &claim)
         return claim
     }
+
+    /// Build + sign a claim whose attestation evidence (#31) is produced by an
+    /// `Attesting` provider and bound to the claim's *core* hash (the hash of
+    /// the unattested claim). The provider runs before the wallet signature, so
+    /// the single signature still covers the final attested claim. The server
+    /// recomputes the same core hash to verify an App Attest assertion.
+    public static func makeAttestedClaim(
+        wallet: Wallet,
+        triangle: TriangleInfo,
+        location: LocationSample,
+        nonce: String,
+        attester: Attesting,
+        campaignId: String? = nil,
+        merchantQrPayload: String? = nil,
+        previousClaimHash: String? = nil
+    ) async throws -> Claim {
+        var claim = Claim(
+            walletAddress: wallet.address,
+            triangleId: triangle.triangleId,
+            meshLevel: triangle.level,
+            latitude: location.latitude,
+            longitude: location.longitude,
+            horizontalAccuracyM: location.horizontalAccuracyM,
+            timestampUtc: isoFormatter.string(from: location.timestamp),
+            nonce: nonce,
+            integrityMode: .devUnattested
+        )
+        claim.campaignId = campaignId
+        if let payload = merchantQrPayload { claim.merchantProof = MerchantProof(payload: payload) }
+        claim.previousClaimHash = previousClaimHash
+        // Bind attestation to the core (unattested) claim hash, then apply it.
+        let evidence = try await attester.evidence(forClaimHash: claim.claimHash)
+        switch evidence {
+        case .attested(let appAttest, let deviceCheck):
+            claim.integrityMode = .attested
+            claim.appAttestation = appAttest
+            claim.deviceIntegrity = deviceCheck
+        case .devUnattested:
+            claim.integrityMode = .devUnattested
+        }
+        try wallet.sign(claim: &claim)
+        return claim
+    }
 }
