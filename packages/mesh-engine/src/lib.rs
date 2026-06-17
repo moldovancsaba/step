@@ -27,9 +27,9 @@ mod vec3;
 pub mod ffi;
 
 pub use mesh::{
-    boundary_policy, child_triangles, contains_point, lat_lon_to_triangle, neighbour_triangles,
-    parent_triangle, triangle_area_m2, triangle_centroid, triangle_min_side_m,
-    triangle_to_vertices, BoundaryDecision, BoundaryVerdict,
+    boundary_policy, child_triangles, contains_point, cover, lat_lon_to_triangle,
+    neighbour_triangles, parent_triangle, triangle_area_m2, triangle_centroid, triangle_min_side_m,
+    triangle_to_vertices, BoundaryDecision, BoundaryVerdict, CoverResult, CoverTriangle,
 };
 pub use triangle_id::{TriangleId, MAX_LEVEL};
 pub use vec3::{LatLon, Vec3};

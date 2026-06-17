@@ -44,6 +44,7 @@ pub fn router(state: Arc<AppState>) -> Router {
     Router::new()
         .route("/v1/validate", post(validate))
         .route("/v1/mesh/resolve", get(mesh_resolve))
+        .route("/v1/mesh/cover", get(mesh_cover))
         .route("/v1/mesh/triangle/{id}", get(mesh_triangle))
         .route("/healthz", get(healthz))
         .route("/metrics", get(metrics))
@@ -66,6 +67,55 @@ async fn mesh_resolve(
     let id = step_mesh_engine::lat_lon_to_triangle(q.lat, q.lon, q.level)
         .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
     Ok(Json(triangle_info(&id)))
+}
+
+#[derive(Debug, Deserialize)]
+struct CoverQuery {
+    #[serde(rename = "minLat")]
+    min_lat: f64,
+    #[serde(rename = "minLon")]
+    min_lon: f64,
+    #[serde(rename = "maxLat")]
+    max_lat: f64,
+    #[serde(rename = "maxLon")]
+    max_lon: f64,
+    level: u8,
+    #[serde(default = "default_cover_max")]
+    max: usize,
+}
+
+fn default_cover_max() -> usize {
+    2000
+}
+
+/// Viewport coverage for the oasis/desert overlay (#15 → #16/#17). Returns every
+/// triangle intersecting the bounding box at `level`, capped at `max`; on
+/// overflow returns `truncated: true` with a coarser `suggested_level`.
+async fn mesh_cover(
+    axum::extract::Query(q): axum::extract::Query<CoverQuery>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    // Defend the descent against CPU-DoS: clamp the cap to a sane ceiling.
+    let cap = q.max.clamp(1, 20_000);
+    let r = step_mesh_engine::cover(q.min_lat, q.min_lon, q.max_lat, q.max_lon, q.level, cap)
+        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+    let triangles: Vec<serde_json::Value> = r
+        .triangles
+        .iter()
+        .map(|t| {
+            serde_json::json!({
+                "triangle_id": t.id.to_string(),
+                "triangle_id_hash": format!("0x{}", hex::encode(triangle_id_hash(&t.id.to_string()))),
+                "vertices": t.vertices.iter().map(|v| serde_json::json!({"lat": v.lat_deg, "lon": v.lon_deg})).collect::<Vec<_>>(),
+            })
+        })
+        .collect();
+    Ok(Json(serde_json::json!({
+        "triangles": triangles,
+        "truncated": r.truncated,
+        "suggested_level": r.suggested_level,
+        "level": q.level,
+        "mesh_spec_version": step_mesh_engine::MESH_SPEC_VERSION,
+    })))
 }
 
 async fn mesh_triangle(
@@ -507,6 +557,56 @@ mod mesh_api_tests {
             .oneshot(
                 axum::http::Request::builder()
                     .uri("/v1/mesh/resolve?lat=99&lon=0&level=10")
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(bad.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn mesh_cover_returns_viewport_triangles() {
+        let app = router(state());
+        let resp = app
+            .clone()
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri("/v1/mesh/cover?minLat=47.49&minLon=19.03&maxLat=47.51&maxLon=19.05&level=10&max=5000")
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let json: serde_json::Value =
+            serde_json::from_slice(&resp.into_body().collect().await.unwrap().to_bytes()).unwrap();
+        assert_eq!(json["truncated"], serde_json::Value::Bool(false));
+        let tris = json["triangles"].as_array().unwrap();
+        assert!(!tris.is_empty());
+        assert_eq!(tris[0]["vertices"].as_array().unwrap().len(), 3);
+
+        // Oversized request → truncated with a coarser suggested level.
+        let big = router(state())
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri("/v1/mesh/cover?minLat=-80&minLon=-170&maxLat=80&maxLon=170&level=12&max=50")
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(big.status(), StatusCode::OK);
+        let bj: serde_json::Value =
+            serde_json::from_slice(&big.into_body().collect().await.unwrap().to_bytes()).unwrap();
+        assert_eq!(bj["truncated"], serde_json::Value::Bool(true));
+        assert!(bj["suggested_level"].as_u64().unwrap() < 12);
+
+        // Invalid bbox → 400.
+        let bad = router(state())
+            .oneshot(
+                axum::http::Request::builder()
+                    .uri("/v1/mesh/cover?minLat=5&minLon=0&maxLat=4&maxLon=1&level=10")
                     .body(axum::body::Body::empty())
                     .unwrap(),
             )
