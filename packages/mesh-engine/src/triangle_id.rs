@@ -1,19 +1,27 @@
-//! Deterministic triangle identifiers (SYS §7.3, ADR-002 §5).
+//! Deterministic triangle identifiers (Mesh ID v2 — see
+//! docs/geography/STEP_mesh_id_v2.md).
 //!
-//! String form: `STEP-{level}-F{face:02}` for level 1, plus `-{base4path}` for
-//! deeper levels, where the path has exactly `level - 1` digits and digit `d`
-//! at position `i` selects child `d` at subdivision step `i` (0 = near vertex A,
-//! 1 = near B, 2 = near C, 3 = centre — SYS §7.4).
+//! Public string form is a dotted, 1-indexed path: `<face>[.<child>]*`, where
+//! `face ∈ 1..=20` is the base icosahedron triangle and each `child ∈ 1..=4`
+//! selects a midpoint-subdivision quarter (1 = corner A, 2 = corner B,
+//! 3 = corner C, 4 = centre). The level equals the number of segments: `7` is
+//! level 1, `7.3` is level 2, `7.3.2` is level 3. Shorter id ⇒ larger triangle.
 //!
-//! Ordering ("lowest triangle ID wins", HARD §5.7): triangles at the same level
-//! compare by `(face, path)` lexicographically. Cross-level ordering compares by
-//! `(level, face, path)`; the protocol only ever tie-breaks within one level.
+//! Internally faces are stored 0–19 and children 0–3 (so the geometry kernel
+//! can index arrays directly); the dotted form converts `+1` on serialize and
+//! `−1` on parse. The slot (NFT) is NOT part of a TriangleId — it is appended by
+//! the mining/NFT layer as `<triangleId>.<slot>` (slot 1..=27).
+//!
+//! Ordering ("lowest triangle ID wins"): triangles compare by
+//! `(level, face, path)`; the protocol only tie-breaks within one level.
 
 use crate::MeshError;
 use std::fmt;
 use std::str::FromStr;
 
-pub const MAX_LEVEL: u8 = 25;
+/// Terminal (finest) mineable level — a fully-mined level-21 triangle is a
+/// permanent desert and never subdivides further.
+pub const MAX_LEVEL: u8 = 21;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct TriangleId {
@@ -86,12 +94,11 @@ impl TriangleId {
 
 impl fmt::Display for TriangleId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "STEP-{}-F{:02}", self.level, self.face)?;
-        if !self.path.is_empty() {
-            f.write_str("-")?;
-            for d in &self.path {
-                write!(f, "{d}")?;
-            }
+        // 1-indexed dotted form: face, then each child quarter. Level is implied
+        // by the segment count (see STEP_mesh_id_v2.md).
+        write!(f, "{}", self.face + 1)?;
+        for d in &self.path {
+            write!(f, ".{}", d + 1)?;
         }
         Ok(())
     }
@@ -101,29 +108,22 @@ impl FromStr for TriangleId {
     type Err = MeshError;
 
     fn from_str(s: &str) -> Result<Self, MeshError> {
-        let mut parts = s.split('-');
         let parse_err = || MeshError::Parse(s.to_string());
-        if parts.next() != Some("STEP") {
+        let mut parts = s.split('.');
+        // First segment = face (1..=20 → internal 0..=19).
+        let face_1: u8 = parts.next().ok_or_else(parse_err)?.parse().map_err(|_| parse_err())?;
+        if !(1..=20).contains(&face_1) {
             return Err(parse_err());
         }
-        let level: u8 = parts.next().ok_or_else(parse_err)?.parse().map_err(|_| parse_err())?;
-        let face_part = parts.next().ok_or_else(parse_err)?;
-        let face: u8 =
-            face_part.strip_prefix('F').ok_or_else(parse_err)?.parse().map_err(|_| parse_err())?;
-        let path: Vec<u8> = match parts.next() {
-            None => Vec::new(),
-            Some(p) => p
-                .chars()
-                .map(|c| match c {
-                    '0'..='3' => Ok(c as u8 - b'0'),
-                    _ => Err(parse_err()),
-                })
-                .collect::<Result<_, _>>()?,
-        };
-        if parts.next().is_some() {
-            return Err(parse_err());
-        }
-        TriangleId::new(face, level, path)
+        // Remaining segments = children (1..=4 → internal 0..=3).
+        let path: Vec<u8> = parts
+            .map(|seg| match seg.parse::<u8>() {
+                Ok(c @ 1..=4) => Ok(c - 1),
+                _ => Err(parse_err()),
+            })
+            .collect::<Result<_, _>>()?;
+        let level = (path.len() + 1) as u8;
+        TriangleId::new(face_1 - 1, level, path)
     }
 }
 
@@ -133,35 +133,43 @@ mod tests {
 
     #[test]
     fn round_trip_and_validation() {
-        let id = TriangleId::new(7, 4, vec![0, 3, 2]).unwrap();
-        assert_eq!(id.to_string(), "STEP-4-F07-032");
-        assert_eq!("STEP-4-F07-032".parse::<TriangleId>().unwrap(), id);
+        // internal face 6 (→ display 7), children [0,3,2] (→ display 1.4.3), level 4
+        let id = TriangleId::new(6, 4, vec![0, 3, 2]).unwrap();
+        assert_eq!(id.to_string(), "7.1.4.3");
+        assert_eq!("7.1.4.3".parse::<TriangleId>().unwrap(), id);
 
-        let base = TriangleId::base_face(19).unwrap();
-        assert_eq!(base.to_string(), "STEP-1-F19");
-        assert_eq!("STEP-1-F19".parse::<TriangleId>().unwrap(), base);
+        let base = TriangleId::base_face(19).unwrap(); // internal 19 → display 20
+        assert_eq!(base.to_string(), "20");
+        assert_eq!("20".parse::<TriangleId>().unwrap(), base);
 
-        assert!(TriangleId::new(20, 1, vec![]).is_err());
+        // The very first mine's triangle on a virgin mesh is face 1 = "1".
+        assert_eq!(TriangleId::base_face(0).unwrap().to_string(), "1");
+
+        assert!(TriangleId::new(20, 1, vec![]).is_err()); // face out of range (internal max 19)
         assert!(TriangleId::new(0, 2, vec![]).is_err()); // wrong path length
         assert!(TriangleId::new(0, 2, vec![4]).is_err()); // bad digit
-        assert!("STEP-4-F07-04X".parse::<TriangleId>().is_err());
-        assert!("MESH-4-F07-032".parse::<TriangleId>().is_err());
+        assert!("7.1.5".parse::<TriangleId>().is_err()); // child 5 invalid
+        assert!("0.1".parse::<TriangleId>().is_err()); // face 0 invalid (1-indexed)
+        assert!("21.1".parse::<TriangleId>().is_err()); // face 21 invalid
+        assert!("7.1.X".parse::<TriangleId>().is_err());
+        assert!("STEP-4-F07-032".parse::<TriangleId>().is_err()); // old v1 form rejected
     }
 
     #[test]
     fn parent_child_round_trip() {
-        let id = TriangleId::new(3, 5, vec![1, 2, 0, 3]).unwrap();
+        // internal face 2 (→ display 3), children [1,2,0,3] (→ 2.3.1.4), level 5
+        let id = TriangleId::new(2, 5, vec![1, 2, 0, 3]).unwrap();
         let child = id.child(2).unwrap();
         assert_eq!(child.parent().unwrap(), id);
-        assert_eq!(child.to_string(), "STEP-6-F03-12032");
+        assert_eq!(child.to_string(), "3.2.3.1.4.3");
         assert!(TriangleId::base_face(0).unwrap().parent().is_none());
     }
 
     #[test]
     fn ordering_is_face_then_path_within_level() {
-        let a = TriangleId::new(2, 3, vec![0, 1]).unwrap();
-        let b = TriangleId::new(2, 3, vec![0, 2]).unwrap();
-        let c = TriangleId::new(3, 3, vec![0, 0]).unwrap();
+        let a = TriangleId::new(1, 3, vec![0, 1]).unwrap();
+        let b = TriangleId::new(1, 3, vec![0, 2]).unwrap();
+        let c = TriangleId::new(2, 3, vec![0, 0]).unwrap();
         assert!(a < b);
         assert!(b < c);
     }

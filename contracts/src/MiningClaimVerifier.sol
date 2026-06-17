@@ -145,82 +145,45 @@ contract MiningClaimVerifier is Parameterized, EIP712 {
         pure
         returns (uint8 level, bytes32 triangleIdHash, bool hasParent, bytes32 parentHash)
     {
+        // Mesh ID v2 (docs/geography/STEP_mesh_id_v2.md): dotted, 1-indexed
+        //   <face 1..20>(.<child 1..4>)*
+        // The level is the number of segments; the parent is the id with its
+        // last segment removed. The slot is NOT part of the triangle id.
         bytes memory value = bytes(triangleId);
-        if (value.length < 10) revert TriangleIdMalformed(keccak256(bytes(triangleId)));
+        uint256 len = value.length;
+        triangleIdHash = keccak256(value);
+        if (len == 0) revert TriangleIdMalformed(triangleIdHash);
 
-        if (
-            value[0] != 0x53
-            || value[1] != 0x54
-            || value[2] != 0x45
-            || value[3] != 0x50
-            || value[4] != 0x2d
-        ) {
-            revert TriangleIdMalformed(keccak256(bytes(triangleId)));
-        }
-
-        uint256 cursor = 5;
-        if (cursor >= value.length) revert TriangleIdMalformed(keccak256(bytes(triangleId)));
-
-        while (cursor < value.length) {
-            if (value[cursor] < 0x30 || value[cursor] > 0x39) break;
-            if (level > 25) revert TriangleIdMalformed(keccak256(bytes(triangleId)));
-            level = uint8(level * 10 + (uint8(value[cursor]) - 0x30));
-            cursor++;
-        }
-
-        if (level == 0 || cursor >= value.length || value[cursor] != 0x2d) {
-            revert TriangleIdMalformed(keccak256(bytes(triangleId)));
-        }
-        cursor++;
-        if (cursor >= value.length || value[cursor] != 0x46) {
-            revert TriangleIdMalformed(keccak256(bytes(triangleId)));
-        }
-
-        if (cursor + 2 >= value.length) revert TriangleIdMalformed(keccak256(bytes(triangleId)));
-        if (value[cursor + 1] < 0x30 || value[cursor + 1] > 0x39) {
-            revert TriangleIdMalformed(keccak256(bytes(triangleId)));
-        }
-        if (value[cursor + 2] < 0x30 || value[cursor + 2] > 0x39) {
-            revert TriangleIdMalformed(keccak256(bytes(triangleId)));
-        }
-        uint8 face = (uint8(value[cursor + 1]) - 0x30) * 10 + (uint8(value[cursor + 2]) - 0x30);
-        if (face >= 20) {
-            revert TriangleIdMalformed(keccak256(bytes(triangleId)));
-        }
-
-        cursor += 3;
-        if (cursor == value.length) {
-            if (level != 1) {
-                revert TriangleIdMalformed(keccak256(bytes(triangleId)));
+        uint256 segStart = 0;
+        uint256 segCount = 0;
+        uint256 lastDot = 0;
+        for (uint256 i = 0; i <= len; i++) {
+            if (i != len && value[i] != 0x2e) continue; // 0x2e = '.'
+            uint256 segLen = i - segStart;
+            if (segLen == 0 || segLen > 2) revert TriangleIdMalformed(triangleIdHash);
+            uint256 num = 0;
+            for (uint256 j = segStart; j < i; j++) {
+                if (value[j] < 0x30 || value[j] > 0x39) revert TriangleIdMalformed(triangleIdHash);
+                num = num * 10 + (uint8(value[j]) - 0x30);
             }
-            hasParent = false;
-            triangleIdHash = keccak256(bytes(triangleId));
-            return (level, triangleIdHash, hasParent, bytes32(0));
-        }
-
-        // Skip the '-' separator between the face and the base-4 path.
-        if (value[cursor] != 0x2d) revert TriangleIdMalformed(keccak256(bytes(triangleId)));
-        cursor++;
-
-        uint256 pathLen = value.length - cursor;
-        if (pathLen != (uint256(level) - 1)) {
-            revert TriangleIdMalformed(keccak256(bytes(triangleId)));
-        }
-
-        for (uint256 i = 0; i < pathLen; i++) {
-            uint8 child = uint8(value[cursor + i]);
-            if (child < 0x30 || child > 0x33) {
-                revert TriangleIdMalformed(keccak256(bytes(triangleId)));
+            if (segCount == 0) {
+                if (num < 1 || num > 20) revert TriangleIdMalformed(triangleIdHash); // face
+            } else {
+                if (num < 1 || num > 4) revert TriangleIdMalformed(triangleIdHash); // child
             }
+            segCount++;
+            if (i != len) lastDot = i;
+            segStart = i + 1;
         }
 
-        hasParent = true;
-        triangleIdHash = keccak256(bytes(triangleId));
-        bytes memory parent = new bytes(value.length - 1);
-        for (uint256 i = 0; i < value.length - 1; i++) {
-            parent[i] = value[i];
+        if (segCount < 1 || segCount > 21) revert TriangleIdMalformed(triangleIdHash);
+        level = uint8(segCount);
+        hasParent = level > 1;
+        if (hasParent) {
+            bytes memory parent = new bytes(lastDot);
+            for (uint256 k = 0; k < lastDot; k++) parent[k] = value[k];
+            parentHash = keccak256(parent);
         }
-        parentHash = keccak256(parent);
         return (level, triangleIdHash, hasParent, parentHash);
     }
 

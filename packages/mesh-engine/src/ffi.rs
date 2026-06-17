@@ -137,7 +137,9 @@ mod tests {
         };
         assert!(n > 0);
         let id = std::str::from_utf8(&buf[..n as usize]).unwrap();
-        assert!(id.starts_with("STEP-5-F"));
+        // Mesh ID v2: dotted, 1-indexed; level 5 ⇒ 5 dot-separated segments.
+        assert_eq!(id.split('.').count(), 5, "level-5 id has 5 segments: {id}");
+        assert!(id.parse::<crate::TriangleId>().is_ok());
         let inside =
             unsafe { step_mesh_contains_point(buf.as_ptr(), n as usize, 47.4979, 19.0402) };
         assert_eq!(inside, 1);

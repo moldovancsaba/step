@@ -537,7 +537,8 @@ mod mesh_api_tests {
         let json: serde_json::Value =
             serde_json::from_slice(&resp.into_body().collect().await.unwrap().to_bytes()).unwrap();
         let id = json["triangle_id"].as_str().unwrap().to_string();
-        assert!(id.starts_with("STEP-10-F"));
+        // Mesh ID v2: dotted, 1-indexed; level 10 ⇒ 10 dot-separated segments.
+        assert_eq!(id.split('.').count(), 10, "level-10 id has 10 segments: {id}");
         assert_eq!(json["vertices"].as_array().unwrap().len(), 3);
         assert_eq!(json["neighbours"].as_array().unwrap().len(), 3);
 

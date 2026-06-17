@@ -85,7 +85,7 @@ async function naturalMine() {
   const miner = privateKeyToAccount(("0x" + "5a".repeat(32)) as Hex);
   const lat = 47.4979, lon = 19.0402;
   const tri = await mesh.resolve(lat, lon, 21);
-  check("mesh resolves a level-21 triangle", tri.triangle_id.startsWith("STEP-21-F"));
+  check("mesh resolves a level-21 triangle", tri.triangle_id.split(".").length === 21);
 
   const { nonce } = await gw.nonce(miner.address);
   const claim = await signClaim(
@@ -158,7 +158,7 @@ async function merchantFlow() {
     lon: 19.0402,
     level: 21,
   })) as { poi_id: string; triangle_id: string };
-  check("POI maps to canonical triangle", poi.triangle_id.startsWith("STEP-21-F"));
+  check("POI maps to canonical triangle", poi.triangle_id.split(".").length === 21);
 
   const qr = (await merchant.qr(poi.poi_id)) as { payload: string };
   check("rotating QR issued", qr.payload.startsWith("stepqr1:"));

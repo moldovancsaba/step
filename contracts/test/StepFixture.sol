@@ -47,8 +47,10 @@ abstract contract StepFixture is Test {
     RewardPool public pool;
     MiningClaimVerifier public verifier;
 
-    string internal constant TRI_A_STRING = "STEP-21-F00-12203302320201032103";
-    string internal constant TRI_B_STRING = "STEP-21-F07-03210320312030120312";
+    // Mesh ID v2 dotted form (STEP_mesh_id_v2.md): face 1..20, children 1..4,
+    // level = segment count. Level-21 (terminal) = face + 20 children.
+    string internal constant TRI_A_STRING = "1.1.2.3.4.1.2.3.4.1.2.3.4.1.2.3.4.1.2.3.4";
+    string internal constant TRI_B_STRING = "8.4.3.2.1.4.3.2.1.4.3.2.1.4.3.2.1.4.3.2.1";
     bytes32 internal constant TRI_A = keccak256(bytes(TRI_A_STRING));
     bytes32 internal constant TRI_B = keccak256(bytes(TRI_B_STRING));
     uint8 internal constant LEVEL = 21;
