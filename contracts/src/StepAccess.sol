@@ -21,9 +21,13 @@ contract StepAccess is AccessControl {
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
     /// @dev Held only by the MiningClaimVerifier contract address.
     bytes32 public constant VERIFIER_ROLE = keccak256("VERIFIER_ROLE");
+    /// @dev Held only by the MiningClaimVerifier; authorises minting slot NFTs (#4/#5).
+    bytes32 public constant NFT_MINTER_ROLE = keccak256("NFT_MINTER_ROLE");
 
     bytes32 public constant PAUSE_MINTING = keccak256("PAUSE_MINTING");
     bytes32 public constant PAUSE_CAMPAIGNS = keccak256("PAUSE_CAMPAIGNS");
+    /// @dev Emergency stop for the triangle NFT marketplace (#8).
+    bytes32 public constant PAUSE_MARKET = keccak256("PAUSE_MARKET");
 
     mapping(bytes32 => bool) private _paused;
 
