@@ -6,6 +6,9 @@
 import SwiftUI
 import StepCore
 
+/// The app shell (M7 #25): GDS-themed, tab-based chrome (Mine · Map · Wallet ·
+/// Marketplace) with a persistent testnet banner and an account/sign-out slot.
+/// Gates on a wallet today; the login wall (#27) drives this via SessionContext.
 public struct RootView: View {
     @ObservedObject var model: AppModel
 
@@ -14,18 +17,112 @@ public struct RootView: View {
     }
 
     public var body: some View {
-        if model.walletAddress == nil {
-            OnboardingView(model: model)
-        } else {
-            TabView {
-                MineView(model: model)
-                    .tabItem { Label("Mine", systemImage: "triangle") }
-                HistoryView(model: model)
-                    .tabItem { Label("Claims", systemImage: "clock") }
-                WalletView(model: model)
-                    .tabItem { Label("Wallet", systemImage: "key") }
-                SettingsView(model: model)
-                    .tabItem { Label("Privacy", systemImage: "hand.raised") }
+        Group {
+            if model.walletAddress == nil {
+                OnboardingView(model: model)
+            } else {
+                shell
+            }
+        }
+        .background(StepColor.background.ignoresSafeArea())
+    }
+
+    private var shell: some View {
+        TabView {
+            NavigationStack { MineView(model: model).stepChrome("Mine", model: model) }
+                .tabItem { Label("Mine", systemImage: "triangle.fill") }
+            NavigationStack { MapTabView(model: model).stepChrome("Map", model: model) }
+                .tabItem { Label("Map", systemImage: "map.fill") }
+            NavigationStack { WalletTabView(model: model).stepChrome("Wallet", model: model) }
+                .tabItem { Label("Wallet", systemImage: "wallet.pass.fill") }
+            NavigationStack { MarketTabView().stepChrome("Marketplace", model: model) }
+                .tabItem { Label("Market", systemImage: "bag.fill") }
+        }
+        .tint(StepColor.primary)
+    }
+}
+
+/// Persistent testnet notice (GDS banner parity). Trinity has no monetary value.
+struct TestnetBanner: View {
+    var body: some View {
+        Text("Testnet pilot — Trinity has no monetary value")
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(StepColor.onPrimary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, StepSpacing.xs)
+            .background(StepColor.warning)
+            .accessibilityLabel("Testnet pilot. Trinity has no monetary value.")
+    }
+}
+
+/// Shared chrome: navigation title, testnet banner, and an account/sign-out slot.
+private struct StepChrome: ViewModifier {
+    let title: String
+    @ObservedObject var model: AppModel
+
+    func body(content: Content) -> some View {
+        content
+            .navigationTitle(title)
+            .safeAreaInset(edge: .top, spacing: 0) { TestnetBanner() }
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Menu {
+                        if let addr = model.walletAddress {
+                            Text(addr).font(.system(.caption2, design: .monospaced))
+                        }
+                        Button("Sign out", role: .destructive) { model.signOut() }
+                    } label: {
+                        Image(systemName: "person.crop.circle")
+                            .accessibilityLabel("Account")
+                    }
+                }
+            }
+    }
+}
+
+extension View {
+    func stepChrome(_ title: String, model: AppModel) -> some View {
+        modifier(StepChrome(title: title, model: model))
+    }
+}
+
+/// Map tab — placeholder until the oasis/desert MapKit overlay (#28) lands.
+struct MapTabView: View {
+    @ObservedObject var model: AppModel
+    var body: some View {
+        ContentUnavailableView(
+            "Oasis / desert map",
+            systemImage: "map",
+            description: Text("The viewport depletion overlay arrives in issue #28.")
+        )
+    }
+}
+
+/// Marketplace tab — placeholder until the marketplace UI (#30) lands.
+struct MarketTabView: View {
+    var body: some View {
+        ContentUnavailableView(
+            "Marketplace",
+            systemImage: "bag",
+            description: Text("Browse, buy, gift and list triangle NFTs — issue #30.")
+        )
+    }
+}
+
+/// Wallet tab: address + (later) owned NFTs (#29), with links to claim history
+/// and privacy settings folded in so the shell stays at four tabs.
+struct WalletTabView: View {
+    @ObservedObject var model: AppModel
+    var body: some View {
+        List {
+            Section { WalletView(model: model) }
+            Section {
+                NavigationLink { HistoryView(model: model).navigationTitle("Claims") } label: {
+                    Label("Claim history", systemImage: "clock")
+                }
+                NavigationLink { SettingsView(model: model).navigationTitle("Privacy") } label: {
+                    Label("Privacy & data rights", systemImage: "hand.raised")
+                }
             }
         }
     }

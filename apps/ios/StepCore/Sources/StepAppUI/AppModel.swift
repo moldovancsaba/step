@@ -78,6 +78,17 @@ public final class AppModel: ObservableObject {
         }
     }
 
+    /// Sign out: clear the in-memory wallet/session and reset UI state. The key
+    /// remains in the KeyStore (Keychain) unless explicitly deleted; the login
+    /// wall (#27) decrypts it back into memory on next sign-in.
+    public func signOut() {
+        wallet = nil
+        walletAddress = nil
+        currentTriangle = nil
+        claimHistory = []
+        status = .idle
+    }
+
     /// Flow B steps 1–3: resolve the current mineable triangle from a location.
     /// With a `stateProvider`, this walks genesis level 1 → 21 and picks the
     /// finest un-exhausted triangle (v2 model); otherwise it resolves at `level`
