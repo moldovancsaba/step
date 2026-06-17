@@ -36,11 +36,19 @@ public final class AppModel: ObservableObject {
 
     let keyStore: KeyStore
     let client: GatewayClient
+    /// Indexer state lookup; when present, mining resolves the current mineable
+    /// triangle via the v2 genesis→breakdown walk instead of a fixed level.
+    let stateProvider: TriangleStateProviding?
     var wallet: Wallet?
 
-    public init(keyStore: KeyStore, client: GatewayClient) {
+    public init(
+        keyStore: KeyStore,
+        client: GatewayClient,
+        stateProvider: TriangleStateProviding? = nil
+    ) {
         self.keyStore = keyStore
         self.client = client
+        self.stateProvider = stateProvider
         if let existing = try? Wallet.load(store: keyStore) {
             wallet = existing
             walletAddress = existing.address
@@ -70,15 +78,33 @@ public final class AppModel: ObservableObject {
         }
     }
 
-    /// Flow B steps 1–3: resolve the current triangle from a location sample.
+    /// Flow B steps 1–3: resolve the current mineable triangle from a location.
+    /// With a `stateProvider`, this walks genesis level 1 → 21 and picks the
+    /// finest un-exhausted triangle (v2 model); otherwise it resolves at `level`
+    /// (default genesis 1).
     public func updateLocation(_ sample: LocationSample, level: Int = 1) async {
         status = .resolvingTriangle
         do {
-            let triangle = try await client.resolveTriangle(
-                lat: sample.latitude, lon: sample.longitude, level: level
-            )
+            let triangle: TriangleInfo
+            if let stateProvider {
+                let resolver = MineableResolver(resolver: client, state: stateProvider)
+                triangle = try await resolver.currentMineable(
+                    lat: sample.latitude, lon: sample.longitude
+                ).triangle
+            } else {
+                triangle = try await client.resolveTriangle(
+                    lat: sample.latitude, lon: sample.longitude, level: level
+                )
+            }
             currentTriangle = triangle
             status = .readyToMine(triangle: triangle.triangleId)
+        } catch let e as MineableError {
+            switch e {
+            case .desert:
+                status = .error("This location is fully mined (desert). It reopens only via a merchant campaign.")
+            case .frozen(let id):
+                status = .error("Triangle \(id) is frozen by safety policy.")
+            }
         } catch {
             status = .error(error.localizedDescription)
         }
