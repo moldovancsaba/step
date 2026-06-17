@@ -88,15 +88,20 @@ extension View {
     }
 }
 
-/// Map tab — placeholder until the oasis/desert MapKit overlay (#28) lands.
+/// Map tab — oasis/desert MapKit overlay (#28) when a cover client is wired,
+/// else a short explainer.
 struct MapTabView: View {
     @ObservedObject var model: AppModel
     var body: some View {
-        ContentUnavailableView(
-            "Oasis / desert map",
-            systemImage: "map",
-            description: Text("The viewport depletion overlay arrives in issue #28.")
-        )
+        if let cover = model.cover {
+            MapView(client: cover)
+        } else {
+            ContentUnavailableView(
+                "Oasis / desert map",
+                systemImage: "map",
+                description: Text("Configure a mesh + indexer endpoint to see the depletion overlay.")
+            )
+        }
     }
 }
 

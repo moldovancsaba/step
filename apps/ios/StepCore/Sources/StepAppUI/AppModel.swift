@@ -44,6 +44,8 @@ public final class AppModel: ObservableObject {
     let account: AccountClient?
     /// nft-indexer client for the Wallet tab's owned slot NFTs (#29).
     let nft: NftClient?
+    /// Viewport cover + depletion client for the oasis/desert map (#28).
+    public let cover: MeshCoverClient?
     var wallet: Wallet?
 
     /// Owned slot NFTs for the Wallet tab (#29).
@@ -54,13 +56,15 @@ public final class AppModel: ObservableObject {
         client: GatewayClient,
         stateProvider: TriangleStateProviding? = nil,
         account: AccountClient? = nil,
-        nft: NftClient? = nil
+        nft: NftClient? = nil,
+        cover: MeshCoverClient? = nil
     ) {
         self.keyStore = keyStore
         self.client = client
         self.stateProvider = stateProvider
         self.account = account
         self.nft = nft
+        self.cover = cover
         if let existing = try? Wallet.load(store: keyStore) {
             wallet = existing
             walletAddress = existing.address
