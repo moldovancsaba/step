@@ -83,6 +83,29 @@ jobs:
       - run: swift test
         working-directory: apps/ios/StepCore
 
+  ios-app:
+    # Builds the shippable app target (#33): generate the project from the
+    # checked-in XcodeGen spec and compile the app + UI-test bundle against the
+    # StepAppUI SPM product. A generic simulator destination compiles everything
+    # without booting a simulator (fast + deterministic). Running the XCUITests
+    # on a booted simulator is the next step once validated on a signing runner.
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+      - run: brew install xcodegen
+      - run: xcodegen generate
+        working-directory: apps/ios/App
+      - run: |
+          xcodebuild build \
+            -project StepApp.xcodeproj \
+            -scheme StepApp \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO
+        working-directory: apps/ios/App
+
   schemas:
     runs-on: ubuntu-latest
     steps:

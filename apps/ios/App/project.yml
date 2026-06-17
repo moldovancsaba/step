@@ -1,0 +1,78 @@
+# XcodeGen spec for the shippable STEP iOS app (M7 #33). Checked in instead of a
+# hand-edited .pbxproj so the project is reproducible and diffs stay reviewable:
+#   cd apps/ios/App && xcodegen generate && open StepApp.xcodeproj
+#
+# The StepApp target depends on the local StepCore SPM package (../StepCore) and
+# its StepAppUI product — all feature code lives there; this target only wires +
+# packages it.
+name: StepApp
+options:
+  bundleIdPrefix: app.step
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+
+packages:
+  StepCore:
+    path: ../StepCore
+
+settings:
+  base:
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_VERSION: "6.0"
+    DEVELOPMENT_TEAM: "" # set locally / in CI signing; empty for unsigned simulator builds
+    # Endpoint configuration consumed by Info.plist → AppConfig. Override per
+    # configuration with an .xcconfig; these defaults target the pilot.
+    STEP_GATEWAY_URL: "https://gateway.step.example"
+    STEP_MESH_URL: "https://gateway.step.example"
+    STEP_INDEXER_URL: "https://indexer.step.example"
+    STEP_ACCOUNT_URL: "https://account.step.example"
+    STEP_NFT_INDEXER_URL: "https://nft.step.example"
+    STEP_RPC_URL: ""
+    STEP_MARKETPLACE_ADDRESS: ""
+    STEP_NFT_ADDRESS: ""
+    STEP_TRINITY_ADDRESS: ""
+
+targets:
+  StepApp:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+      - path: PrivacyInfo.xcprivacy
+        buildPhase: resources
+    info:
+      path: Info.plist
+    entitlements:
+      path: StepApp.entitlements
+    dependencies:
+      - package: StepCore
+        product: StepAppUI
+    settings:
+      base:
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        GENERATE_INFOPLIST_FILE: NO
+        PRODUCT_BUNDLE_IDENTIFIER: app.step.miner
+        CODE_SIGN_STYLE: Automatic
+
+  StepAppUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: Tests
+    dependencies:
+      - target: StepApp
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.step.miner.uitests
+
+schemes:
+  StepApp:
+    build:
+      targets:
+        StepApp: all
+        StepAppUITests: [test]
+    test:
+      targets:
+        - StepAppUITests

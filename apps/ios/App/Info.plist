@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDisplayName</key>
+	<string>STEP</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>UILaunchScreen</key>
+	<dict/>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+
+	<!-- Usage strings (#33). Text matches the in-app privacy promise: precise
+	     location is used only to resolve the current MESH triangle; only the
+	     triangle id + proof hash leave the device (PRV-001). -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>STEP uses your location only to find the MESH triangle you’re standing in. Your exact coordinates never leave the device — only the triangle’s id and a proof hash are submitted.</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>STEP uses Bluetooth to read nearby trusted anchors (beacons) that strengthen your proof of presence. It never scans for or tracks other devices.</string>
+	<key>NFCReaderUsageDescription</key>
+	<string>STEP reads NFC tags from trusted anchors to confirm you’re physically present at a location.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>STEP uses the camera only to scan a trusted anchor’s QR code when you choose to verify with an anchor.</string>
+
+	<!-- Endpoint configuration; override per build configuration via xcconfig.
+	     No secrets are stored here. Marketplace trading turns on only when
+	     RpcURL + the three addresses are present. -->
+	<key>StepConfig</key>
+	<dict>
+		<key>GatewayURL</key>
+		<string>$(STEP_GATEWAY_URL)</string>
+		<key>MeshURL</key>
+		<string>$(STEP_MESH_URL)</string>
+		<key>IndexerURL</key>
+		<string>$(STEP_INDEXER_URL)</string>
+		<key>AccountURL</key>
+		<string>$(STEP_ACCOUNT_URL)</string>
+		<key>NftIndexerURL</key>
+		<string>$(STEP_NFT_INDEXER_URL)</string>
+		<key>RpcURL</key>
+		<string>$(STEP_RPC_URL)</string>
+		<key>Marketplace</key>
+		<string>$(STEP_MARKETPLACE_ADDRESS)</string>
+		<key>MarketNft</key>
+		<string>$(STEP_NFT_ADDRESS)</string>
+		<key>Trinity</key>
+		<string>$(STEP_TRINITY_ADDRESS)</string>
+	</dict>
+</dict>
+</plist>

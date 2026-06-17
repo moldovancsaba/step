@@ -1,6 +1,6 @@
 # STEP iOS miner app
 
-**Status: protocol core + product surface (auth, mining, oasis/desert map, wallet/NFTs, device attestation) implemented and test-verified as a Swift package; the Xcode app target + TestFlight pipeline are the remaining packaging steps (documented honestly below — no hidden gaps).**
+**Status: protocol core + full product surface (auth, mining, oasis/desert map, wallet/NFTs, device attestation, trusted-anchor capture, marketplace) implemented and test-verified as a Swift package; a reproducible XcodeGen app target ([`App/`](App/)) packages it for the simulator/device/TestFlight. Device-only APIs (App Attest, NFC, camera) and the on-chain marketplace round-trip are field/deploy-verified — documented honestly below, no hidden gaps.**
 
 All UI is built natively with SwiftUI against a GDS-parity design system (`StepAppUI/Theme.swift` mirrors the @doneisbetter/gds tokens used by the web apps, because GDS is React/Mantine and cannot run on iOS). Accessibility (Dynamic Type, VoiceOver labels, colour-independent state, Reduce Motion) is treated as mandatory, not optional.
 
@@ -76,13 +76,23 @@ monetary value, surfaced in the UI. The deterministic encoding/signing pieces
 are unit-tested against `cast` vectors; the on-chain round-trip is verified once
 addresses are deployed.
 
-## What is NOT done yet (requires Xcode / Apple accounts — the build machine has Command Line Tools only)
+## App target (#33)
 
-1. **Xcode app target (#33).** Create the iOS App target, add the local `StepCore` package, set `RootView(model:)` as the root. Required Info.plist usage strings + App Attest entitlement — see `apps/ios/StepMiner/` scaffold and `docs/engineering/STEP_ios_app_plan.md`.
-2. **Server-side App Attest verification.** Gateway/validator must verify Apple attestation objects + assertions before accepting `attested` claims (paired backend issue).
-3. **MapLibre Native basemap.** The map renders the mesh overlay on MapKit; the full vector basemap (MapLibre Native iOS via SPM) is an app-target integration.
-4. **TestFlight.** Apple Developer Program membership, signing, `xcodebuild archive` + upload; app-store crypto-rules review (LEG-003/IOS-008) before distribution.
-5. **Field tests F1–F9** (`tests/field-tests/`) need physical iPhones in the pilot area.
+The reproducible app target lives in [`App/`](App/) — a checked-in XcodeGen
+spec (`project.yml`) plus `Info.plist` (usage strings), `StepApp.entitlements`
+(App Attest + NFC), `PrivacyInfo.xcprivacy` (PRV-001: no off-device location),
+the `@main` composition root, a MetricKit observability hook, and XCUITests. CI
+generates the project and builds the app + UI-test bundle on every push (job
+`ios-app`). See [`App/README.md`](App/README.md) for generate/run, configuration,
+and the App Store / TestFlight review notes.
+
+## What is NOT done yet (requires a physical device, Apple Developer Program, or the #5 deploy — the build machine has Command Line Tools only)
+
+1. **Server-side App Attest verification.** Gateway/validator must verify Apple attestation objects + assertions before accepting `attested` claims (paired backend issue).
+2. **MapLibre Native basemap.** The map renders the mesh overlay on MapKit; the full vector basemap (MapLibre Native iOS via SPM) is an app-target integration.
+3. **TestFlight distribution.** Apple Developer Program membership, signing (`DEVELOPMENT_TEAM`), App Attest `production` entitlement, `xcodebuild archive` + upload; app-store crypto-rules review (LEG-003/IOS-008) before distribution.
+4. **Device/field verification.** App Attest, NFC, and camera are device-only (Simulator degrades to unattested); the marketplace on-chain round-trip needs the #5 deploy. Field tests F1–F9 (`tests/field-tests/`) need physical iPhones in the pilot area.
+5. **Accessibility ship gate.** Full-app VoiceOver + Dynamic Type + contrast pass before submission (XCUITests cover the automatable slice).
 
 ## Running the core tests
 
