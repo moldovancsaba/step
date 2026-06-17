@@ -1,0 +1,9 @@
+name = "step-web-app"
+account_id = "66ce3adbb96f6715f8cc2b04991c30e4"
+compatibility_date = "2026-06-15"
+
+# Static-assets Worker for the GDS mobile web app (Vite SPA build). No server
+# code — Cloudflare serves dist/ with SPA fallback for client-side routing.
+[assets]
+directory = "./dist"
+not_found_handling = "single-page-application"
