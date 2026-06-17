@@ -18,8 +18,9 @@
 | Output (HARD §4.11) | Alpha default | Blocking decision |
 |---|---|---|
 | 1 STEP : Trinity ratio | 67,108,864 | OPEN-1 |
-| Mineable levels | [21] | ADR-003 confirm + audit |
-| Triangle count at level 21 | 21,990,232,555,520 (implementation-verified) | MESH-014 independent audit |
+| Mineable depth | 1..21 (**level 21 terminal**; one mine/wallet/triangle; exhaust → 4-way breakdown) | ADR-003 + Mesh ID v2 |
+| Triangle count at level 20 | 5 497 558 138 880 (implementation-verified) | MESH-014 independent audit |
+| Triangle count at level 21 | 21 990 232 555 520 (implementation-verified) | MESH-014 independent audit |
 | Collector slots / triangle | 27 | OPEN with tokenomics |
 | Reward curve | geometric halving from 2²⁶ Trinity (slot 27 = exactly 1) | OPEN with tokenomics |
 | Max natural supply | slots×curve×count — **deliberately not published pre-audit** | MESH-014 + above |
@@ -52,7 +53,7 @@ A permanent 100% twin doubles effective issuance. The alpha default is the *docu
 ## 6. Operational answers for the first beta run
 
 1. How many times can a triangle be mined naturally? `27` times (default `collector_slots_per_triangle`).
-2. How many breakdown levels are available? The deterministic subdivision is recursive and 4-way per level (`step-mesh-v1` supports deep levels by recursion; the protocol enforces mineable levels by configuration).
+2. How many breakdown levels are available? The deterministic subdivision is recursive and 4-way per level; mining runs from **level 1 to level 21 (terminal)** and controls local mineability by parent-exhaustion state (a triangle breaks into 4 children only when its 27 slots are exhausted). There is no level 22.
 3. How much Trinity does a miner earn? `slot 0` starts at `67,108,864`; each next slot divides by 2, and the protocol blocks any slot reward < `1` Trinity.
-4. How is a claim approved? A claim is approved only when it passes validator quorum checks and all acceptance gates (geometry, signature, freshness, precision, cooldown/open state, and no fraud reasons). Rejection reasons are returned by the gateway/contract and shown to the miner.
+4. How is a claim approved? A claim is approved only when it passes validator quorum checks and all acceptance gates (geometry, signature, freshness, precision, cooldown/open state, parent exhaustion, and no fraud reasons). Rejection reasons are returned by the gateway/contract and shown to the miner.
 5. Can I mine the same triangle twice with the same wallet? No. A wallet can consume each natural triangle slot only once.

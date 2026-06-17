@@ -64,8 +64,8 @@ Deviations from the literal master-prompt tree, with reasons (documented as requ
 1. **Earth model:** unit sphere; WGS84 lat/lon input converted to 3D unit vectors (HARD §5.8 recommendation). Authalic radius 6371.0088 km used only for area/length display.
 2. **Orientation:** standard icosahedron orientation with one vertex at the geographic North Pole and a documented fixed rotation about the polar axis (exact rotation constant fixed in the mesh spec at implementation time and committed with golden vectors). Vertex-at-pole makes polar behaviour explicit and testable (DEV §7.3 pole tests).
 3. **Edges:** great-circle arcs (SYS §6.7, HARD §5.8).
-4. **Subdivision:** 4-way midpoint subdivision; midpoints normalised to the sphere; child indices 0/1/2/3 per SYS §7.4.
-5. **ID encoding:** `STEP-{level}-F{face:02}-{base4path}` per SYS §7.3; binary form `bytes32` for contracts (packed face + level + path) defined in the mesh spec.
+4. **Subdivision:** 4-way midpoint subdivision; midpoints normalised to the sphere; children numbered **1–4** in the public ID (internal 0–3). A triangle subdivides into these 4 quarters when its 27 mining slots are exhausted (the breakdown lifecycle).
+5. **ID encoding (Mesh ID v2 — supersedes the old `STEP-{level}-F{face}-{base4path}` form):** a dotted, **1-indexed** path `<face 1..20>(.<child 1..4>)*`; the **level is the segment count**; a mined slot/NFT appends the slot `1..27` as the final segment (`<triangleId>.<slot>`). On-chain key is `keccak256(utf8(triangle_id_string))`. Canonical spec: `docs/geography/STEP_mesh_id_v2.md`.
 6. **Containment:** sign tests against the three oriented great-circle edge planes; point exactly on an edge plane (within tolerance 1e-12 on the unit sphere) resolves by deterministic tie-break: lowest triangle ID wins (HARD §5.7 recommended rule).
 7. **Antimeridian/poles:** handled naturally by 3D vector math — no lat/lon arithmetic in containment; explicit golden tests at ±180° and both poles.
 **Consequences:** Spherical-by-design distortion documented (SYS §7.2). The v1 spec is versioned in `MeshRegistry`; a v2 may supersede it before mainnet without breaking alpha data (mesh version is part of on-chain state).
@@ -77,8 +77,8 @@ Deviations from the literal master-prompt tree, with reasons (documented as requ
 
 **Status:** ACCEPTED-ALPHA (protocol parameter, not a frozen constant)
 **Context:** SYS §6.4 open decision; HARD §5.6 recommends parent levels as metadata only, with one or few issuance levels.
-**Decision:** Alpha mines exactly **one configurable terminal level**, default **level 21** (~7.6 m sides — human-scale presence per SYS §6.4 table). All other levels are navigation/hierarchy/visualisation metadata. The mineable-level set lives in `MeshRegistry` and the protocol-parameter registry, marked UNFROZEN.
-**Consequences:** Simplest possible supply story for alpha (HARD §5.6 "Simpler supply"); supply maths for the tokenomics constitution must be computed per level once the mathematical audit (MESH-014) lands.
+**Decision:** The mesh is enabled for every configured depth in scope (default **1–25**) as potential geometry. A child triangle becomes mineable only if all ancestors along its path are exhausted; mineability is therefore location and state-specific, not a global whitelist. The mineable-level set is still parameterised in `MeshRegistry` and currently defaulted to open over all available depths for this pilot.
+**Consequences:** Supply and operational hardening is controlled by triangle state transitions (exhaustion + child-unlock) and by geometry state, not by a fixed global level gate.
 
 ---
 

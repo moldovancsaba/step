@@ -124,6 +124,13 @@ export function claimHash(canonicalMessage: string): Hex {
   return keccak256(stringToBytes(canonicalMessage));
 }
 
+/**
+ * On-chain key for a triangle id. The id is the Mesh ID v2 dotted string
+ * (`face(1-20).child(1-4)...`; slot/NFT appends `.slot(1-27)`) — see
+ * docs/geography/STEP_mesh_id_v2.md. TS/Swift treat the id as an opaque hash
+ * input (no parsing), so this is format-agnostic and stays correct across the
+ * v1→v2 change.
+ */
 export function triangleIdHash(triangleId: string): Hex {
   return keccak256(stringToBytes(triangleId));
 }

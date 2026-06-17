@@ -53,7 +53,7 @@ Each requirement has:
 | MESH-001 | MESH base is a spherical icosahedron: 20 base triangular faces (level 1). | SYS §6.2, HARD §5.4 | CONFIRMED | IN |
 | MESH-002 | Each subdivision splits one triangle into 4 children; `T(n) = 20 × 4^(n-1)`; cumulative `C(n) = 20 × (4^n − 1) / 3`. | SYS §6.3, HARD §5.4 | CONFIRMED | IN |
 | MESH-003 | MESH must be deterministic, hierarchical, global, non-overlapping, exhaustive, addressable, independently verifiable, and efficient on mobile. | HARD §5.2 | CONFIRMED | IN |
-| MESH-004 | Triangle ID format: deterministic `STEP-{level}-{baseFace}-{path}` with base-4 child path (child indices 0=near A, 1=near B, 2=near C, 3=centre). | SYS §7.3–7.4 | RECOMMENDED | IN |
+| MESH-004 | Triangle ID format (**Mesh ID v2**, `docs/geography/STEP_mesh_id_v2.md`): dotted **1-indexed** path `<face 1..20>(.<child 1..4>)*`; level = segment count; mined slot/NFT appends slot `1..27` as the final segment (`<triangleId>.<slot>`). Children 1=near A, 2=near B, 3=near C, 4=centre. Supersedes the old `STEP-{level}-F{face}-{base4path}` form. | SYS §7.3–7.4 | CONFIRMED | IN |
 | MESH-005 | Required functions: `latLonToTriangle`, `triangleToVertices`, `containsPoint`, `parentTriangle`, `childTriangles`, `neighbourTriangles`, `triangleArea`, `triangleCentroid`, `boundaryPolicy`. | DEV §7.1 | CONFIRMED | IN |
 | MESH-006 | Containment: convert WGS84 lat/lon to 3D unit vectors; oriented great-circle edge tests; documented tolerances. | SYS §6.7, HARD §5.8 | RECOMMENDED | IN |
 | MESH-007 | Boundary cases must be deterministic. Normal mining: border claims assigned to one deterministic triangle (tie-break by triangle ID). Sponsored campaigns: stronger proof and merchant-defined safe zones. | SYS §6.8, HARD §5.7 | RECOMMENDED | IN |
@@ -61,7 +61,7 @@ Each requirement has:
 | MESH-009 | Alpha Earth model: spherical approximation. Production: evaluate ellipsoidal correction or declare protocol spherical-by-design with documented distortion. | SYS §7.2 | RECOMMENDED | IN |
 | MESH-010 | Canonical MESH engine implemented once in Rust (`mesh-core`), exported to iOS (UniFFI/C FFI → XCFramework), web (WASM), validator node (native), with cross-language golden tests guaranteeing identical results. | DEV §4.1, §7.2 | RECOMMENDED | IN |
 | MESH-011 | The MESH must handle poles and antimeridian (±180° longitude) without breaking IDs; behaviour must be tested. | DEV §7.3 | CONFIRMED | IN |
-| MESH-012 | Mineable levels: use parent levels for navigation/hierarchy/visualisation; restrict natural Trinity issuance to one or a small set of levels. Exact levels are a protocol parameter. | SYS §6.4, HARD §5.6 | DECISION | PARTIAL (configurable constant) |
+| MESH-012 | Mineable levels: all potential levels are available by depth configuration (default 1–25). A location can mine a triangle when it is the deepest non-exhausted available level along the local parent-to-child chain at that location; parent exhaustion is the gate, not a global blacklist. | SYS §6.4, HARD §5.6 | DECISION | PARTIAL (configurable constant) |
 | MESH-013 | Exact icosahedron orientation, edge definition (great-circle), ID encoding, coordinate precision, and rounding policy must be frozen in a MESH specification before any supply numbers are published. | DEV §7.4, HARD §5.8 | DECISION | IN (alpha freeze of v1 spec) |
 | MESH-014 | Independent mathematical audit of level count, triangle count, side length, area, total supply, and reward curve required before investor/whitepaper use. Known issue: level 21 count is ~22 trillion, not 2.1 trillion. | SYS §6.4, HARD §5.5 | BLOCKER (for whitepaper/investor numbers, not for alpha code) | N/A |
 | MESH-015 | STEP should document its relationship to OGC DGGS principles. | SYS §6.9, HARD §5.3 | RESEARCH | OUT |
@@ -293,7 +293,7 @@ Each requirement has:
 All `DECISION` items are tracked as ADRs (see `STEP_architecture_decision_records.md`). The decisions that block the most downstream work, in dependency order:
 
 1. **Trinity denomination** (TOK-001) → blocks collector slots, reward curve, supply maths.
-2. **Mineable levels** (MESH-012) → blocks natural supply calculation and triangle state scope.
+2. **Mineable depth set** (MESH-012) → defaults to 1–25 depth for this alpha, with local availability determined by parent exhaustion at the target coordinate.
 3. **Collector slots + reward curve** (TOK-008) → blocks TriangleMiningState and reward tests.
 4. **Foundation twin schedule** (TOK-005/006) → blocks Treasury contract finalisation and tokenomics constitution.
 5. **MESH v1 freeze** (MESH-013: orientation, edges, ID encoding, tolerances) → blocks cross-platform golden tests.

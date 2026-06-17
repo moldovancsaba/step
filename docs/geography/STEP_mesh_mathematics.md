@@ -27,14 +27,17 @@ The level-1 MESH is a spherical icosahedron with:
 
 **Rotation constant about the polar axis: 0°** — the first upper-ring vertex lies exactly on the prime meridian. This resolves ADR OPEN-10 and is frozen for v1.
 
-**Face indexing** (F00–F19):
+**Face indexing.** Faces are numbered **1–20 in the public ID** (Mesh ID v2 —
+see `STEP_mesh_id_v2.md`); the engine stores them internally as 0–19 for array
+indexing and adds 1 on serialization. The construction below uses the internal
+0-based index:
 
-| Faces | Band | Construction (i = 0..4, j = (i+1) mod 5) |
-|---|---|---|
-| F00–F04 | North polar cap | (North, Upper[i], Upper[j]) |
-| F05–F09 | Upper-middle | (Upper[i], Lower[i], Upper[j]) |
-| F10–F14 | Lower-middle | (Lower[i], Upper[j], Lower[j]) |
-| F15–F19 | South polar cap | (Lower[i], South, Lower[j]) |
+| Faces (internal) | Public | Band | Construction (i = 0..4, j = (i+1) mod 5) |
+|---|---|---|---|
+| F00–F04 | 1–5 | North polar cap | (North, Upper[i], Upper[j]) |
+| F05–F09 | 6–10 | Upper-middle | (Upper[i], Lower[i], Upper[j]) |
+| F10–F14 | 11–15 | Lower-middle | (Lower[i], Upper[j], Lower[j]) |
+| F15–F19 | 16–20 | South polar cap | (Lower[i], South, Lower[j]) |
 
 Every face's vertex triple is wound counter-clockwise viewed from outside the sphere (`det[A,B,C] > 0`); the constructor deterministically swaps B/C where the generation order would violate this. Tests assert the invariant.
 
@@ -42,12 +45,17 @@ Every face's vertex triple is wound counter-clockwise viewed from outside the sp
 
 Each triangle (A, B, C) splits into 4 children by **normalized edge midpoints** (`m_XY = normalize(X + Y)`), per SYS §7.4:
 
-| Child digit | Vertices | Position |
-|---|---|---|
-| 0 | (A, m_AB, m_CA) | corner at A |
-| 1 | (B, m_BC, m_AB) | corner at B |
-| 2 | (C, m_CA, m_BC) | corner at C |
-| 3 | (m_AB, m_BC, m_CA) | centre |
+| Child (public) | Internal | Vertices | Position |
+|---|---|---|---|
+| 1 | 0 | (A, m_AB, m_CA) | corner at A |
+| 2 | 1 | (B, m_BC, m_AB) | corner at B |
+| 3 | 2 | (C, m_CA, m_BC) | corner at C |
+| 4 | 3 | (m_AB, m_BC, m_CA) | centre |
+
+Children are **1–4 in the public ID** (internal 0–3). When a triangle's 27
+mining slots are all consumed it **breaks down** into exactly these 4 quarters
+(the next finer level); this is the mining lifecycle, see §9 and
+`STEP_mesh_id_v2.md`.
 
 Edges are **great-circle arcs** (the midpoint normalization guarantees children's edges lie on great circles through their endpoint pairs). Winding is preserved (tested to depth 5 over all faces).
 
@@ -57,13 +65,26 @@ At level 21: `T(21) = 20 × 4^20 = 21 990 232 555 520` (~22.0 trillion — confi
 
 ## 4. Triangle identifiers
 
-String form (SYS §7.3): `STEP-{level}-F{face:02}` for level 1; deeper levels append `-{path}` where `path` is exactly `level − 1` base-4 digits, digit *i* selecting the child at subdivision step *i*.
+**String form — Mesh ID v2** (canonical: `STEP_mesh_id_v2.md`): a **dotted,
+1-indexed path** `<face>(.<child>)*`, where `face ∈ 1..=20` and each `child ∈
+1..=4` selects a midpoint-subdivision quarter. **The level is the number of
+segments** (no explicit level/`F`/`STEP-` decoration). Shorter id ⇒ larger
+triangle; longer ⇒ smaller.
 
-Examples from the golden vectors: `STEP-1-F00`, `STEP-5-F00-1220`, `STEP-21-F00-12203302320201…`.
+Examples (from the regenerated golden vectors): `1` (level 1), `1.2` (level 2),
+`1.2.3.3.1` (level 5), and a 21-segment id at the terminal level.
 
-**Ordering** ("lowest triangle ID wins", HARD §5.7): within a level, `(face, path)` lexicographic; implemented as the derived ordering on `(level, face, path)`.
+A mined **slot (NFT)** appends the slot index `∈ 1..=27` as a final segment:
+`<triangleId>.<slot>` — e.g. `1.1` is face 1, slot 1 (the very first mine on a
+virgin mesh); `7.3.2` is triangle `7.3`, slot 2. (The slot is part of the public
+NFT id; the bare triangle id is the same string with the slot dropped.)
 
-Maximum level: **25** (level-25 sides ≈ 0.42 m; f64 unit-vector precision ≈ 10⁻⁹ m on Earth's surface leaves > 8 orders of magnitude of headroom).
+**Ordering** ("lowest triangle ID wins"): by `(level, face, path)`; the protocol
+only tie-breaks within one level.
+
+Maximum (terminal) level: **21** (`S(21) ≈ 6.7 m`). A fully-mined level-21
+triangle does not subdivide further — it is a permanent **desert**. (The
+geometry kernel is exact well below this, but mining stops at 21.)
 
 An on-chain `bytes32` packing is defined in the contract layer: `keccak256(utf8(triangle_id_string))`. The hash form is used purely as an opaque key; the string is the canonical identity. (A bit-packed reversible encoding remains possible in a future spec version without breaking the string identity.)
 
@@ -101,8 +122,7 @@ Each term is the sine of the angular distance from p to the oriented edge great-
 | 1 | 7 053.6 km | 20 |
 | 10 | 13.8 km | 5 242 880 |
 | 15 | 430 m | 5 368 709 120 |
-| 21 | 6.7 m | 21 990 232 555 520 |
-| 25 | 0.42 m | 5.6 × 10¹⁵ |
+| 21 (terminal) | 6.7 m | 21 990 232 555 520 |
 
 ## 7. Boundary and accuracy policy (MESH-007/008)
 
@@ -120,9 +140,29 @@ Each term is the sine of the angular distance from p to the oriented edge great-
 
 The three edge-adjacent triangles are found by resolving a probe point placed 25% beyond each edge midpoint along the centroid→midpoint direction, at the same level. Because resolution is global vector math, adjacency across base-face boundaries, the antimeridian, and near the poles requires no special cases. Symmetry and distinctness are tested.
 
-## 9. Mineable levels
+## 9. Mining lifecycle & mineable levels (Mesh ID v2)
 
-Geometry exists at all levels 1–25. **Economic issuance is restricted to the configured `mesh.mineable_levels` parameter (UNFROZEN, alpha default `[21]`)** per ADR-003/HARD §5.6: parent levels serve navigation, rarity grouping, and visualisation only.
+Mining is an **emergent, per-location lifecycle**, not a fixed level. See
+`STEP_mesh_id_v2.md` for the canonical rules; summary:
+
+1. **Genesis = level 1.** A virgin mesh is the 20 base faces, all un-mined. The
+   first miner at face *F* takes slot `F.1`, the next `F.2`, … up to `F.27`.
+2. **27 slots per triangle** (`collector_slots_per_triangle`); slots are handed
+   out in order 1→27. **One slot per wallet per triangle** (anti-sybil;
+   on-chain `minedByWallet`).
+3. **Breakdown on exhaustion.** When slot 27 is taken the triangle is Exhausted
+   and subdivides into its 4 children (next finer level); each child starts at
+   slot 1. A miner now standing in child *k* mines `…​.k.1`, `…​.k.2`, …
+4. **A triangle at level N is mineable only when its parent (level N−1) is
+   exhausted** (level 1 has no parent). Navigation is hierarchical; mineability
+   is state-specific to that location.
+5. **Terminal level 21.** A fully-mined level-21 triangle is a permanent
+   **desert** — no further subdivision. (A merchant funding STEPs is the only
+   way to re-open activity there.)
+
+"Oasis" = a location whose current (finest un-exhausted) triangle still has free
+slots; "desert" = exhausted to level 21. The geometry exists at every level; the
+issuance/breakdown set is governed on-chain (see contract spec).
 
 ## 10. Conformance and audit status
 

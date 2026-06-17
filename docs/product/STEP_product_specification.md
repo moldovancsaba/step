@@ -4,7 +4,7 @@
 
 ## 1. Definition
 
-STEP is a market for verified physical presence. The Earth is divided into a deterministic spherical triangular MESH (`step-mesh-v1`: icosahedral, 4-way subdivision, ~6.7 m triangles at the mineable level 21). A miner earns **Trinity** — the smallest, indivisible unit of the STEP economy — by being physically inside a triangle and submitting a signed proof-of-presence that independent validators verify and smart contracts finalise. Businesses buy verified visits by funding **Trinity oases**: triangles loaded with pre-existing Trinity that release rewards only against accepted proofs.
+STEP is a market for verified physical presence. The Earth is divided into a deterministic spherical triangular MESH (`step-mesh-v1`: icosahedral, 4-way subdivision, mineable depths 1..21 with **level 21 terminal**). Triangle IDs are dotted, 1-indexed paths `face(1–20).child(1–4)…`, and a mined slot/NFT appends its slot `1–27` as a final segment (e.g. `1.1`); see `docs/geography/STEP_mesh_id_v2.md`. A miner earns **Trinity** — the smallest, indivisible unit of the STEP economy — by being physically inside a triangle and submitting a signed proof-of-presence that independent validators verify and smart contracts finalise. Businesses buy verified visits by funding **Trinity oases**: triangles loaded with pre-existing Trinity that release rewards only against accepted proofs.
 
 The single protocol question: *Was this miner physically present inside this spherical triangle at this time?*
 

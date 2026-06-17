@@ -115,6 +115,9 @@ If you use the Cloudflare Worker deployment, set:
 - `STEP_WEB_EXPLORER_URL` (example: `https://step-explorer.example.com`)
 - `STEP_WEB_MINER_URL` (example: `https://step-miner.example.com`)
 
+For a real non-sandbox launch, these backend URLs must be publicly reachable HTTPS URLs.
+`127.0.0.1` / `localhost` is valid only for local-machine testing and will fail for remote users.
+
 Store `STEP_BACKEND_GATEWAY_URL` and `STEP_BACKEND_INDEXER_URL` as GitHub repository Variables
 (Settings → Actions → Variables). Workflow deployment uses those values when deploying Cloudflare Worker.
 
@@ -124,6 +127,7 @@ For one-command local worker deploy with real endpoints:
 cp .env.example .env
 # fill in your real values
 source .env
+pnpm --dir apps/static-frontend build
 pnpm --dir apps/static-frontend deploy:cloudflare-worker
 ```
 
@@ -140,7 +144,23 @@ docker compose -f infra/docker/docker-compose.yml up
 
 ## Protocol parameters
 
-Economic constants (Trinity denomination, collector slots, reward curve, foundation twin rate, mineable level) are **UNFROZEN protocol parameters**, not decided values. They live in [`config/protocol-params.alpha.json`](config/protocol-params.alpha.json) and are pending the tokenomics constitution. No code may hardcode them.
+Economic constants (Trinity denomination, collector slots, reward curve, foundation twin rate) are **UNFROZEN protocol parameters**, not decided values. They live in [`config/protocol-params.alpha.json`](config/protocol-params.alpha.json) and are pending the tokenomics constitution. No code may hardcode them.
+
+### Triangle IDs & mine progression (Mesh ID v2)
+
+Triangle IDs are **dotted, 1-indexed paths** — `face(1–20).child(1–4)…` — where
+the level is the number of segments (`1` = a level-1 face, `1.2` = level 2,
+`3.2.3.4.3.2` = level 6). A mined **slot/NFT** appends the slot index `1–27` as
+the final segment: `1.1` is face 1, slot 1 (the first mine on a virgin mesh).
+Shorter id ⇒ larger triangle. Canonical spec: [`docs/geography/STEP_mesh_id_v2.md`](docs/geography/STEP_mesh_id_v2.md).
+
+Mine progression: a virgin mesh is the 20 level-1 faces; mining hands out a
+triangle's **27 slots in order (1→27), one slot per wallet per triangle**. When
+all 27 are taken the triangle **breaks down into its 4 children** (next finer
+level) and mining continues there. A triangle is mineable only once its parent
+is exhausted, so first-time mining at a fresh location is at **level 1**. **Level
+21 is terminal** — a fully-mined level-21 triangle is a permanent desert until a
+merchant re-seeds it.
 
 ## Status
 

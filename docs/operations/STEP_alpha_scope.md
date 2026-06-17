@@ -27,7 +27,7 @@ The alpha must **not** try to prove the economy, the exchange, open validation, 
 |---|---|---|
 | Geography | One controlled pilot city/district (config-driven; selection is OPEN-7) | HARD §17.2, SYS §27 |
 | Token | Testnet Trinity on a foundation-operated internal EVM testnet; explicitly valueless | HARD §17.2, ADR-006 |
-| Mineable level | One configurable terminal level (default 21) | ADR-003 |
+| Mineable levels | Levels 1..21, with **level 21 terminal** (no level 22; a fully-mined level-21 triangle is a permanent desert). Mineability is ancestor-gated and location-specific: a child appears mineable only when its parent's 27 slots are exhausted and it breaks down. See `docs/geography/STEP_mesh_id_v2.md`. | ADR-003 |
 | Exchange | None. Closed campaign-credit model with declared reference price + disclaimer only | HARD §8.3, ADR-011 |
 | Merchants | 3–10 pilot merchants, admin-approved, signed pilot agreement | HARD §17.2 |
 | Miners | 100–500 invited TestFlight users | HARD §17.2, DEV §21.3 |
