@@ -199,11 +199,11 @@ afterAll(() => {
 
 async function mine(account: typeof miner, lat: number, lon: number) {
   const { nonce } = await gw.nonce(account.address);
-  const triangle = await mesh.resolve(lat, lon, 21);
+  const triangle = await mesh.resolve(lat, lon, 1);
   const unsigned = buildUnsignedClaim({
     wallet: account.address,
     triangleId: triangle.triangle_id,
-    meshLevel: 21,
+    meshLevel: 1,
     latitude: lat,
     longitude: lon,
     horizontalAccuracyM: 5,
@@ -254,13 +254,13 @@ describe("E2E full system on real components", () => {
     // Distinct triangle: E2E-1's triangle is in post-claim cooldown (correct
     // contract behaviour, COOLDOWN=3600 in the deploy script).
     const spot = { lat: 47.499, lon: 19.042 };
-    const triangle = await mesh.resolve(spot.lat, spot.lon, 21);
+    const triangle = await mesh.resolve(spot.lat, spot.lon, 1);
     const make = async (ts: string) =>
       signClaim(
         buildUnsignedClaim({
           wallet: miner2.address,
           triangleId: triangle.triangle_id,
-          meshLevel: 21,
+          meshLevel: 1,
           latitude: spot.lat,
           longitude: spot.lon,
           horizontalAccuracyM: 5,
@@ -284,7 +284,7 @@ describe("E2E full system on real components", () => {
     // Fresh wallet (no teleport history), triangle near Budapest.
     const m3 = privateKeyToAccount(("0x" + "44".repeat(32)) as Hex);
     const spot = { lat: 47.51, lon: 19.05 };
-    const triangle = await mesh.resolve(spot.lat, spot.lon, 21);
+    const triangle = await mesh.resolve(spot.lat, spot.lon, 1);
     const tidHash = keccak256(stringToBytes(triangle.triangle_id));
     await write(deployments.SafetyRegistry!, SafetyRegistryAbi, "freezeTriangle", [
       tidHash,
@@ -296,7 +296,7 @@ describe("E2E full system on real components", () => {
       buildUnsignedClaim({
         wallet: m3.address,
         triangleId: triangle.triangle_id,
-        meshLevel: 21,
+        meshLevel: 1,
         latitude: spot.lat,
         longitude: spot.lon,
         horizontalAccuracyM: 5,
@@ -336,7 +336,7 @@ describe("E2E full system on real components", () => {
 
     // Merchant creates + funds + activates a front-door oasis at a POI triangle.
     const poi = { lat: 47.4925, lon: 19.0514 }; // different triangle than earlier tests
-    const triangle = await mesh.resolve(poi.lat, poi.lon, 21);
+    const triangle = await mesh.resolve(poi.lat, poi.lon, 1);
     const tidHash = keccak256(stringToBytes(triangle.triangle_id));
     const merchantWallet = createWalletClient({ chain, transport: http(), account: merchant });
 
@@ -383,7 +383,7 @@ describe("E2E full system on real components", () => {
       buildUnsignedClaim({
         wallet: visitor.address,
         triangleId: triangle.triangle_id,
-        meshLevel: 21,
+        meshLevel: 1,
         latitude: poi.lat,
         longitude: poi.lon,
         horizontalAccuracyM: 5,
