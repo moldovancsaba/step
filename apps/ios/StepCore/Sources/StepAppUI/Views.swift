@@ -228,6 +228,9 @@ public struct MineView: View {
     @ObservedObject var model: AppModel
     @State private var manualLat = "47.4979"
     @State private var manualLon = "19.0402"
+    /// Per-attempt session nonce for optional anchor capture (#32). Production
+    /// binds the anchor proof to the claim nonce; this is the pre-claim seam.
+    @State private var anchorNonce = UUID().uuidString
 
     public init(model: AppModel) {
         self.model = model
@@ -272,6 +275,12 @@ public struct MineView: View {
                 .buttonStyle(.bordered)
             }
             .font(.system(.footnote, design: .monospaced))
+
+            if let address = model.walletAddress {
+                AnchorCaptureView(minerAddress: address, nonce: anchorNonce) { proof in
+                    model.capturedAnchor = proof
+                }
+            }
 
             Button {
                 Task { await model.mine(at: sample) }

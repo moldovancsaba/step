@@ -36,6 +36,9 @@ public struct Claim: Codable, Sendable {
     public var previousClaimHash: String?
     public var campaignId: String?
     public var merchantProof: MerchantProof?
+    /// Trusted-anchor proofs (#32) — evidence for validator fusion (#19); not
+    /// part of the signed canonical message (like the other evidence fields).
+    public var anchorProofs: [AnchorProof]?
     public var signature: String = ""
 
     enum CodingKeys: String, CodingKey {
@@ -54,6 +57,7 @@ public struct Claim: Codable, Sendable {
         case previousClaimHash = "previous_claim_hash"
         case campaignId = "campaign_id"
         case merchantProof = "merchant_proof"
+        case anchorProofs = "anchor_proofs"
         case signature
     }
 

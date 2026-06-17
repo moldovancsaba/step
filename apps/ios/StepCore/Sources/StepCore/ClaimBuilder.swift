@@ -84,6 +84,7 @@ public enum ClaimBuilder {
         location: LocationSample,
         nonce: String,
         attester: Attesting,
+        anchorProofs: [AnchorProof]? = nil,
         campaignId: String? = nil,
         merchantQrPayload: String? = nil,
         previousClaimHash: String? = nil
@@ -101,6 +102,7 @@ public enum ClaimBuilder {
         )
         claim.campaignId = campaignId
         if let payload = merchantQrPayload { claim.merchantProof = MerchantProof(payload: payload) }
+        claim.anchorProofs = anchorProofs
         claim.previousClaimHash = previousClaimHash
         // Bind attestation to the core (unattested) claim hash, then apply it.
         let evidence = try await attester.evidence(forClaimHash: claim.claimHash)

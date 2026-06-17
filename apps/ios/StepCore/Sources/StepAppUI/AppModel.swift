@@ -54,6 +54,10 @@ public final class AppModel: ObservableObject {
     /// Owned slot NFTs for the Wallet tab (#29).
     @Published public private(set) var ownedNfts: LoadPhase<[NftToken]> = .idle
 
+    /// Optional trusted-anchor proof (#32) captured for the next claim. Cleared
+    /// after a claim is submitted so a proof is never replayed across claims.
+    @Published public var capturedAnchor: AnchorProof?
+
     public init(
         keyStore: KeyStore,
         client: GatewayClient,
@@ -267,10 +271,12 @@ public final class AppModel: ObservableObject {
                 triangle: triangle,
                 location: sample,
                 nonce: nonce.nonce,
-                attester: attester
+                attester: attester,
+                anchorProofs: capturedAnchor.map { [$0] }
             )
             status = .validating
             let record = try await client.submit(claim: claim)
+            capturedAnchor = nil // never replay an anchor proof across claims
             claimHistory.insert(record, at: 0)
             switch record.status {
             case "finalised":

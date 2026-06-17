@@ -17,6 +17,7 @@ All UI is built natively with SwiftUI against a GDS-parity design system (`StepA
 | `Wallet` | secp256k1 wallet (secp256k1.swift 0.15.0), Ethereum address, 65-byte r‖s‖v signing, Keychain + in-memory key stores | **Reproduces the Rust k256 signature byte-for-byte** (RFC-6979) |
 | `ClaimBuilder` | Location + nonce + integrity evidence → signed claim; `makeClaim` (explicit evidence) and `makeAttestedClaim` (evidence from an `Attesting` provider, bound to the core claim hash) | Unit tests |
 | `Attestation` (#31) | `Attesting` protocol, `UnattestedAttester` fallback (all platforms), `AppAttestAttester` (iOS-only, `DCAppAttestService`) | `AttestationTests` (fallback, wire-mapping, hash-binding) |
+| `Anchor` (#32) | `AnchorKind`/`AnchorProof`/`AnchorCapturing` wire types + `AnchorChallenge` (keccak256(abi.encode(miner,nonceHash,anchorId,window)), byte-identical to `AnchorRegistry.challenge`) | `AnchorTests` (window/nonceHash/abi-encode/codable/parity) |
 | `MineableResolver` (#26) | v2 genesis→breakdown walk: resolves the current mineable triangle (level 1→21) from indexer state; `.desert`/`.frozen` errors | Unit tests |
 | `IndexerClient` (#26) | `TriangleStateProviding` via `GET /v1/mesh-states/{idHash}` | Unit tests |
 | `AccountVault` (#27) | Argon2id KDF + AES-256-GCM zero-knowledge wallet vault; **cross-impl parity** with the @noble/account-api vector | `AccountVaultTests` parity vector |
@@ -34,6 +35,7 @@ All UI is built natively with SwiftUI against a GDS-parity design system (`StepA
 | `AppModel` | `@MainActor` state machine: onboarding/login gate, register/sign-in (Argon2 off-main), mining (via `MineableResolver` + `attester`), owned NFTs, sign-out |
 | `Views` | Themed 4-tab shell (Mine / Map / Wallet / Market), testnet banner, account menu, claim history, privacy settings |
 | `MapView` (#28) | MapKit oasis/desert overlay — per-triangle depletion fill, debounced viewport fetch, legend, truncation/zoom hint |
+| `AnchorCapture` / `AnchorReaders` (#32) | Accessible capture state machine + transport readers — `QRAnchorReader` (AVFoundation, iOS), `NFCAnchorReader` (CoreNFC, iOS), `BLEAnchorReader` (CoreBluetooth) — each behind `#if canImport(...)`; offers only the transports the device has |
 
 Because every signed byte is identical across Swift, Rust, and TypeScript, a claim built by this code is accepted by the validator network and contracts proven in `tests/e2e` — the chain path needs no iOS-specific verification.
 
@@ -45,6 +47,12 @@ Because every signed byte is identical across Swift, Rust, and TypeScript, a cla
 - `UnattestedAttester` (all platforms, the default): always returns the clearly-marked `.devUnattested` tier — **never silently "attested"** on Simulator / unsupported devices / macOS.
 
 App Attest is a device-only API: it cannot be exercised on the Simulator or on this Command-Line-Tools build machine, so its behaviour is verified by structure (compiled behind `#if os(iOS)`, fallback covered by tests) and must be field-verified on a physical device. Pilot validators reject `attested` claims until server-side verification of Apple attestation objects ships (`allow_dev_claims=false`) — by design, never silently downgraded.
+
+## Trusted-anchor capture (#32, AnchorRegistry #18)
+
+An optional step in the mine flow: read a registered anchor (BLE beacon / NFC tag / rotating QR) to corroborate presence beyond GPS. The anchor signs `AnchorChallenge.hash(miner, nonceHash, anchorId, window)` (== `AnchorRegistry.challenge`); the app captures `{anchorId, proofWindow, signature}`, wraps it as an `AnchorProof`, and attaches it to the next claim as evidence for validator multi-signal fusion (#19) and on-chain `verifyAnchorProof`. The proof is bound to the miner + claim nonce and cleared after each submit, so it can never be replayed.
+
+`StepCore` holds the transport-free wire types + challenge maths (macOS-buildable, fully tested); the radio/camera readers are iOS-device features. `BLEAnchorReader` (CoreBluetooth) compiles + builds on macOS; `QRAnchorReader` (AVFoundation) and `NFCAnchorReader` (CoreNFC) are iOS-only and must be field-verified on a device. Permissions (`NSBluetoothAlwaysUsageDescription`, NFC entitlement, `NSCameraUsageDescription`) are configured in the app target (#33).
 
 ## What is NOT done yet (requires Xcode / Apple accounts — the build machine has Command Line Tools only)
 
