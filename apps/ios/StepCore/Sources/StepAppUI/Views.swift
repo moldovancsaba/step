@@ -37,7 +37,7 @@ public struct RootView: View {
                 .tabItem { Label("Map", systemImage: "map.fill") }
             NavigationStack { WalletTabView(model: model).stepChrome("Wallet", model: model) }
                 .tabItem { Label("Wallet", systemImage: "wallet.pass.fill") }
-            NavigationStack { MarketTabView().stepChrome("Marketplace", model: model) }
+            NavigationStack { MarketTabView(model: model).stepChrome("Marketplace", model: model) }
                 .tabItem { Label("Market", systemImage: "bag.fill") }
         }
         .tint(StepColor.primary)
@@ -107,13 +107,8 @@ struct MapTabView: View {
 
 /// Marketplace tab — placeholder until the marketplace UI (#30) lands.
 struct MarketTabView: View {
-    var body: some View {
-        ContentUnavailableView(
-            "Marketplace",
-            systemImage: "bag",
-            description: Text("Browse, buy, gift and list triangle NFTs — issue #30.")
-        )
-    }
+    @ObservedObject var model: AppModel
+    var body: some View { MarketplaceView(model: model) }
 }
 
 /// Wallet tab: address + owned slot NFTs (#29) with provenance, plus links to

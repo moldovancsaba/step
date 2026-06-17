@@ -44,6 +44,12 @@ public final class AppModel: ObservableObject {
     let account: AccountClient?
     /// nft-indexer client for the Wallet tab's owned slot NFTs (#29).
     let nft: NftClient?
+    /// Marketplace read client (#30); nil hides the marketplace browse path.
+    let market: MarketplaceClient?
+    /// JSON-RPC endpoint + deployed addresses for marketplace writes (#30); both
+    /// present → trading is enabled, else the tab shows a "not deployed" state.
+    let rpcURL: URL?
+    let marketAddresses: MarketplaceAddresses?
     /// Viewport cover + depletion client for the oasis/desert map (#28).
     public let cover: MeshCoverClient?
     /// Device attestation provider (#31). Defaults to the honest unattested
@@ -65,6 +71,9 @@ public final class AppModel: ObservableObject {
         account: AccountClient? = nil,
         nft: NftClient? = nil,
         cover: MeshCoverClient? = nil,
+        market: MarketplaceClient? = nil,
+        rpcURL: URL? = nil,
+        marketAddresses: MarketplaceAddresses? = nil,
         attester: Attesting = UnattestedAttester()
     ) {
         self.keyStore = keyStore
@@ -73,6 +82,9 @@ public final class AppModel: ObservableObject {
         self.account = account
         self.nft = nft
         self.cover = cover
+        self.market = market
+        self.rpcURL = rpcURL
+        self.marketAddresses = marketAddresses
         self.attester = attester
         if let existing = try? Wallet.load(store: keyStore) {
             wallet = existing
@@ -133,6 +145,52 @@ public final class AppModel: ObservableObject {
         } catch {
             ownedNfts = .failed("Couldn't load your triangles. Pull to retry.")
         }
+    }
+
+    // MARK: marketplace (#30)
+
+    /// Active marketplace listings.
+    @Published public private(set) var listings: LoadPhase<[Listing]> = .idle
+    /// Last marketplace action outcome, for the status banner.
+    @Published public var marketStatus: String?
+
+    /// True when trading (not just browsing) is wired: a wallet, an RPC endpoint,
+    /// and deployed contract addresses are all present.
+    public var canTrade: Bool { wallet != nil && rpcURL != nil && marketAddresses != nil }
+
+    public func loadListings() async {
+        guard let market else { listings = .empty; return }
+        listings = .loading
+        do {
+            let all = try await market.listings()
+            listings = all.isEmpty ? .empty : .loaded(all)
+        } catch {
+            listings = .failed("Couldn't load the marketplace. Pull to retry.")
+        }
+    }
+
+    /// Run a state-changing marketplace action (already user-confirmed), refresh
+    /// listings, and surface the outcome. Never auto-retries a sent tx.
+    public func runMarketAction(_ action: @escaping (MarketplaceWriter) async throws -> String) async {
+        guard let writer = makeWriter() else {
+            marketStatus = "The marketplace isn't available on this network yet."
+            return
+        }
+        marketStatus = "Submitting…"
+        do {
+            let txHash = try await action(writer)
+            marketStatus = "Done — tx \(txHash.prefix(10))…"
+            await loadListings()
+        } catch let error as MarketplaceWriteError {
+            marketStatus = error.userMessage
+        } catch {
+            marketStatus = "The transaction failed. Try again."
+        }
+    }
+
+    private func makeWriter() -> MarketplaceWriter? {
+        guard let wallet, let rpcURL, let marketAddresses else { return nil }
+        return MarketplaceWriter(rpc: JsonRpcClient(url: rpcURL), addresses: marketAddresses, wallet: wallet)
     }
 
     /// Login wall (#27) — register: derive keys client-side, encrypt the wallet

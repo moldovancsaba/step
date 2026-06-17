@@ -18,6 +18,9 @@ All UI is built natively with SwiftUI against a GDS-parity design system (`StepA
 | `ClaimBuilder` | Location + nonce + integrity evidence → signed claim; `makeClaim` (explicit evidence) and `makeAttestedClaim` (evidence from an `Attesting` provider, bound to the core claim hash) | Unit tests |
 | `Attestation` (#31) | `Attesting` protocol, `UnattestedAttester` fallback (all platforms), `AppAttestAttester` (iOS-only, `DCAppAttestService`) | `AttestationTests` (fallback, wire-mapping, hash-binding) |
 | `Anchor` (#32) | `AnchorKind`/`AnchorProof`/`AnchorCapturing` wire types + `AnchorChallenge` (keccak256(abi.encode(miner,nonceHash,anchorId,window)), byte-identical to `AnchorRegistry.challenge`) | `AnchorTests` (window/nonceHash/abi-encode/codable/parity) |
+| `Marketplace` (#30) | `Listing`/`Trade` + `MarketplaceClient` reads (nft-indexer #10) | `MarketplaceTests` (decode) |
+| `Web3` (#30) | Dependency-free RLP, ABI calldata, EIP-1559 (type-2) tx signing, JSON-RPC client | `Web3Tests` (selectors/calldata/RLP/big-decimal/signing — vectors from `cast`) |
+| `MarketplaceWriter` (#30) | Signed `list`/`cancel`/`buy`/`gift` (+ Trinity allowance / NFT approval) with simulate-before-send + decoded reverts | `MarketplaceTests` (revert mapping) |
 | `MineableResolver` (#26) | v2 genesis→breakdown walk: resolves the current mineable triangle (level 1→21) from indexer state; `.desert`/`.frozen` errors | Unit tests |
 | `IndexerClient` (#26) | `TriangleStateProviding` via `GET /v1/mesh-states/{idHash}` | Unit tests |
 | `AccountVault` (#27) | Argon2id KDF + AES-256-GCM zero-knowledge wallet vault; **cross-impl parity** with the @noble/account-api vector | `AccountVaultTests` parity vector |
@@ -36,6 +39,7 @@ All UI is built natively with SwiftUI against a GDS-parity design system (`StepA
 | `Views` | Themed 4-tab shell (Mine / Map / Wallet / Market), testnet banner, account menu, claim history, privacy settings |
 | `MapView` (#28) | MapKit oasis/desert overlay — per-triangle depletion fill, debounced viewport fetch, legend, truncation/zoom hint |
 | `AnchorCapture` / `AnchorReaders` (#32) | Accessible capture state machine + transport readers — `QRAnchorReader` (AVFoundation, iOS), `NFCAnchorReader` (CoreNFC, iOS), `BLEAnchorReader` (CoreBluetooth) — each behind `#if canImport(...)`; offers only the transports the device has |
+| `MarketplaceView` (#30) | Browse active listings + my-listings filter, buy/cancel/gift/list with explicit price-showing confirmation, decoded-revert + paused + not-deployed states; GDS-parity, fully accessible |
 
 Because every signed byte is identical across Swift, Rust, and TypeScript, a claim built by this code is accepted by the validator network and contracts proven in `tests/e2e` — the chain path needs no iOS-specific verification.
 
@@ -53,6 +57,24 @@ App Attest is a device-only API: it cannot be exercised on the Simulator or on t
 An optional step in the mine flow: read a registered anchor (BLE beacon / NFC tag / rotating QR) to corroborate presence beyond GPS. The anchor signs `AnchorChallenge.hash(miner, nonceHash, anchorId, window)` (== `AnchorRegistry.challenge`); the app captures `{anchorId, proofWindow, signature}`, wraps it as an `AnchorProof`, and attaches it to the next claim as evidence for validator multi-signal fusion (#19) and on-chain `verifyAnchorProof`. The proof is bound to the miner + claim nonce and cleared after each submit, so it can never be replayed.
 
 `StepCore` holds the transport-free wire types + challenge maths (macOS-buildable, fully tested); the radio/camera readers are iOS-device features. `BLEAnchorReader` (CoreBluetooth) compiles + builds on macOS; `QRAnchorReader` (AVFoundation) and `NFCAnchorReader` (CoreNFC) are iOS-only and must be field-verified on a device. Permissions (`NSBluetoothAlwaysUsageDescription`, NFC entitlement, `NSCameraUsageDescription`) are configured in the app target (#33).
+
+## Marketplace (#30, TriangleMarketplace #8 + indexer #10)
+
+Browse active listings and trade history (read path, fully testable). Trading —
+`list` / `cancel` / `buy` / `gift` — is built on a small dependency-free web3
+layer (`Web3.swift`: RLP, ABI calldata, EIP-1559 signing reusing the secp256k1
+wallet, JSON-RPC). Every state-changing action **simulates first** (`eth_call`)
+so reverts surface without spending gas, runs behind an explicit confirmation
+that shows the price, and is never auto-retried after broadcast (idempotent via
+on-chain state). `buy` ensures a Trinity allowance; `list` ensures NFT approval.
+
+Trading is enabled only when an RPC endpoint **and** deployed contract addresses
+are configured (`AppModel(rpcURL:marketAddresses:)`); these land with the #5
+verifier-integration deploy. Until then the tab browses and clearly states that
+trading isn't available on the network yet. Trinity is a testnet token with no
+monetary value, surfaced in the UI. The deterministic encoding/signing pieces
+are unit-tested against `cast` vectors; the on-chain round-trip is verified once
+addresses are deployed.
 
 ## What is NOT done yet (requires Xcode / Apple accounts — the build machine has Command Line Tools only)
 
