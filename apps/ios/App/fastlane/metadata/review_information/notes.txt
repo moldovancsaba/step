@@ -1,0 +1,9 @@
+TESTNET BUILD. The in-app token "Trinity" has NO monetary value and cannot be purchased with money; it is not a security or investment. The marketplace trades NFTs for Trinity on a test network only.
+
+LOCATION: used only to determine which fixed MESH triangle the device is in. Precise coordinates never leave the device — only a triangle id and a proof hash are submitted (see Privacy Policy and PrivacyInfo.xcprivacy). The location permission is requested when the user taps Mine or opens the Map.
+
+APP ATTEST: on the Simulator, App Attest is unavailable, so the app clearly degrades to an "unattested" tier — this is expected and shown in the UI. To exercise attested mining, run on a physical device.
+
+OPTIONAL BLUETOOTH/NFC/CAMERA: used only when the user chooses "Verify with a trusted anchor" to read a nearby beacon/tag/QR. The app does not scan for or track other devices.
+
+ACCOUNT: optional. Reviewers can use the onboarding flow to generate a local wallet without an account, or create an account (zero-knowledge encrypted vault). A demo account can be provided on request.

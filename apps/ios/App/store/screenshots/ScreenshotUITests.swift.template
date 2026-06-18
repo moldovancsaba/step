@@ -1,0 +1,42 @@
+// fastlane snapshot capture test (#33). Kept as a .template so it is NOT compiled
+// by default (it needs the fastlane-generated SnapshotHelper.swift). To enable:
+//   1) cd apps/ios/App && fastlane snapshot init   # adds SnapshotHelper.swift
+//   2) copy this file to Tests/ScreenshotUITests.swift
+//   3) ensure both files are in the StepAppUITests target (project.yml Tests path)
+//   4) fastlane ios screenshots
+import XCTest
+
+final class ScreenshotUITests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        setupSnapshot(app)            // from SnapshotHelper.swift
+        app.launch()
+    }
+
+    func testCaptureScreens() {
+        let app = XCUIApplication()
+
+        // 1) Mine (launch surface). Adjust taps to your demo flow as needed.
+        snapshot("01-Mine")
+
+        // 2) Map tab.
+        if app.tabBars.buttons["Map"].waitForExistence(timeout: 5) {
+            app.tabBars.buttons["Map"].tap()
+            snapshot("02-Map")
+        }
+
+        // 3) Wallet tab.
+        if app.tabBars.buttons["Wallet"].exists {
+            app.tabBars.buttons["Wallet"].tap()
+            snapshot("03-Wallet")
+        }
+
+        // 4) Marketplace tab.
+        if app.tabBars.buttons["Market"].exists {
+            app.tabBars.buttons["Market"].tap()
+            snapshot("04-Marketplace")
+        }
+    }
+}

@@ -1,0 +1,63 @@
+# fastlane lanes for the STEP iOS app (#33 App Store readiness).
+#
+# Prereqs: `brew install fastlane xcodegen`, an App Store Connect API key
+# (recommended) exported as APP_STORE_CONNECT_API_KEY_* env vars or a key file,
+# and a Distribution signing identity / provisioning (e.g. via `match`).
+#
+# Lanes:
+#   fastlane ios build         # generate project + build a signed archive (.ipa)
+#   fastlane ios screenshots   # capture localized screenshots via UI tests
+#   fastlane ios beta          # upload the build to TestFlight
+#   fastlane ios release       # upload build + metadata + screenshots to review
+default_platform(:ios)
+
+WORKSPACE_DIR = File.expand_path("..", __dir__) # apps/ios/App
+PROJECT = "StepApp.xcodeproj"
+SCHEME  = "StepApp"
+
+platform :ios do
+  desc "Generate the Xcode project from the checked-in XcodeGen spec"
+  lane :generate do
+    sh("cd #{WORKSPACE_DIR} && xcodegen generate")
+  end
+
+  desc "Build a signed archive for distribution"
+  lane :build do
+    generate
+    build_app(
+      project: "#{WORKSPACE_DIR}/#{PROJECT}",
+      scheme: SCHEME,
+      export_method: "app-store",
+      output_directory: "#{WORKSPACE_DIR}/build",
+      clean: true
+    )
+  end
+
+  desc "Capture App Store screenshots on the configured simulators"
+  lane :screenshots do
+    generate
+    capture_screenshots(
+      project: "#{WORKSPACE_DIR}/#{PROJECT}",
+      scheme: SCHEME
+    )
+  end
+
+  desc "Upload the latest build to TestFlight"
+  lane :beta do
+    build
+    upload_to_testflight(skip_waiting_for_build_processing: true)
+  end
+
+  desc "Upload build + metadata + screenshots to App Store review"
+  lane :release do
+    build
+    upload_to_app_store(
+      submit_for_review: false,           # flip to true once you're confident
+      automatic_release: false,
+      force: true,                        # skip the HTML preview prompt
+      precheck_include_in_app_purchases: false,
+      metadata_path: "#{WORKSPACE_DIR}/fastlane/metadata",
+      screenshots_path: "#{WORKSPACE_DIR}/fastlane/screenshots"
+    )
+  end
+end

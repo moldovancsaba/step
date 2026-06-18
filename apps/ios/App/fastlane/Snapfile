@@ -1,0 +1,17 @@
+# fastlane snapshot config — App Store screenshot capture (#33).
+# Apple requires screenshots for one 6.7" iPhone and one 13" iPad (other sizes
+# are scaled from these). Run: `fastlane ios screenshots`.
+devices([
+  "iPhone 16 Pro Max",   # 6.9"/6.7" class — required
+  "iPad Pro 13-inch (M4)" # 13" iPad — required if you ship for iPad
+])
+
+languages(["en-US"])
+
+scheme("StepApp")
+
+# Each launch starts clean so screenshots are deterministic.
+clear_previous_screenshots(true)
+override_status_bar(true) # clean 9:41 status bar
+
+output_directory("./fastlane/screenshots")

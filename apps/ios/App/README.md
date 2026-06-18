@@ -40,6 +40,26 @@ an `.xcconfig` per environment (Debug/pilot/Release). Marketplace trading is
 enabled only when the RPC URL and all three addresses are set; otherwise the
 Marketplace tab browses and states that trading isn't available yet.
 
+## Store assets & legal (ready in-repo)
+
+Everything needed to submit is checked in — see **[`store/PUBLISHING.md`](store/PUBLISHING.md)**
+for the end-to-end runbook. Key pieces:
+
+| Asset | Location |
+|---|---|
+| App icon (1024², opaque) + reproducible renderer | `Assets.xcassets/AppIcon.appiconset/` · [`../../../tools/icon/RenderIcon.swift`](../../../tools/icon/RenderIcon.swift) |
+| App Store listing text (name/subtitle/description/keywords/promo/review notes) | [`fastlane/metadata/`](fastlane/metadata) |
+| Screenshot spec + capture test | [`store/screenshots/`](store/screenshots) |
+| App Privacy "nutrition label" answers | [`store/app-privacy-details.md`](store/app-privacy-details.md) |
+| Export-compliance note | [`store/export-compliance.md`](store/export-compliance.md) |
+| Privacy Policy | [`../../../docs/legal/STEP_privacy_policy.md`](../../../docs/legal/STEP_privacy_policy.md) |
+| Terms of Service (GTC) | [`../../../docs/legal/STEP_terms_of_service.md`](../../../docs/legal/STEP_terms_of_service.md) |
+| fastlane lanes (build / beta / release / screenshots) | [`fastlane/Fastfile`](fastlane/Fastfile) |
+
+The legal documents and a few listing fields contain clearly-marked
+`[PLACEHOLDER]`s (legal entity, jurisdiction, contact, category) that need your
+input + counsel review before submission — `store/PUBLISHING.md` lists them.
+
 ## App Store / TestFlight readiness
 
 - **Signing:** set `DEVELOPMENT_TEAM` (locally or via CI secret) and flip the

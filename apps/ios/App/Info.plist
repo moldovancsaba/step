@@ -10,6 +10,14 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>UILaunchScreen</key>
 	<dict/>
+
+	<!-- Export compliance (#33). The app uses only standard, widely-available
+	     cryptography (TLS, AES-256-GCM, secp256k1/keccak) for wallet security and
+	     proof signing — no proprietary algorithms. This qualifies for the
+	     exemption, so no annual self-classification report is required. Confirm
+	     with legal before the first submission; see store/export-compliance.md. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
