@@ -18,6 +18,7 @@ import { WalletView } from "./WalletView.js";
 import { WalletUnlock } from "./WalletUnlock.js";
 import { Footer } from "./Footer.js";
 import { loadBackup, downloadBackup } from "./keybackup.js";
+import { isDeviceTrusted, untrustDevice } from "./trusteddevice.js";
 
 type Tab = "map" | "wallet" | "mine" | "market";
 
@@ -69,6 +70,19 @@ export function App() {
       {walletUnlocked && (
         <Button size="xs" variant="subtle" onClick={() => lockWallet()}>
           Lock wallet
+        </Button>
+      )}
+      {isDeviceTrusted(session.identity) && (
+        <Button
+          size="xs"
+          variant="subtle"
+          color="red"
+          onClick={() => {
+            untrustDevice(session.identity);
+            lockWallet();
+          }}
+        >
+          Forget device
         </Button>
       )}
       <Button size="xs" variant="subtle" onClick={() => void logout()}>
