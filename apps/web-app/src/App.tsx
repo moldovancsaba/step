@@ -16,6 +16,7 @@ import { LoginWall } from "./LoginWall.js";
 import { MapView } from "./MapView.js";
 import { WalletView } from "./WalletView.js";
 import { Footer } from "./Footer.js";
+import { loadBackup, downloadBackup } from "./keybackup.js";
 
 type Tab = "map" | "wallet" | "mine" | "market";
 
@@ -52,9 +53,15 @@ export function App() {
     </Stack>
   );
 
+  const backup = loadBackup(session.identity);
   const accountPanel = (
     <Group gap="sm">
       <Text size="sm">{session.identity}</Text>
+      {backup && (
+        <Button size="xs" variant="subtle" onClick={() => downloadBackup(backup)}>
+          Download key
+        </Button>
+      )}
       <Button size="xs" variant="subtle" onClick={() => void logout()}>
         Sign out
       </Button>

@@ -14,7 +14,17 @@
  */
 import { useState } from "react";
 import { AuthShell, FormField } from "@doneisbetter/gds";
-import { Button, PasswordInput, Stack, Text, TextInput, Anchor, Textarea } from "@mantine/core";
+import {
+  Button,
+  PasswordInput,
+  Stack,
+  Text,
+  TextInput,
+  Anchor,
+  Textarea,
+  FileButton,
+  Group,
+} from "@mantine/core";
 import type { Hex } from "viem";
 import { account } from "./api.js";
 import {
@@ -25,6 +35,7 @@ import {
   addressOf,
   type KdfParams,
 } from "./crypto.js";
+import { saveBackup, parseBackup, type KeyBackup } from "./keybackup.js";
 import { useSession } from "./session.js";
 
 type Mode = "sign-in" | "sign-up";
@@ -38,8 +49,21 @@ export function LoginWall() {
   const [password, setPassword] = useState("");
   const [importKey, setImportKey] = useState("");
   const [showImport, setShowImport] = useState(false);
+  const [backup, setBackup] = useState<KeyBackup | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  async function handleBackupFile(file: File | null) {
+    setError(null);
+    if (!file) return;
+    try {
+      const b = parseBackup(await file.text());
+      setBackup(b);
+      setIdentity(b.identity);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "invalid backup file");
+    }
+  }
 
   async function handleSignUp() {
     setBusy(true);
@@ -60,6 +84,15 @@ export function LoginWall() {
       localStorage.setItem(kdfKey(identity), JSON.stringify(blob.kdf_params));
       const res = await account.login(identity, blob.authKey);
       const walletKey = decryptWallet(password, res.vault_ciphertext, res.iv, res.kdf_params);
+      // Save an encrypted key backup the user can download (cross-device login).
+      saveBackup({
+        format: "step.keybackup.v1",
+        identity: identity.toLowerCase(),
+        address: res.address,
+        vault_ciphertext: res.vault_ciphertext,
+        iv: res.iv,
+        kdf_params: res.kdf_params,
+      });
       setSignedIn(identity.toLowerCase(), res.address, walletKey);
     } catch (e) {
       setError(e instanceof Error ? e.message : "registration failed");
@@ -72,16 +105,42 @@ export function LoginWall() {
     setBusy(true);
     setError(null);
     try {
+      // Path A — uploaded key backup: decrypt entirely client-side (carries its
+      // own KDF params), so this works on a fresh device with no server bootstrap.
+      if (backup) {
+        let walletKey: Hex;
+        try {
+          walletKey = decryptWallet(password, backup.vault_ciphertext, backup.iv, backup.kdf_params);
+        } catch {
+          throw new Error("Couldn't unlock the backup — check your password.");
+        }
+        if (addressOf(walletKey).toLowerCase() !== backup.address.toLowerCase()) {
+          throw new Error("Couldn't unlock the backup — check your password.");
+        }
+        saveBackup(backup);
+        localStorage.setItem(kdfKey(backup.identity), JSON.stringify(backup.kdf_params));
+        setSignedIn(backup.identity.toLowerCase(), backup.address, walletKey);
+        return;
+      }
+      // Path B — same device: use the cached (non-secret) KDF salt + the server.
       const cached = localStorage.getItem(kdfKey(identity));
       if (!cached) {
         throw new Error(
-          "No saved key parameters on this device. Sign up here, or import your key.",
+          "No saved key on this device. Upload your key backup file below, or create an account.",
         );
       }
       const kdf = JSON.parse(cached) as KdfParams;
       const authKey = deriveAuthKey(password, kdf);
       const res = await account.login(identity, authKey);
       const walletKey = decryptWallet(password, res.vault_ciphertext, res.iv, res.kdf_params);
+      saveBackup({
+        format: "step.keybackup.v1",
+        identity: identity.toLowerCase(),
+        address: res.address,
+        vault_ciphertext: res.vault_ciphertext,
+        iv: res.iv,
+        kdf_params: res.kdf_params,
+      });
       setSignedIn(identity.toLowerCase(), res.address, walletKey);
     } catch (e) {
       setError(e instanceof Error ? e.message : "sign-in failed");
@@ -130,6 +189,32 @@ export function LoginWall() {
             autoComplete={mode === "sign-in" ? "current-password" : "new-password"}
           />
         </FormField>
+
+        {mode === "sign-in" && (
+          <FormField
+            label="Key backup file (optional)"
+            description={
+              backup
+                ? `Loaded backup for ${backup.address.slice(0, 10)}… — enter its password and sign in.`
+                : "New device? Upload the key backup (.json) you downloaded, then enter its password."
+            }
+          >
+            <Group gap="sm">
+              <FileButton onChange={handleBackupFile} accept="application/json,.json">
+                {(props) => (
+                  <Button {...props} variant="light" size="xs">
+                    {backup ? "Choose a different file" : "Upload key backup (.json)"}
+                  </Button>
+                )}
+              </FileButton>
+              {backup && (
+                <Anchor size="xs" onClick={() => setBackup(null)}>
+                  clear
+                </Anchor>
+              )}
+            </Group>
+          </FormField>
+        )}
 
         {mode === "sign-up" && (
           <FormField
