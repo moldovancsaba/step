@@ -21,7 +21,7 @@ already in the repo.
 | Privacy Policy + Terms (GTC) | `docs/legal/STEP_privacy_policy.md` · `docs/legal/STEP_terms_of_service.md` |
 | fastlane lanes (build/beta/release/screenshots) | `fastlane/` |
 
-Identity is locked in: public name **RegioMiner (STEP)**, bundle id
+Identity is locked in: public name **STEP**, bundle id
 **`com.regiominer.miner`**, publisher **Moldovan Csaba Kft**.
 
 ## 1. Remaining placeholders **[you]**
@@ -52,7 +52,7 @@ The metadata URLs already point at these pages.
   needs a D-U-N-S number for the company + Apple verification (can take days).
 - Create the App ID `com.regiominer.miner` with **App Attest** and **NFC Tag
   Reading** capabilities.
-- Register the app in App Store Connect (name "RegioMiner (STEP)").
+- Register the app in App Store Connect (name "STEP").
 - Create signing assets (recommended: `fastlane match` for a shared cert/profile)
   and set `DEVELOPMENT_TEAM` (locally or as a CI secret).
 - For the Release config, flip the App Attest entitlement environment from

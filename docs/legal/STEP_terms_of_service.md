@@ -1,4 +1,4 @@
-# RegioMiner — Terms of Service (General Terms & Conditions)
+# STEP — Terms of Service (General Terms & Conditions)
 
 **Last updated: 2026-06-18**
 
@@ -8,8 +8,8 @@
 > https://regiominer.com/terms.
 
 These Terms of Service ("Terms") are a binding agreement between you and
-Moldovan Csaba Kft ("RegioMiner", "we", "us") governing your use of the
-**RegioMiner** iOS app (the client for the STEP proof-of-presence protocol) and
+Moldovan Csaba Kft ("STEP", "we", "us") governing your use of the
+**STEP** iOS app (the client for the STEP proof-of-presence protocol) and
 the related services (together, the "Service"). By downloading, accessing, or
 using the Service, you agree to these Terms and to the
 [Privacy Policy](STEP_privacy_policy.md). If you do not agree, do not use the
@@ -75,7 +75,7 @@ escrow. Confirm every action carefully — transactions cannot be undone.
 
 ## 7. Intellectual property
 
-The App, branding ("RegioMiner" and "STEP"), and related materials are owned by Moldovan Csaba Kft
+The App, branding ("STEP"), and related materials are owned by Moldovan Csaba Kft
 or its licensors. We grant you a limited, revocable, non-exclusive,
 non-transferable licence to use the App for its intended purpose. Open-source
 components are governed by their own licences.

@@ -1,4 +1,4 @@
-# RegioMiner — Privacy Policy
+# STEP — Privacy Policy
 
 **Last updated: 2026-06-18**
 
@@ -7,8 +7,8 @@
 > GDPR, CCPA/CPRA, and Apple App Store requirements. It is hosted at
 > https://regiominer.com/privacy and that URL is entered in App Store Connect.
 
-This Privacy Policy explains how Moldovan Csaba Kft ("RegioMiner", "we", "us")
-handles information in connection with the **RegioMiner** iOS application (the
+This Privacy Policy explains how Moldovan Csaba Kft ("STEP", "we", "us")
+handles information in connection with the **STEP** iOS application (the
 "App"), which is the client for the STEP proof-of-presence protocol and services
 (together, the "Service").
 

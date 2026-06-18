@@ -1,6 +1,6 @@
 # regiominer.com site
 
-Static public site for **RegioMiner** — landing page plus the **Privacy Policy**
+Static public site for **STEP** — landing page plus the **Privacy Policy**
 and **Terms of Service** that the App Store requires at public URLs:
 
 - https://regiominer.com/ — landing

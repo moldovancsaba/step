@@ -93,7 +93,7 @@ function page(title, bodyHtml, { hero = false } = {}) {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(title)}</title><style>${CSS}</style></head>
-<body><header class="site"><span class="logo"></span><a href="/">RegioMiner</a>
+<body><header class="site"><span class="logo"></span><a href="/">STEP</a>
 <nav><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/support">Support</a></nav></header>
 <main class="wrap${hero ? " hero" : ""}">${bodyHtml}</main>
 <footer><div class="wrap" style="padding:0">© 2026 Moldovan Csaba Kft · 1125 Budapest, Diós árok 49/a, Hungary ·
@@ -103,23 +103,23 @@ Company reg. 01-09-388294 · Tax HU27395842 · <a href="mailto:hello@regiominer.
 
 const read = (p) => readFileSync(resolve(repo, p), "utf8");
 
-writeFileSync(resolve(dist, "privacy.html"), page("Privacy Policy — RegioMiner", mdToHtml(read("docs/legal/STEP_privacy_policy.md"))));
-writeFileSync(resolve(dist, "terms.html"), page("Terms of Service — RegioMiner", mdToHtml(read("docs/legal/STEP_terms_of_service.md"))));
+writeFileSync(resolve(dist, "privacy.html"), page("Privacy Policy — STEP", mdToHtml(read("docs/legal/STEP_privacy_policy.md"))));
+writeFileSync(resolve(dist, "terms.html"), page("Terms of Service — STEP", mdToHtml(read("docs/legal/STEP_terms_of_service.md"))));
 
-const landing = `<h1>RegioMiner</h1>
+const landing = `<h1>STEP</h1>
 <p>Proof of presence, on the map. Stand somewhere real, prove it, and mine it. Powered by the STEP protocol.</p>
 <p><strong>Trinity is a testnet token with no monetary value.</strong></p>
 <a class="btn" href="/privacy">Privacy Policy</a> <a class="btn" href="/terms" style="background:#0C6E33">Terms</a>`;
-writeFileSync(resolve(dist, "index.html"), page("RegioMiner — Proof of Presence", landing, { hero: true }));
+writeFileSync(resolve(dist, "index.html"), page("STEP — Proof of Presence", landing, { hero: true }));
 
 const support = `<h1>Support</h1>
-<p>Need help with RegioMiner? We're glad to assist.</p>
+<p>Need help with STEP? We're glad to assist.</p>
 <ul>
 <li><strong>Email:</strong> <a href="mailto:hello@regiominer.com">hello@regiominer.com</a></li>
 <li><strong>Privacy questions:</strong> <a href="mailto:privacy@regiominer.com">privacy@regiominer.com</a></li>
 </ul>
-<p>RegioMiner is a testnet / pilot. Trinity has no monetary value and cannot be bought with money.
+<p>STEP is a testnet / pilot. Trinity has no monetary value and cannot be bought with money.
 Your location is processed on your device only — see our <a href="/privacy">Privacy Policy</a>.</p>`;
-writeFileSync(resolve(dist, "support.html"), page("Support — RegioMiner", support));
+writeFileSync(resolve(dist, "support.html"), page("Support — STEP", support));
 
 console.log("regiominer-site: wrote dist/{index,privacy,terms,support}.html");
