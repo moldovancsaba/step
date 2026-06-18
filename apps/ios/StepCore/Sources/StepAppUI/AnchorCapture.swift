@@ -15,7 +15,7 @@ import SwiftUI
 import os
 import StepCore
 
-private let anchorLog = Logger(subsystem: "app.step.miner", category: "anchor")
+private let anchorLog = Logger(subsystem: "com.regiominer.miner", category: "anchor")
 
 /// Capture state machine shared by all transports.
 @MainActor public final class AnchorCaptureModel: ObservableObject {

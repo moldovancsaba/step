@@ -21,26 +21,38 @@ already in the repo.
 | Privacy Policy + Terms (GTC) | `docs/legal/STEP_privacy_policy.md` · `docs/legal/STEP_terms_of_service.md` |
 | fastlane lanes (build/beta/release/screenshots) | `fastlane/` |
 
-## 1. Fill in the placeholders **[you]**
+Identity is locked in: public name **RegioMiner (STEP)**, bundle id
+**`com.regiominer.miner`**, publisher **Moldovan Csaba Kft**.
 
-- Legal docs: replace `[LEGAL ENTITY]`, `[JURISDICTION]`, `[VENUE]`, addresses,
-  liability cap, and contact emails in `docs/legal/*`. **Get them reviewed by
-  counsel.**
-- `fastlane/metadata/copyright.txt` and `review_information/phone_number.txt`.
-- Decide the App Store **category** (currently Navigation / Lifestyle).
+## 1. Remaining placeholders **[you]**
 
-## 2. Host the legal pages **[you]**
+- Company details, governing law, and contacts are filled into `docs/legal/*`
+  and the metadata — **still get the legal docs reviewed by counsel.**
+- `fastlane/metadata/review_information/phone_number.txt` (Apple review contact).
+- Confirm the App Store **category** (currently Navigation / Lifestyle).
+- Optional: stand up the `hello@`/`privacy@`/`legal@regiominer.com` mailboxes the
+  docs reference (they fall back to moldovancsaba@gmail.com until then).
 
-The Privacy Policy URL is required by App Store Connect and must be public.
-Publish `STEP_privacy_policy.md` (and Terms) as HTML — e.g. add `/privacy` and
-`/terms` routes to the existing `step.moldovancsaba.workers.dev` site or GitHub
-Pages — and make sure `fastlane/metadata/en-US/privacy_url.txt` points to it.
+## 2. Host the legal pages
+
+The site is built — `apps/regiominer-site/` renders the canonical legal markdown
+to https://regiominer.com/{privacy,terms,support}. Deploy it:
+
+```sh
+cd apps/regiominer-site
+CLOUDFLARE_API_TOKEN=*** npx wrangler deploy
+curl -I https://regiominer.com/privacy   # expect 200
+```
+
+The metadata URLs already point at these pages.
 
 ## 3. Apple Developer setup **[you]**
 
-- Enrol in the Apple Developer Program; create the App ID `app.step.miner` with
-  **App Attest** and **NFC Tag Reading** capabilities.
-- Register the app in App Store Connect (name "STEP — Proof of Presence").
+- Enrol in the Apple Developer Program as **Organization (Moldovan Csaba Kft)** —
+  needs a D-U-N-S number for the company + Apple verification (can take days).
+- Create the App ID `com.regiominer.miner` with **App Attest** and **NFC Tag
+  Reading** capabilities.
+- Register the app in App Store Connect (name "RegioMiner (STEP)").
 - Create signing assets (recommended: `fastlane match` for a shared cert/profile)
   and set `DEVELOPMENT_TEAM` (locally or as a CI secret).
 - For the Release config, flip the App Attest entitlement environment from

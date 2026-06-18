@@ -10,7 +10,7 @@ import MetricKit
 
 final class MetricsObserver: NSObject, MXMetricManagerSubscriber {
     static let shared = MetricsObserver()
-    private let log = Logger(subsystem: "app.step.miner", category: "metrics")
+    private let log = Logger(subsystem: "com.regiominer.miner", category: "metrics")
 
     func start() { MXMetricManager.shared.add(self) }
 

@@ -1,0 +1,11 @@
+{
+  "name": "@step/regiominer-site",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Static regiominer.com site — landing + Privacy Policy + Terms (App Store required URLs)",
+  "scripts": {
+    "build": "node build.mjs",
+    "deploy": "node build.mjs && wrangler deploy"
+  }
+}

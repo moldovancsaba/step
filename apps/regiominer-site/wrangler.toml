@@ -1,0 +1,27 @@
+# Cloudflare Workers static site for regiominer.com (#33 publishing).
+# Serves the built dist/ (index, privacy, terms, support) with clean URLs
+# (/privacy → privacy.html). Deploy:
+#
+#   CLOUDFLARE_API_TOKEN=*** npx wrangler deploy   # from this directory
+#
+# The custom-domain routes require regiominer.com to be an active zone on this
+# Cloudflare account (it is — the user added it). wrangler provisions the
+# hostname records for a Workers custom domain automatically.
+name = "regiominer"
+account_id = "66ce3adbb96f6715f8cc2b04991c30e4"
+compatibility_date = "2026-06-15"
+
+# Build dist/ before deploy (no dependencies — plain Node).
+[build]
+command = "node build.mjs"
+
+[assets]
+directory = "./dist"
+html_handling = "auto-trailing-slash"   # /privacy serves privacy.html
+not_found_handling = "404-page"
+
+# Serve at the apex and www. Requires the zone on this account.
+routes = [
+  { pattern = "regiominer.com", custom_domain = true },
+  { pattern = "www.regiominer.com", custom_domain = true },
+]

@@ -8,7 +8,7 @@ import SwiftUI
 import os
 import StepCore
 
-private let marketLog = Logger(subsystem: "app.step.miner", category: "market")
+private let marketLog = Logger(subsystem: "com.regiominer.miner", category: "market")
 
 struct MarketplaceView: View {
     @ObservedObject var model: AppModel

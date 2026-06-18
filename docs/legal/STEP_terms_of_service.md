@@ -1,17 +1,18 @@
-# STEP — Terms of Service (General Terms & Conditions)
+# RegioMiner — Terms of Service (General Terms & Conditions)
 
 **Last updated: 2026-06-18**
 
-> ⚖️ **Legal review required before publication.** This template describes the
-> STEP App as built, but the bracketed placeholders and the choice of governing
-> law, arbitration, and consumer-protection terms must be completed and reviewed
-> by qualified counsel before you rely on it. Host it at a public URL.
+> ⚖️ **Counsel review recommended before reliance.** Company details and
+> governing law are filled in, but you should still have a lawyer review the
+> liability, consumer-protection, and dispute terms for your market. Hosted at
+> https://regiominer.com/terms.
 
 These Terms of Service ("Terms") are a binding agreement between you and
-`[LEGAL ENTITY]` ("STEP", "we", "us") governing your use of the STEP iOS app and
-the STEP proof-of-presence protocol and services (together, the "Service"). By
-downloading, accessing, or using the Service, you agree to these Terms and to
-the [Privacy Policy](STEP_privacy_policy.md). If you do not agree, do not use the
+Moldovan Csaba Kft ("RegioMiner", "we", "us") governing your use of the
+**RegioMiner** iOS app (the client for the STEP proof-of-presence protocol) and
+the related services (together, the "Service"). By downloading, accessing, or
+using the Service, you agree to these Terms and to the
+[Privacy Policy](STEP_privacy_policy.md). If you do not agree, do not use the
 Service.
 
 ## 1. Eligibility
@@ -74,7 +75,7 @@ escrow. Confirm every action carefully — transactions cannot be undone.
 
 ## 7. Intellectual property
 
-The App, branding ("STEP"), and related materials are owned by `[LEGAL ENTITY]`
+The App, branding ("RegioMiner" and "STEP"), and related materials are owned by Moldovan Csaba Kft
 or its licensors. We grant you a limited, revocable, non-exclusive,
 non-transferable licence to use the App for its intended purpose. Open-source
 components are governed by their own licences.
@@ -95,17 +96,17 @@ any value or utility.
 
 ## 10. Limitation of liability
 
-TO THE MAXIMUM EXTENT PERMITTED BY LAW, `[LEGAL ENTITY]` AND ITS AFFILIATES WILL
+TO THE MAXIMUM EXTENT PERMITTED BY LAW, Moldovan Csaba Kft AND ITS AFFILIATES WILL
 NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE
 DAMAGES, OR FOR LOST PROFITS, DATA, KEYS, TOKENS, OR NFTS. OUR TOTAL LIABILITY
-FOR ANY CLAIM RELATING TO THE SERVICE WILL NOT EXCEED `[CAP, e.g. USD 100]` OR
+FOR ANY CLAIM RELATING TO THE SERVICE WILL NOT EXCEED EUR 100 OR
 THE AMOUNT YOU PAID US (IF ANY) IN THE 12 MONTHS BEFORE THE CLAIM, WHICHEVER IS
 GREATER. Some jurisdictions do not allow certain limitations, so some of the
 above may not apply to you.
 
 ## 11. Indemnity
 
-You agree to indemnify and hold harmless `[LEGAL ENTITY]` from claims arising out
+You agree to indemnify and hold harmless Moldovan Csaba Kft from claims arising out
 of your misuse of the Service or violation of these Terms or applicable law.
 
 ## 12. Suspension and termination
@@ -122,13 +123,14 @@ changes means you accept them.
 
 ## 14. Governing law and disputes
 
-These Terms are governed by the laws of `[JURISDICTION]`, without regard to
-conflict-of-laws rules. Disputes will be resolved in the courts of
-`[VENUE]` / by `[ARBITRATION, if any]`, subject to any mandatory consumer
-protections in your country of residence.
+These Terms are governed by the laws of Hungary, without regard to
+conflict-of-laws rules. Disputes will be resolved by the competent courts of
+Budapest, Hungary, subject to any mandatory consumer protections in your country
+of residence.
 
 ## 15. Contact
 
-`[LEGAL ENTITY]`
-`[REGISTERED ADDRESS]`
-Email: `[LEGAL CONTACT EMAIL]` (interim: moldovancsaba@gmail.com)
+**Moldovan Csaba Kft**
+1125 Budapest, Diós árok 49/a, Hungary
+Company registration No.: 01-09-388294 · Tax No.: HU27395842
+Email: legal@regiominer.com (interim: moldovancsaba@gmail.com)

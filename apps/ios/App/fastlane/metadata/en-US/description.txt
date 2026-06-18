@@ -1,6 +1,6 @@
-STEP turns the physical world into a map you earn by showing up.
+RegioMiner turns the physical world into a map you earn by showing up.
 
-The planet is divided into a fixed grid of triangles (the MESH). Stand inside one, and STEP builds a cryptographically signed “proof of presence” — without ever sending your exact location off your device. Only the triangle’s id and a proof hash are submitted; independent validators check it and smart contracts finalise it. Be there first, and you mine the triangle, earning Trinity and a collectible slot NFT.
+The planet is divided into a fixed grid of triangles (the STEP MESH). Stand inside one, and RegioMiner builds a cryptographically signed “proof of presence” — without ever sending your exact location off your device. Only the triangle’s id and a proof hash are submitted; independent validators check it and smart contracts finalise it. Be there first, and you mine the triangle, earning Trinity and a collectible slot NFT.
 
 WHAT YOU CAN DO
 • Mine the triangle you’re standing in — one tap, real presence required.
@@ -15,9 +15,9 @@ PRIVATE BY DESIGN
 • No ads, no third-party trackers, no background location.
 
 GENUINE-DEVICE PROOF
-STEP uses Apple App Attest to confirm the app runs on real hardware, helping keep mining fair against spoofing and bots.
+RegioMiner uses Apple App Attest to confirm the app runs on real hardware, helping keep mining fair against spoofing and bots.
 
 IMPORTANT
-STEP is a testnet / pilot. Trinity is the protocol’s internal unit — it has NO monetary value, cannot be bought with money, and is not an investment. Blockchain records are public and permanent.
+RegioMiner is a testnet / pilot. Trinity is the protocol’s internal unit — it has NO monetary value, cannot be bought with money, and is not an investment. Blockchain records are public and permanent.
 
 You must be 17+ and physically present to mine. Be honest, be there, and claim your corner of the map.

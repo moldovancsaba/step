@@ -1,17 +1,16 @@
-# STEP — Privacy Policy
+# RegioMiner — Privacy Policy
 
 **Last updated: 2026-06-18**
 
-> ⚖️ **Legal review required before publication.** This document is drafted to
-> accurately describe how the STEP iOS app behaves, but the bracketed
-> placeholders (`[LEGAL ENTITY]`, `[JURISDICTION]`, addresses) must be completed
-> and the whole policy reviewed by qualified counsel for your jurisdiction
-> (GDPR, CCPA/CPRA, Apple App Store requirements) before you rely on it. It must
-> be hosted at a public URL and that URL entered in App Store Connect.
+> ⚖️ **Counsel review recommended before reliance.** Company details are filled
+> in, but you should still have this policy reviewed by qualified counsel for
+> GDPR, CCPA/CPRA, and Apple App Store requirements. It is hosted at
+> https://regiominer.com/privacy and that URL is entered in App Store Connect.
 
-This Privacy Policy explains how `[LEGAL ENTITY]` ("STEP", "we", "us") handles
-information in connection with the STEP iOS application (the "App") and the STEP
-proof-of-presence protocol and services (together, the "Service").
+This Privacy Policy explains how Moldovan Csaba Kft ("RegioMiner", "we", "us")
+handles information in connection with the **RegioMiner** iOS application (the
+"App"), which is the client for the STEP proof-of-presence protocol and services
+(together, the "Service").
 
 STEP is **private by design**. We minimise what we collect, we do **not** sell
 personal data, and we do **not** track you across other apps or websites.
@@ -109,7 +108,7 @@ remove the key.
 
 Depending on where you live, you may have rights to access, correct, delete, or
 port your personal data, and to object to or restrict processing. To exercise
-them, contact us at `[PRIVACY CONTACT EMAIL]`. Note that we **cannot alter or
+them, contact us at `privacy@regiominer.com`. Note that we **cannot alter or
 erase blockchain records**, which are outside our control by design; we will
 help you understand what is and is not on-chain. You may also withdraw device
 permissions at any time in iOS Settings.
@@ -140,6 +139,7 @@ updated" date and, where appropriate, notify you in the App.
 
 ## 12. Contact
 
-`[LEGAL ENTITY]`
-`[REGISTERED ADDRESS]`
-Email: `[PRIVACY CONTACT EMAIL]` (interim: moldovancsaba@gmail.com)
+**Moldovan Csaba Kft**
+1125 Budapest, Diós árok 49/a, Hungary
+Company registration No.: 01-09-388294 · Tax No.: HU27395842
+Email: privacy@regiominer.com (interim: moldovancsaba@gmail.com)
