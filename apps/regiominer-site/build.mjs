@@ -103,15 +103,8 @@ Company reg. 01-09-388294 · Tax HU27395842 · <a href="mailto:hello@regiominer.
 
 const read = (p) => readFileSync(resolve(repo, p), "utf8");
 
-writeFileSync(resolve(dist, "privacy.html"), page("Privacy Policy — STEP", mdToHtml(read("docs/legal/STEP_privacy_policy.md"))));
-writeFileSync(resolve(dist, "terms.html"), page("Terms of Service — STEP", mdToHtml(read("docs/legal/STEP_terms_of_service.md"))));
-
-const landing = `<h1>STEP</h1>
-<p>Proof of presence, on the map. Stand somewhere real, prove it, and mine it. Powered by the STEP protocol.</p>
-<p><strong>Trinity is a testnet token with no monetary value.</strong></p>
-<a class="btn" href="/privacy">Privacy Policy</a> <a class="btn" href="/terms" style="background:#0C6E33">Terms</a>`;
-writeFileSync(resolve(dist, "index.html"), page("STEP — Proof of Presence", landing, { hero: true }));
-
+const privacyHtml = page("Privacy Policy — STEP", mdToHtml(read("docs/legal/STEP_privacy_policy.md")));
+const termsHtml = page("Terms of Service — STEP", mdToHtml(read("docs/legal/STEP_terms_of_service.md")));
 const support = `<h1>Support</h1>
 <p>Need help with STEP? We're glad to assist.</p>
 <ul>
@@ -120,6 +113,24 @@ const support = `<h1>Support</h1>
 </ul>
 <p>STEP is a testnet / pilot. Trinity has no monetary value and cannot be bought with money.
 Your location is processed on your device only — see our <a href="/privacy">Privacy Policy</a>.</p>`;
-writeFileSync(resolve(dist, "support.html"), page("Support — STEP", support));
+const supportHtml = page("Support — STEP", support);
+const landing = `<h1>STEP</h1>
+<p>Proof of presence, on the map. Stand somewhere real, prove it, and mine it. Powered by the STEP protocol.</p>
+<p><strong>Trinity is a testnet token with no monetary value.</strong></p>
+<a class="btn" href="/privacy">Privacy Policy</a> <a class="btn" href="/terms" style="background:#0C6E33">Terms</a>`;
 
-console.log("regiominer-site: wrote dist/{index,privacy,terms,support}.html");
+writeFileSync(resolve(dist, "privacy.html"), privacyHtml);
+writeFileSync(resolve(dist, "terms.html"), termsHtml);
+writeFileSync(resolve(dist, "support.html"), supportHtml);
+writeFileSync(resolve(dist, "index.html"), page("STEP — Proof of Presence", landing, { hero: true }));
+
+// Also emit the legal pages into the web app's static assets so they're served
+// from the product's own domain (step.regiominer.com/privacy etc.). The web app
+// has its own index.html, so we do NOT write a landing page there.
+const webPublic = resolve(repo, "apps/web-app/public");
+mkdirSync(webPublic, { recursive: true });
+writeFileSync(resolve(webPublic, "privacy.html"), privacyHtml);
+writeFileSync(resolve(webPublic, "terms.html"), termsHtml);
+writeFileSync(resolve(webPublic, "support.html"), supportHtml);
+
+console.log("wrote dist/{index,privacy,terms,support}.html + web-app/public/{privacy,terms,support}.html");

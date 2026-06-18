@@ -5,7 +5,7 @@
 > ⚖️ **Counsel review recommended before reliance.** Company details are filled
 > in, but you should still have this policy reviewed by qualified counsel for
 > GDPR, CCPA/CPRA, and Apple App Store requirements. It is hosted at
-> https://regiominer.com/privacy and that URL is entered in App Store Connect.
+> https://step.regiominer.com/privacy and that URL is entered in App Store Connect.
 
 This Privacy Policy explains how Moldovan Csaba Kft ("STEP", "we", "us")
 handles information in connection with the **STEP** iOS application (the

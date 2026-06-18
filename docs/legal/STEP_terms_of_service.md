@@ -5,7 +5,7 @@
 > ⚖️ **Counsel review recommended before reliance.** Company details and
 > governing law are filled in, but you should still have a lawyer review the
 > liability, consumer-protection, and dispute terms for your market. Hosted at
-> https://regiominer.com/terms.
+> https://step.regiominer.com/terms.
 
 These Terms of Service ("Terms") are a binding agreement between you and
 Moldovan Csaba Kft ("STEP", "we", "us") governing your use of the
