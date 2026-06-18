@@ -15,6 +15,7 @@ import { useSession } from "./session.js";
 import { LoginWall } from "./LoginWall.js";
 import { MapView } from "./MapView.js";
 import { WalletView } from "./WalletView.js";
+import { Footer } from "./Footer.js";
 
 type Tab = "map" | "wallet" | "mine" | "market";
 
@@ -29,7 +30,13 @@ export function App() {
   const { session, logout } = useSession();
   const [tab, setTab] = useState<Tab>("map");
 
-  if (!session) return <LoginWall />;
+  if (!session)
+    return (
+      <>
+        <LoginWall />
+        <Footer />
+      </>
+    );
 
   const nav = (
     <Stack gap={4}>
@@ -75,6 +82,7 @@ export function App() {
           description="Browsing, buying, gifting and listing triangle NFTs is issue #11."
         />
       )}
+      <Footer />
     </AppShell>
   );
 }

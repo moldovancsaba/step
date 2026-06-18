@@ -114,17 +114,35 @@ const support = `<h1>Support</h1>
 <p>STEP is a testnet / pilot. Trinity has no monetary value and cannot be bought with money.
 Your location is processed on your device only — see our <a href="/privacy">Privacy Policy</a>.</p>`;
 const supportHtml = page("Support — STEP", support);
+const about = `<h1>About STEP</h1>
+<p>STEP is a <strong>proof-of-presence protocol</strong> and app: the world is divided into a fixed grid of map triangles, and you earn by being physically present and cryptographically proving it — without your exact location ever leaving your device.</p>
+<h2>Who builds STEP</h2>
+<p>STEP is developed and operated by <strong>Moldovan Csaba Kft</strong>, a company registered in Hungary, founded and led by <strong>Csaba Moldovan</strong> (developer and owner).</p>
+<ul>
+<li><strong>Company:</strong> Moldovan Csaba Kft</li>
+<li><strong>Registered office:</strong> 1125 Budapest, Diós árok 49/a, Hungary</li>
+<li><strong>Company registration No.:</strong> 01-09-388294</li>
+<li><strong>EU VAT / Tax No.:</strong> HU27395842</li>
+<li><strong>Developer &amp; owner:</strong> Csaba Moldovan</li>
+<li><strong>Contact:</strong> <a href="mailto:hello@regiominer.com">hello@regiominer.com</a></li>
+</ul>
+<h2>How we operate</h2>
+<p><strong>Private by design.</strong> Your precise location is processed only on your device to find the current map triangle; only a triangle id and a proof hash are submitted. Your wallet is non-custodial and encrypted on your device.</p>
+<p><strong>Honest about stage.</strong> STEP is a testnet / pilot. The in-app unit, Trinity, has <strong>no monetary value</strong> and cannot be bought with money.</p>
+<p>Read our <a href="/privacy">Privacy Policy</a> and <a href="/terms">Terms of Service</a>, or get <a href="/support">Support</a>.</p>`;
+const aboutHtml = page("About — STEP · Moldovan Csaba Kft", about);
 const landing = `<h1>STEP</h1>
 <p>Proof of presence, on the map. Stand somewhere real, prove it, and mine it. Powered by the STEP protocol.</p>
 <p><strong>Trinity is a testnet token with no monetary value.</strong></p>
-<a class="btn" href="/privacy">Privacy Policy</a> <a class="btn" href="/terms" style="background:#0C6E33">Terms</a>`;
+<a class="btn" href="/about">About</a> <a class="btn" href="/privacy" style="background:#0C6E33">Privacy</a> <a class="btn" href="/terms" style="background:#0C6E33">Terms</a>`;
 
 writeFileSync(resolve(dist, "privacy.html"), privacyHtml);
 writeFileSync(resolve(dist, "terms.html"), termsHtml);
 writeFileSync(resolve(dist, "support.html"), supportHtml);
+writeFileSync(resolve(dist, "about.html"), aboutHtml);
 writeFileSync(resolve(dist, "index.html"), page("STEP — Proof of Presence", landing, { hero: true }));
 
-// Also emit the legal pages into the web app's static assets so they're served
+// Also emit the content pages into the web app's static assets so they're served
 // from the product's own domain (step.regiominer.com/privacy etc.). The web app
 // has its own index.html, so we do NOT write a landing page there.
 const webPublic = resolve(repo, "apps/web-app/public");
@@ -132,5 +150,6 @@ mkdirSync(webPublic, { recursive: true });
 writeFileSync(resolve(webPublic, "privacy.html"), privacyHtml);
 writeFileSync(resolve(webPublic, "terms.html"), termsHtml);
 writeFileSync(resolve(webPublic, "support.html"), supportHtml);
+writeFileSync(resolve(webPublic, "about.html"), aboutHtml);
 
-console.log("wrote dist/{index,privacy,terms,support}.html + web-app/public/{privacy,terms,support}.html");
+console.log("wrote dist/ + web-app/public/ {privacy,terms,support,about}.html");
