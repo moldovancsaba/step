@@ -12,6 +12,7 @@
  * secret (authKey / ciphertext / token) is ever logged.
  */
 import { Hono, type Context } from "hono";
+import { cors } from "hono/cors";
 import { setCookie, getCookie, deleteCookie } from "hono/cookie";
 import {
   hashAuthKey,
@@ -29,6 +30,12 @@ export interface AccountDeps {
   /** Secure cookie flag — false only for local http dev. */
   secureCookies: boolean;
   nowUnix: () => number;
+  /** Allowed browser origin for CORS (with credentials). Omit to disable CORS
+   *  (same-origin / native clients). e.g. "https://step.regiominer.com". */
+  corsOrigin?: string;
+  /** Session cookie SameSite. Default "Strict" (same-origin). Use "None" when
+   *  the browser app is on a different site than the API (cross-site cookies). */
+  cookieSameSite?: "Strict" | "Lax" | "None";
 }
 
 const COOKIE = "step_session";
@@ -62,6 +69,20 @@ function isB64(s: unknown): s is string {
 
 export function createApp(deps: AccountDeps): { app: Hono } {
   const app = new Hono();
+
+  // Cross-origin browser access (with cookies) when the web app is on a
+  // different origin than the API. Specific origin (never "*") + credentials.
+  if (deps.corsOrigin) {
+    app.use(
+      "*",
+      cors({
+        origin: deps.corsOrigin,
+        credentials: true,
+        allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        allowHeaders: ["content-type"],
+      }),
+    );
+  }
 
   app.get("/healthz", (c) => c.text("ok"));
 
@@ -129,7 +150,7 @@ export function createApp(deps: AccountDeps): { app: Hono } {
     setCookie(c, COOKIE, signSession(claims, deps.sessionSecret), {
       httpOnly: true,
       secure: deps.secureCookies,
-      sameSite: "Strict",
+      sameSite: deps.cookieSameSite ?? "Strict",
       path: "/",
       maxAge: deps.sessionTtlSeconds,
     });

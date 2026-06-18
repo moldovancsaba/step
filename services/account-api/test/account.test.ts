@@ -188,7 +188,7 @@ describe("account api", () => {
     expect(serialized).not.toContain(password);
     expect(serialized).not.toContain(reg.body.authKey);
     expect(serialized).not.toContain(Buffer.from(walletKey).toString("hex"));
-    expect(row!.auth_hash.startsWith("argon2id$")).toBe(true);
+    expect(row!.auth_hash.startsWith("hmac-sha256$")).toBe(true);
     expect(row!.address).toBe(address);
   });
 

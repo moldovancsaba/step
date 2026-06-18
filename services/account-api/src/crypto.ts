@@ -2,18 +2,19 @@
  * Server-side crypto for the account service. Two independent primitives:
  *
  *  - Auth verifier: the client already runs a memory-hard Argon2id KDF over the
- *    password to derive `authKey` (high-entropy, the password never leaves the
- *    browser). The server stores Argon2id(authKey + per-row salt) as a verifier
- *    so a DB leak does not reveal authKey. Defense-in-depth, not the primary
- *    KDF (that is client-side).
+ *    password to derive `authKey` — a high-entropy 256-bit secret; the password
+ *    never leaves the browser. The server stores a salted HMAC-SHA256 of authKey
+ *    as a verifier, so a DB leak does not reveal authKey (which, being
+ *    high-entropy, is not brute-forceable). A fast keyed hash is sufficient here
+ *    *because* the memory-hard cost is already paid client-side — and it keeps
+ *    the verifier within edge/serverless CPU budgets (no per-request Argon2).
  *  - Session token: a compact HMAC-SHA256-signed token (`payloadB64.sigB64`),
- *    carried in an HTTP-only, Secure, SameSite=strict cookie. Stateless; short
- *    TTL; tamper- and expiry-checked on every request.
+ *    carried in an HTTP-only, Secure cookie. Stateless; short TTL; tamper- and
+ *    expiry-checked on every request.
  *
- * No external/native dependencies: Argon2id comes from the audited pure-JS
- * @noble/hashes; HMAC + random come from Node's crypto.
+ * No external/native dependencies: HMAC + random come from Node's crypto
+ * (available on Cloudflare Workers via nodejs_compat).
  */
-import { argon2id } from "@noble/hashes/argon2";
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
 const utf8 = (s: string) => new TextEncoder().encode(s);
@@ -26,25 +27,24 @@ const b64url = (b: Uint8Array | string) =>
     .replace(/=+$/, "");
 const fromB64url = (s: string) => Buffer.from(s.replace(/-/g, "+").replace(/_/g, "/"), "base64");
 
-// Server-side verifier params: modest (authKey is already high-entropy from the
-// client KDF). Tuned to ~tens of ms; the heavy memory-hard cost is client-side.
-const VERIFY_PARAMS = { m: 19_456, t: 2, p: 1, dkLen: 32 } as const;
+/** Salted HMAC-SHA256 of authKey (the per-row salt is the HMAC key). */
+function macAuthKey(authKey: string, salt: Buffer): Buffer {
+  return createHmac("sha256", salt).update(utf8(authKey)).digest();
+}
 
-/** Produce a salted Argon2id verifier string `argon2id$<saltB64>$<hashB64>`. */
+/** Produce a salted verifier string `hmac-sha256$<saltB64>$<macB64>`. */
 export function hashAuthKey(authKey: string): string {
   const salt = randomBytes(16);
-  const hash = argon2id(utf8(authKey), salt, VERIFY_PARAMS);
-  return `argon2id$${b64(salt)}$${b64(hash)}`;
+  return `hmac-sha256$${b64(salt)}$${b64(macAuthKey(authKey, salt))}`;
 }
 
 /** Constant-time verify of an authKey against a stored verifier. */
 export function verifyAuthKey(authKey: string, stored: string): boolean {
   const parts = stored.split("$");
-  const [scheme, saltB64, hashB64] = parts;
-  if (parts.length !== 3 || scheme !== "argon2id" || !saltB64 || !hashB64) return false;
-  const salt = Buffer.from(saltB64, "base64");
-  const expected = Buffer.from(hashB64, "base64");
-  const actual = Buffer.from(argon2id(utf8(authKey), salt, VERIFY_PARAMS));
+  const [scheme, saltB64, macB64] = parts;
+  if (parts.length !== 3 || scheme !== "hmac-sha256" || !saltB64 || !macB64) return false;
+  const expected = Buffer.from(macB64, "base64");
+  const actual = macAuthKey(authKey, Buffer.from(saltB64, "base64"));
   return expected.length === actual.length && timingSafeEqual(expected, actual);
 }
 

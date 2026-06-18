@@ -1,0 +1,22 @@
+# Cloudflare Worker deploy of the account-api (zero-knowledge wallet vault, #12).
+# Hono app (src/app.ts) + KV store (src/kv-store.ts) via src/worker.ts. Lets the
+# browser web app register/login against a real backend.
+#
+#   cd services/account-api
+#   set -a; . ../../.env.cloudflare; set +a
+#   echo "<32-byte-hex>" | npx wrangler secret put SESSION_SIGNING_KEY
+#   npx wrangler deploy
+name = "step-account"
+main = "src/worker.ts"
+account_id = "66ce3adbb96f6715f8cc2b04991c30e4"
+compatibility_date = "2026-06-15"
+compatibility_flags = ["nodejs_compat"]   # node:crypto (HMAC, randomBytes, timingSafeEqual)
+workers_dev = true
+
+[[kv_namespaces]]
+binding = "STEP_ACCOUNTS"
+id = "c3c8181457074235ac40c959fe9445e2"
+
+[vars]
+CORS_ORIGIN = "https://step.regiominer.com"
+SESSION_TTL_SECONDS = "86400"
