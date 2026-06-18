@@ -5,11 +5,26 @@
 #   CLOUDFLARE_API_TOKEN=*** npx wrangler deploy   # from this directory
 #
 # The custom-domain routes require regiominer.com to be an active zone on this
-# Cloudflare account (it is — the user added it). wrangler provisions the
-# hostname records for a Workers custom domain automatically.
+# Cloudflare account (it is). wrangler provisions the hostname records for a
+# Workers custom domain automatically.
+#
+# NOTE: top-level keys (incl. `routes`) MUST appear before any [table] header,
+# or TOML nests them under the preceding table (e.g. assets.routes) and they're
+# silently ignored.
 name = "regiominer"
 account_id = "66ce3adbb96f6715f8cc2b04991c30e4"
 compatibility_date = "2026-06-15"
+
+# Keep the workers.dev URL as a guaranteed fallback.
+workers_dev = true
+
+# Attach to the existing regiominer.com hostname via a Workers Route (not a
+# custom domain) — this binds to the zone's existing proxied DNS record and
+# needs only Workers Routes:Edit, NOT Zone DNS:Edit (which this token lacks).
+routes = [
+  { pattern = "regiominer.com/*", zone_name = "regiominer.com" },
+  { pattern = "www.regiominer.com/*", zone_name = "regiominer.com" },
+]
 
 # Build dist/ before deploy (no dependencies — plain Node).
 [build]
@@ -19,9 +34,3 @@ command = "node build.mjs"
 directory = "./dist"
 html_handling = "auto-trailing-slash"   # /privacy serves privacy.html
 not_found_handling = "404-page"
-
-# Serve at the apex and www. Requires the zone on this account.
-routes = [
-  { pattern = "regiominer.com", custom_domain = true },
-  { pattern = "www.regiominer.com", custom_domain = true },
-]
