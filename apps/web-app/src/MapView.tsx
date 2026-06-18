@@ -5,9 +5,9 @@
  * Truncated viewports surface the engine's coarser suggested level.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { MapPanel, MetricCard } from "@doneisbetter/gds";
+import { MapPanel, MetricCard, EmptyState } from "@doneisbetter/gds";
 import { Button, Group, NumberInput, Stack, Text } from "@mantine/core";
-import { mesh, type CoverTriangle, type MeshState } from "./api.js";
+import { mesh, meshConfigured, type CoverTriangle, type MeshState } from "./api.js";
 
 interface ViewState {
   centerLat: number;
@@ -50,6 +50,7 @@ export function MapView() {
   );
 
   const load = useCallback(async () => {
+    if (!meshConfigured) return; // backend not deployed — show the notice below
     setLoading(true);
     setError(null);
     setTruncatedTo(null);
@@ -122,6 +123,14 @@ export function MapView() {
     ),
     [triangles, states, project],
   );
+
+  if (!meshConfigured)
+    return (
+      <EmptyState
+        title="Live map is coming online"
+        description="The oasis/desert map reads from the STEP mesh + indexer services. They're being deployed — the map will populate here as soon as they're live."
+      />
+    );
 
   return (
     <Stack gap="md">

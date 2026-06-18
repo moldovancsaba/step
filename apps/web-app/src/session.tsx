@@ -12,7 +12,14 @@
  *
  * So: logging in identifies you; unlocking with your key authorizes the wallet.
  */
-import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useEffect,
+  type ReactNode,
+} from "react";
 import { privateKeyToAccount } from "viem/accounts";
 import type { Hex } from "viem";
 import { account } from "./api.js";
@@ -23,6 +30,8 @@ export interface SessionState {
 }
 
 interface SessionContextValue {
+  /** True until the cookie session has been checked on first load. */
+  restoring: boolean;
   /** Identity layer — who you are (no wallet access on its own). */
   session: SessionState | null;
   /** Wallet layer — true only while the key is unlocked in memory. */
@@ -42,8 +51,28 @@ const Ctx = createContext<SessionContextValue | null>(null);
 
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<SessionState | null>(null);
+  const [restoring, setRestoring] = useState(true);
   // Never serialised; cleared on lock/logout.
   const [walletKey, setWalletKey] = useState<Hex | null>(null);
+
+  // Restore the IDENTITY layer from the HTTP-only cookie on load, so a refresh
+  // keeps you signed in. The wallet layer stays locked (the key is never
+  // persisted) — you re-unlock it with your key when you need value operations.
+  useEffect(() => {
+    let alive = true;
+    account
+      .session()
+      .then((s) => {
+        if (alive && s) setSession({ identity: s.identity, address: s.address });
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (alive) setRestoring(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const signIn = useCallback((identity: string, address: Hex) => {
     setSession({ identity, address });
@@ -67,6 +96,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   return (
     <Ctx.Provider
       value={{
+        restoring,
         session,
         walletUnlocked: walletKey !== null,
         signIn,

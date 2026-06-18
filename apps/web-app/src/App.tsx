@@ -9,7 +9,7 @@
  */
 import { useState, type ReactNode } from "react";
 import { AppShell, EmptyState } from "@doneisbetter/gds";
-import { Button, Group, NavLink, Stack, Text } from "@mantine/core";
+import { Button, Center, Group, Loader, NavLink, Stack, Text } from "@mantine/core";
 import { IconMap2, IconWallet, IconPick, IconBuildingStore } from "@tabler/icons-react";
 import { useSession } from "./session.js";
 import { LoginWall } from "./LoginWall.js";
@@ -30,8 +30,16 @@ const NAV: { key: Tab; label: string; icon: ReactNode }[] = [
 ];
 
 export function App() {
-  const { session, walletUnlocked, lockWallet, logout } = useSession();
+  const { restoring, session, walletUnlocked, lockWallet, logout } = useSession();
   const [tab, setTab] = useState<Tab>("map");
+
+  // Don't flash the login wall while the cookie session is being restored.
+  if (restoring)
+    return (
+      <Center h="100vh">
+        <Loader />
+      </Center>
+    );
 
   if (!session)
     return (
@@ -50,6 +58,10 @@ export function App() {
           leftSection={n.icon}
           active={tab === n.key}
           onClick={() => setTab(n.key)}
+          // GDS DiscoveryShell closes the mobile drawer on click of an element
+          // matching this hook; Mantine NavLink (an <a> without href) otherwise
+          // wouldn't match, so the drawer would stay open after selecting a tab.
+          data-gds-nav-close
         />
       ))}
     </Stack>
