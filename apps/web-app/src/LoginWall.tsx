@@ -1,41 +1,22 @@
 /**
- * Login wall (#13) on GDS AuthShell + FormField + Mantine inputs (themed by
- * GdsProvider). Register derives keys client-side, generates or imports a
- * wallet, encrypts it, and posts only the verifier + ciphertext (#12 zero-
- * knowledge). Sign-in derives the authKey, fetches the ciphertext, and decrypts
- * the wallet into the in-memory session. Copy/paste token import is retained as
- * an advanced recovery option.
+ * Login wall (#13) on GDS AuthShell. This is the IDENTITY layer only: a simple
+ * email + password sign-in identifies the user — it does NOT unlock the wallet.
+ * After signing in, the wallet (and mining/marketplace) stay locked until the
+ * user authorizes them with their KEY (their downloaded key-backup file) on the
+ * in-app unlock gate. See WalletUnlock.tsx.
  *
- * KDF salt bootstrap: account-api returns kdf_params only on a successful login,
- * so to derive the authKey the client needs the (non-secret) salt up front. For
- * the pilot we cache kdf_params locally at register time (same-device sign-in).
- * A fresh device uses token import or re-registration; the cross-device salt
- * endpoint is hardening #14. The salt is not secret, so caching it is safe.
+ * Sign-in derives the authKey from the password using the account's KDF salt,
+ * fetched from the server (/v1/kdf) so it works on ANY device with no local
+ * cache and no key file. Register generates/encrypts the wallet, saves a
+ * downloadable backup, and unlocks the wallet once (the user just created it).
  */
 import { useState } from "react";
 import { AuthShell, FormField } from "@doneisbetter/gds";
-import {
-  Button,
-  PasswordInput,
-  Stack,
-  Text,
-  TextInput,
-  Anchor,
-  Textarea,
-  FileButton,
-  Group,
-} from "@mantine/core";
+import { Button, PasswordInput, Stack, Text, TextInput, Anchor, Textarea } from "@mantine/core";
 import type { Hex } from "viem";
 import { account } from "./api.js";
-import {
-  encryptWallet,
-  decryptWallet,
-  deriveAuthKey,
-  newWalletKey,
-  addressOf,
-  type KdfParams,
-} from "./crypto.js";
-import { saveBackup, parseBackup, type KeyBackup } from "./keybackup.js";
+import { encryptWallet, decryptWallet, deriveAuthKey, newWalletKey, addressOf } from "./crypto.js";
+import { saveBackup } from "./keybackup.js";
 import { useSession } from "./session.js";
 
 type Mode = "sign-in" | "sign-up";
@@ -43,27 +24,14 @@ type Mode = "sign-in" | "sign-up";
 const kdfKey = (identity: string) => `step.kdf.${identity.toLowerCase()}`;
 
 export function LoginWall() {
-  const { setSignedIn } = useSession();
+  const { signIn, unlockWallet } = useSession();
   const [mode, setMode] = useState<Mode>("sign-in");
   const [identity, setIdentity] = useState("");
   const [password, setPassword] = useState("");
   const [importKey, setImportKey] = useState("");
   const [showImport, setShowImport] = useState(false);
-  const [backup, setBackup] = useState<KeyBackup | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  async function handleBackupFile(file: File | null) {
-    setError(null);
-    if (!file) return;
-    try {
-      const b = parseBackup(await file.text());
-      setBackup(b);
-      setIdentity(b.identity);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "invalid backup file");
-    }
-  }
 
   async function handleSignUp() {
     setBusy(true);
@@ -80,20 +48,20 @@ export function LoginWall() {
         iv: blob.iv,
         kdf_params: blob.kdf_params,
       });
-      // Cache the (non-secret) salt so same-device sign-in can derive authKey.
       localStorage.setItem(kdfKey(identity), JSON.stringify(blob.kdf_params));
-      const res = await account.login(identity, blob.authKey);
-      const walletKey = decryptWallet(password, res.vault_ciphertext, res.iv, res.kdf_params);
-      // Save an encrypted key backup the user can download (cross-device login).
+      // A downloadable encrypted key backup — the user's wallet authentication.
       saveBackup({
         format: "step.keybackup.v1",
         identity: identity.toLowerCase(),
-        address: res.address,
-        vault_ciphertext: res.vault_ciphertext,
-        iv: res.iv,
-        kdf_params: res.kdf_params,
+        address: blob.address,
+        vault_ciphertext: blob.vault_ciphertext,
+        iv: blob.iv,
+        kdf_params: blob.kdf_params,
       });
-      setSignedIn(identity.toLowerCase(), res.address, walletKey);
+      // New account: identify AND unlock once (they hold the key now). Prompt to
+      // download it — it's required to unlock the wallet on any future session.
+      signIn(identity.toLowerCase(), blob.address);
+      unlockWallet(key);
     } catch (e) {
       setError(e instanceof Error ? e.message : "registration failed");
     } finally {
@@ -105,34 +73,13 @@ export function LoginWall() {
     setBusy(true);
     setError(null);
     try {
-      // Path A — uploaded key backup: decrypt entirely client-side (carries its
-      // own KDF params), so this works on a fresh device with no server bootstrap.
-      if (backup) {
-        let walletKey: Hex;
-        try {
-          walletKey = decryptWallet(password, backup.vault_ciphertext, backup.iv, backup.kdf_params);
-        } catch {
-          throw new Error("Couldn't unlock the backup — check your password.");
-        }
-        if (addressOf(walletKey).toLowerCase() !== backup.address.toLowerCase()) {
-          throw new Error("Couldn't unlock the backup — check your password.");
-        }
-        saveBackup(backup);
-        localStorage.setItem(kdfKey(backup.identity), JSON.stringify(backup.kdf_params));
-        setSignedIn(backup.identity.toLowerCase(), backup.address, walletKey);
-        return;
-      }
-      // Path B — same device: use the cached (non-secret) KDF salt + the server.
-      const cached = localStorage.getItem(kdfKey(identity));
-      if (!cached) {
-        throw new Error(
-          "No saved key on this device. Upload your key backup file below, or create an account.",
-        );
-      }
-      const kdf = JSON.parse(cached) as KdfParams;
-      const authKey = deriveAuthKey(password, kdf);
+      // Identity only: fetch the (non-secret) KDF salt, derive the authKey, and
+      // verify with the account API. The wallet is NOT decrypted here.
+      const { kdf_params } = await account.kdf(identity);
+      const authKey = deriveAuthKey(password, kdf_params);
       const res = await account.login(identity, authKey);
-      const walletKey = decryptWallet(password, res.vault_ciphertext, res.iv, res.kdf_params);
+      localStorage.setItem(kdfKey(identity), JSON.stringify(res.kdf_params));
+      // Keep an encrypted backup available for download (not auto-unlocked).
       saveBackup({
         format: "step.keybackup.v1",
         identity: identity.toLowerCase(),
@@ -141,7 +88,7 @@ export function LoginWall() {
         iv: res.iv,
         kdf_params: res.kdf_params,
       });
-      setSignedIn(identity.toLowerCase(), res.address, walletKey);
+      signIn(identity.toLowerCase(), res.address); // wallet stays LOCKED
     } catch (e) {
       setError(e instanceof Error ? e.message : "sign-in failed");
     } finally {
@@ -159,7 +106,7 @@ export function LoginWall() {
     <AuthShell
       title={mode === "sign-in" ? "Sign in to STEP" : "Create your STEP account"}
       intent={mode}
-      description="Your wallet is encrypted on this device and never leaves it unencrypted. We never see your key or password."
+      description="Signing in identifies you. Your wallet stays locked until you unlock it with your key — we never see your key or password."
       error={error ?? undefined}
       footer={
         <Text size="sm">
@@ -190,37 +137,13 @@ export function LoginWall() {
           />
         </FormField>
 
-        {mode === "sign-in" && (
-          <FormField
-            label="Key backup file (optional)"
-            description={
-              backup
-                ? `Loaded backup for ${backup.address.slice(0, 10)}… — enter its password and sign in.`
-                : "New device? Upload the key backup (.json) you downloaded, then enter its password."
-            }
-          >
-            <Group gap="sm">
-              <FileButton onChange={handleBackupFile} accept="application/json,.json">
-                {(props) => (
-                  <Button {...props} variant="light" size="xs">
-                    {backup ? "Choose a different file" : "Upload key backup (.json)"}
-                  </Button>
-                )}
-              </FileButton>
-              {backup && (
-                <Anchor size="xs" onClick={() => setBackup(null)}>
-                  clear
-                </Anchor>
-              )}
-            </Group>
-          </FormField>
-        )}
-
         {mode === "sign-up" && (
           <FormField
             label="Wallet"
             description={
-              showImport ? "Paste an existing private key (advanced)." : "A new wallet will be generated."
+              showImport
+                ? "Paste an existing private key (advanced)."
+                : "A new wallet will be generated. Download your key backup afterwards — it's how you unlock the wallet later."
             }
           >
             <Stack gap="xs">

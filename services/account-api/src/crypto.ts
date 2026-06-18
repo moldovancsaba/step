@@ -32,6 +32,16 @@ function macAuthKey(authKey: string, salt: Buffer): Buffer {
   return createHmac("sha256", salt).update(utf8(authKey)).digest();
 }
 
+/**
+ * Deterministic per-identity salt for UNKNOWN accounts, so the public KDF-salt
+ * lookup returns an indistinguishable shape for existing vs non-existing
+ * identities (anti-enumeration). Derived from the server secret, so it's stable
+ * but unguessable; an attacker can't tell a real salt from this dummy.
+ */
+export function decoyKdfSalt(identity: string, secret: string): string {
+  return b64(createHmac("sha256", secret).update("kdfsalt:" + identity).digest().subarray(0, 16));
+}
+
 /** Produce a salted verifier string `hmac-sha256$<saltB64>$<macB64>`. */
 export function hashAuthKey(authKey: string): string {
   const salt = randomBytes(16);

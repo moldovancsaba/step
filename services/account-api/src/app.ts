@@ -19,6 +19,7 @@ import {
   verifyAuthKey,
   signSession,
   verifySession,
+  decoyKdfSalt,
   type SessionClaims,
 } from "./crypto.js";
 import { IdentityTakenError, type AccountStore, type KdfParams } from "./store.js";
@@ -85,6 +86,20 @@ export function createApp(deps: AccountDeps): { app: Hono } {
   }
 
   app.get("/healthz", (c) => c.text("ok"));
+
+  // Public KDF-salt lookup: lets a client on ANY device derive the authKey from
+  // the password to identity-login, without local cache or the key file. The
+  // salt is non-secret. Unknown identities get a stable decoy salt so existing
+  // and non-existing accounts are indistinguishable (no user enumeration).
+  app.get("/v1/kdf", async (c) => {
+    const identity = normalizeIdentity(c.req.query("identity"));
+    if (!identity) return c.json({ error: "validation" }, 400);
+    const acct = await deps.store.byIdentity(identity);
+    const kdf_params = acct
+      ? acct.kdf_params
+      : { algo: "argon2id" as const, m: 19_456, t: 2, p: 1, salt: decoyKdfSalt(identity, deps.sessionSecret) };
+    return c.json({ kdf_params });
+  });
 
   app.post("/v1/register", async (c) => {
     let body: Record<string, unknown>;

@@ -52,6 +52,15 @@ export const account = {
       }),
     );
   },
+  /** Public KDF-salt lookup (non-secret) so any device can derive the authKey
+   *  for identity-login without local cache. Decoyed server-side vs enumeration. */
+  async kdf(identity: string): Promise<{ kdf_params: KdfParams }> {
+    return (await jsonOrThrow(
+      await fetch(`${ACCOUNT_URL}/v1/kdf?identity=${encodeURIComponent(identity)}`, {
+        credentials: "include",
+      }),
+    )) as { kdf_params: KdfParams };
+  },
   async login(identity: string, authKey: string): Promise<LoginResult> {
     return (await jsonOrThrow(
       await fetch(`${ACCOUNT_URL}/v1/login`, {

@@ -15,6 +15,7 @@ import { useSession } from "./session.js";
 import { LoginWall } from "./LoginWall.js";
 import { MapView } from "./MapView.js";
 import { WalletView } from "./WalletView.js";
+import { WalletUnlock } from "./WalletUnlock.js";
 import { Footer } from "./Footer.js";
 import { loadBackup, downloadBackup } from "./keybackup.js";
 
@@ -28,7 +29,7 @@ const NAV: { key: Tab; label: string; icon: ReactNode }[] = [
 ];
 
 export function App() {
-  const { session, logout } = useSession();
+  const { session, walletUnlocked, lockWallet, logout } = useSession();
   const [tab, setTab] = useState<Tab>("map");
 
   if (!session)
@@ -57,9 +58,17 @@ export function App() {
   const accountPanel = (
     <Group gap="sm">
       <Text size="sm">{session.identity}</Text>
-      {backup && (
+      <Text size="xs" c={walletUnlocked ? "teal" : "dimmed"}>
+        {walletUnlocked ? "wallet unlocked" : "wallet locked"}
+      </Text>
+      {walletUnlocked && backup && (
         <Button size="xs" variant="subtle" onClick={() => downloadBackup(backup)}>
           Download key
+        </Button>
+      )}
+      {walletUnlocked && (
+        <Button size="xs" variant="subtle" onClick={() => lockWallet()}>
+          Lock wallet
         </Button>
       )}
       <Button size="xs" variant="subtle" onClick={() => void logout()}>
@@ -67,6 +76,11 @@ export function App() {
       </Button>
     </Group>
   );
+
+  // The wallet/value surfaces require the key (the authentication layer); the
+  // map is public and only needs identity.
+  const gate = (node: ReactNode, action: string) =>
+    walletUnlocked ? node : <WalletUnlock action={action} />;
 
   return (
     <AppShell
@@ -76,19 +90,23 @@ export function App() {
       showThemeToggle
     >
       {tab === "map" && <MapView />}
-      {tab === "wallet" && <WalletView />}
-      {tab === "mine" && (
-        <EmptyState
-          title="Mining comes next"
-          description="The web capture flow (proof of presence) is delivered in issue #21."
-        />
-      )}
-      {tab === "market" && (
-        <EmptyState
-          title="Marketplace coming soon"
-          description="Browsing, buying, gifting and listing triangle NFTs is issue #11."
-        />
-      )}
+      {tab === "wallet" && gate(<WalletView />, "Your wallet is protected by your key.")}
+      {tab === "mine" &&
+        gate(
+          <EmptyState
+            title="Mining comes next"
+            description="The web capture flow (proof of presence) is delivered in issue #21."
+          />,
+          "Mining requires your key.",
+        )}
+      {tab === "market" &&
+        gate(
+          <EmptyState
+            title="Marketplace coming soon"
+            description="Browsing, buying, gifting and listing triangle NFTs is issue #11."
+          />,
+          "Trading requires your key.",
+        )}
       <Footer />
     </AppShell>
   );
