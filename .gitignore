@@ -38,3 +38,8 @@ apps/web-app/dist/
 
 # TypeScript incremental build artifacts
 *.tsbuildinfo
+
+# XcodeGen-generated project (reproducible from apps/ios/App/project.yml)
+apps/ios/App/StepApp.xcodeproj/
+*.xcuserdata/
+**/xcuserdata/

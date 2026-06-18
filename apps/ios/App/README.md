@@ -7,15 +7,46 @@ the checked-in [`project.yml`](project.yml) (XcodeGen) rather than a hand-edited
 
 ## Generate + run
 
+One-command toolchain setup (installs XcodeGen user-locally with **no admin**,
+generates the project, and builds the StepCore package):
+
 ```sh
-brew install xcodegen          # one-time
+bash tools/setup-ios-toolchain.sh
+```
+
+Or manually:
+
+```sh
+brew install xcodegen          # or: tools/setup-ios-toolchain.sh installs it without admin
 cd apps/ios/App
-xcodegen generate              # → StepApp.xcodeproj
+xcodegen generate              # → StepApp.xcodeproj (gitignored — regenerate any time)
 open StepApp.xcodeproj          # run on a simulator or device
 ```
 
+The `.xcodeproj` is **generated from `project.yml` and gitignored** — never edit
+it by hand; change `project.yml` and regenerate.
+
+> ⚠️ **`project.yml` references `Info.plist` and `StepApp.entitlements` via build
+> settings (`INFOPLIST_FILE` / `CODE_SIGN_ENTITLEMENTS`), not via XcodeGen's
+> `info:` / `entitlements:` keys.** Those keys make XcodeGen *generate* (and
+> overwrite) the files, which would wipe the usage strings and App Attest/NFC
+> entitlements. Keep them as build settings.
+
+### Toolchain privilege tiers
+
+| Tier | Needs | Enables |
+|---|---|---|
+| XcodeGen (user-local) | nothing | `xcodegen generate`, validate the project |
+| StepCore `swift build` | Command Line Tools | compile/verify the library |
+| Full Xcode + simulators | admin + Apple ID (~12 GB) | `xcodebuild`, `swift test`, run/archive |
+| fastlane | Homebrew | screenshots, TestFlight, submit |
+
+`tools/setup-ios-toolchain.sh` does the no-admin tiers automatically and prints
+the exact admin/Apple-ID commands for the rest (`--full` drives brew + xcodes).
+
 CI (`.github/workflows/ci.yml`, job `ios-app`) generates the project and builds
-the app + UI-test bundle for a generic iOS Simulator destination on every push.
+the app + UI-test bundle for a generic iOS Simulator destination on every push
+(GitHub's macOS runners ship the full Xcode).
 
 ## What's in here
 
