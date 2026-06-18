@@ -44,6 +44,11 @@ targets:
       - path: PrivacyInfo.xcprivacy
         buildPhase: resources
     dependencies:
+      # StepApp.swift imports BOTH modules directly, so depend on both products
+      # explicitly — don't rely on StepCore being importable transitively via
+      # StepAppUI (that's fragile across Xcode versions → "no such module").
+      - package: StepCore
+        product: StepCore
       - package: StepCore
         product: StepAppUI
     settings:
