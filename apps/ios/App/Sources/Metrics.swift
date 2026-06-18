@@ -8,7 +8,8 @@ import os
 #if canImport(MetricKit) && os(iOS)
 import MetricKit
 
-final class MetricsObserver: NSObject, MXMetricManagerSubscriber {
+final class MetricsObserver: NSObject, MXMetricManagerSubscriber, @unchecked Sendable {
+    // Holds only an immutable Logger; MetricKit owns callback threading.
     static let shared = MetricsObserver()
     private let log = Logger(subsystem: "com.regiominer.miner", category: "metrics")
 

@@ -46,3 +46,6 @@ apps/ios/App/StepApp.xcodeproj/
 
 # regiominer.com generated site
 apps/regiominer-site/dist/
+
+# Xcode build output
+apps/ios/App/build/

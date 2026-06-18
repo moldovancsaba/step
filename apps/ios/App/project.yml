@@ -21,6 +21,7 @@ settings:
     MARKETING_VERSION: "0.1.0"
     CURRENT_PROJECT_VERSION: "1"
     SWIFT_VERSION: "6.0"
+    ALWAYS_SEARCH_USER_PATHS: NO   # silence the legacy-headermap build warning
     DEVELOPMENT_TEAM: "" # set locally / in CI signing; empty for unsigned simulator builds
     # Endpoint configuration consumed by Info.plist → AppConfig. Override per
     # configuration with an .xcconfig; these defaults target the pilot.
@@ -60,6 +61,7 @@ targets:
         INFOPLIST_FILE: Info.plist
         CODE_SIGN_ENTITLEMENTS: StepApp.entitlements
         GENERATE_INFOPLIST_FILE: NO
+        PRODUCT_NAME: StepApp
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         PRODUCT_BUNDLE_IDENTIFIER: com.regiominer.miner
         CODE_SIGN_STYLE: Automatic
