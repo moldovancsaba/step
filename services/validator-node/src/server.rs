@@ -9,6 +9,7 @@ use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use tower_http::cors::{AllowOrigin, CorsLayer};
 use step_validation_rules::sign::{
     claim_hash, eip712_vote_digest, format_address, parse_address, sign_digest, triangle_id_hash,
 };
@@ -41,6 +42,7 @@ pub struct ValidateResponse {
 }
 
 pub fn router(state: Arc<AppState>) -> Router {
+    let cors = cors_layer(&state.config.cors_origins);
     Router::new()
         .route("/v1/validate", post(validate))
         .route("/v1/mesh/resolve", get(mesh_resolve))
@@ -48,7 +50,22 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/v1/mesh/triangle/{id}", get(mesh_triangle))
         .route("/healthz", get(healthz))
         .route("/metrics", get(metrics))
+        .layer(cors)
         .with_state(state)
+}
+
+/// CORS for the public, read-only mesh endpoints. Specific allow-listed origins
+/// (never a wildcard with credentials); no credentials are used — the mesh data
+/// is public. Empty list → a permissive-free layer that adds no headers.
+fn cors_layer(origins: &[String]) -> CorsLayer {
+    use axum::http::Method;
+    let base = CorsLayer::new().allow_methods([Method::GET, Method::OPTIONS]);
+    if origins.is_empty() {
+        base
+    } else {
+        let parsed: Vec<_> = origins.iter().filter_map(|o| o.parse().ok()).collect();
+        base.allow_origin(AllowOrigin::list(parsed))
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -296,6 +313,7 @@ mod tests {
             )
             .into(),
             wallet_rate_limit_per_hour: 5,
+            cors_origins: vec![],
         };
         let key = SigningKey::from_slice(&[0x11; 32]).unwrap();
         Arc::new(AppState::new(config, key))
@@ -513,6 +531,7 @@ mod mesh_api_tests {
             )
             .into(),
             wallet_rate_limit_per_hour: 5,
+            cors_origins: vec![],
         };
         Arc::new(AppState::new(
             config,

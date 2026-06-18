@@ -176,7 +176,9 @@ async function main() {
     EXCHANGE_URL: `http://127.0.0.1:${PORTS.exchange}`,
     MERCHANT_API_URL: `http://127.0.0.1:${PORTS.merchant}`,
     STEP_CORS_ORIGINS:
-      process.env.STEP_CORS_ORIGINS ?? "http://127.0.0.1:3010,http://localhost:3010",
+      process.env.STEP_CORS_ORIGINS ??
+      // web-app (3020) + web-miner/explorer (3010) on both localhost and 127.0.0.1
+      "http://localhost:3020,http://127.0.0.1:3020,http://localhost:3010,http://127.0.0.1:3010",
     ...secrets,
   };
   writeFileSync(
@@ -197,6 +199,7 @@ async function main() {
       GATEWAY_NONCE_SECRET: secrets.GATEWAY_NONCE_SECRET,
       VALIDATOR_ALLOW_DEV_CLAIMS: "true", // local dev only; pilot nodes set false
       STEP_PROTOCOL_PARAMS: envLines.STEP_PROTOCOL_PARAMS,
+      STEP_CORS_ORIGINS: envLines.STEP_CORS_ORIGINS, // browsers read /v1/mesh/cover
     });
   });
   await Promise.all(PORTS.validators.map((p) => httpOk(`http://127.0.0.1:${p}/healthz`)));
@@ -251,6 +254,7 @@ async function main() {
     ...envLines,
     ACCOUNT_PORT: String(PORTS.account),
     SECURE_COOKIES: "false", // local http dev
+    COOKIE_SAMESITE: "Lax", // same-site across localhost ports; sent on credentialed fetch
   });
   await httpOk(`http://127.0.0.1:${PORTS.account}/healthz`);
 

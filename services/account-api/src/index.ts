@@ -24,11 +24,25 @@ if (process.env.DATABASE_URL) {
   );
 }
 
+// Browser origins allowed to call this API with credentials. Local-first dev
+// serves the web app from a different port (localhost:3020) than this API
+// (:8091) — a cross-origin, credentialed setup that needs CORS + a cookie
+// SameSite the browser will send. STEP_CORS_ORIGINS is set by scripts/dev/up.mjs.
+const corsOrigin = (process.env.STEP_CORS_ORIGINS ?? "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+const secureCookies = (process.env.SECURE_COOKIES ?? "true") !== "false";
+
 const { app } = createApp({
   store,
   sessionSecret: sessionSecret ?? randomBytes(32).toString("hex"),
   sessionTtlSeconds: Number(process.env.SESSION_TTL_SECONDS ?? 86_400),
-  secureCookies: (process.env.SECURE_COOKIES ?? "true") !== "false",
+  secureCookies,
+  // Cross-site cookies need SameSite=None;Secure. On local http (no Secure) the
+  // browser rejects None, but localhost ports are same-site so "Lax" is sent.
+  cookieSameSite: process.env.COOKIE_SAMESITE as "Strict" | "Lax" | "None" | undefined,
+  corsOrigin: corsOrigin.length ? corsOrigin : undefined,
   nowUnix: () => Math.floor(Date.now() / 1000),
 });
 

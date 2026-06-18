@@ -31,9 +31,10 @@ export interface AccountDeps {
   /** Secure cookie flag — false only for local http dev. */
   secureCookies: boolean;
   nowUnix: () => number;
-  /** Allowed browser origin for CORS (with credentials). Omit to disable CORS
-   *  (same-origin / native clients). e.g. "https://step.regiominer.com". */
-  corsOrigin?: string;
+  /** Allowed browser origin(s) for CORS (with credentials). Omit to disable CORS
+   *  (same-origin / native clients). e.g. "https://step.regiominer.com" or a list
+   *  of local-dev origins. */
+  corsOrigin?: string | string[];
   /** Session cookie SameSite. Default "Strict" (same-origin). Use "None" when
    *  the browser app is on a different site than the API (cross-site cookies). */
   cookieSameSite?: "Strict" | "Lax" | "None";

@@ -19,6 +19,9 @@ pub struct NodeConfig {
     pub params_file: String,
     /// Max approved claims per wallet per hour (rate limit, HARD §17 security).
     pub wallet_rate_limit_per_hour: u32,
+    /// Browser origins allowed to read the public mesh endpoints (CORS). Empty =
+    /// no CORS headers (server-to-server only). Set via STEP_CORS_ORIGINS.
+    pub cors_origins: Vec<String>,
 }
 
 impl NodeConfig {
@@ -65,6 +68,12 @@ impl NodeConfig {
                 .unwrap_or_else(|_| "30".into())
                 .parse()
                 .map_err(|_| "bad VALIDATOR_WALLET_RATE_LIMIT")?,
+            cors_origins: std::env::var("STEP_CORS_ORIGINS")
+                .unwrap_or_default()
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect(),
         })
     }
 }

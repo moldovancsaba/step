@@ -50,5 +50,6 @@ apps/regiominer-site/dist/
 # Xcode build output
 apps/ios/App/build/
 
-# Web-app production config (public URLs, no secrets) — committed intentionally
+# Web-app env config (public localhost/Worker URLs, no secrets) — committed
 !apps/web-app/.env.production
+!apps/web-app/.env.development

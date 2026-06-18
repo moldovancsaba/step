@@ -9,6 +9,10 @@ license.workspace = true
 step-validation-rules = { path = "../../packages/validation-rules" }
 step-mesh-engine = { path = "../../packages/mesh-engine" }
 axum = "0.8"
+# CORS for the public mesh endpoints so any browser (web app on another origin)
+# can read /v1/mesh/cover. tower-http is the canonical axum middleware; hand-
+# rolling preflight/Vary handling is error-prone.
+tower-http = { version = "0.6", features = ["cors"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

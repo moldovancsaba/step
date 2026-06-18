@@ -49,6 +49,9 @@ export function LoginWall() {
         kdf_params: blob.kdf_params,
       });
       localStorage.setItem(kdfKey(identity), JSON.stringify(blob.kdf_params));
+      // Establish the server session cookie so a refresh keeps you signed in
+      // (register alone sets no cookie — only login does).
+      await account.login(identity, blob.authKey);
       // A downloadable encrypted key backup — the user's wallet authentication.
       saveBackup({
         format: "step.keybackup.v1",

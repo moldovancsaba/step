@@ -16,13 +16,13 @@ const MESH_URL = env.VITE_MESH_URL ?? "http://127.0.0.1:8081";
 const INDEXER_URL = env.VITE_INDEXER_URL ?? "http://127.0.0.1:8090";
 const NFT_URL = env.VITE_NFT_URL ?? "http://127.0.0.1:8092";
 
-/** Whether the mesh/indexer/NFT backends are deployed for this build. When the
- *  app is served over https but those URLs are still the local-dev defaults,
- *  they're unreachable (and would be mixed-content) — so map/NFT surfaces show a
- *  clear "coming soon" state instead of hammering localhost. */
-const isLocalUrl = (u: string) => u.includes("127.0.0.1") || u.includes("localhost");
-export const meshConfigured = !!env.VITE_MESH_URL && !isLocalUrl(MESH_URL);
-export const nftConfigured = !!env.VITE_NFT_URL && !isLocalUrl(NFT_URL);
+/** Whether the mesh/indexer/NFT backends are wired for this build. True when the
+ *  URL is explicitly set (local-first dev points these at this computer; a remote
+ *  deploy points them at a host). When unset — e.g. a production build before the
+ *  services are reachable — the map/NFT surfaces show a clear "coming soon" state
+ *  instead of hammering the unreachable localhost default. */
+export const meshConfigured = !!env.VITE_MESH_URL;
+export const nftConfigured = !!env.VITE_NFT_URL;
 
 async function jsonOrThrow(resp: Response): Promise<unknown> {
   if (!resp.ok) {
