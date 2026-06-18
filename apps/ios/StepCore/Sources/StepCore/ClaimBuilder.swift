@@ -18,7 +18,7 @@ public struct LocationSample: Sendable {
     }
 }
 
-public enum AttestationEvidence: Sendable {
+public enum AttestationEvidence: Sendable, Equatable {
     /// Real App Attest + DeviceCheck tokens (production path; obtained via
     /// DCAppAttestService in the app target — see apps/ios/README).
     case attested(appAttest: String, deviceCheck: String)

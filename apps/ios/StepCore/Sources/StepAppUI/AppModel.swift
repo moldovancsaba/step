@@ -56,6 +56,10 @@ public final class AppModel: ObservableObject {
     /// fallback; the app wires `AppAttestAttester()` on a real iOS device.
     let attester: Attesting
     var wallet: Wallet?
+    /// Raw wallet key + identity for the current session — used to export a key
+    /// backup and to store the key on a trusted device. Never persisted in clear.
+    private var walletKeyData: Data?
+    private var currentIdentity: String?
 
     /// Owned slot NFTs for the Wallet tab (#29).
     @Published public private(set) var ownedNfts: LoadPhase<[NftToken]> = .idle
@@ -125,6 +129,8 @@ public final class AppModel: ObservableObject {
     public func signOut() {
         wallet = nil
         walletAddress = nil
+        walletKeyData = nil
+        currentIdentity = nil
         currentTriangle = nil
         claimHistory = []
         status = .idle
@@ -134,6 +140,9 @@ public final class AppModel: ObservableObject {
     @Published public private(set) var authError: String?
 
     public func clearAuthError() { authError = nil }
+
+    /// Surface a UI-side validation message through the shared auth-error channel.
+    public func reportAuthError(_ message: String) { authError = message }
 
     /// Load the wallet's owned slot NFTs (#29) into `ownedNfts`.
     public func loadOwnedNfts() async {
@@ -204,6 +213,7 @@ public final class AppModel: ObservableObject {
             let blob = try await Self.offMain { try AccountVault.encrypt(password: password, walletKey: walletKey) }
             try await account.register(identity: identity, blob: blob)
             Self.cacheKdf(blob.kdf, for: identity)        // salt is not secret
+            Self.persistBackup(KeyBackup(identity: identity, blob: blob))
             try keyStore.save(walletKey)
             _ = try await account.login(identity: identity, authKey: blob.authKey)  // obtain session cookie
             adopt(walletKey: walletKey, identity: identity)
@@ -228,6 +238,10 @@ public final class AppModel: ObservableObject {
                 try AccountVault.decrypt(password: password, ciphertext: res.ciphertext, iv: res.iv, kdf: res.kdf)
             }
             try keyStore.save(key)
+            Self.persistBackup(KeyBackup(
+                identity: identity, address: res.address,
+                vaultCiphertext: res.ciphertext, iv: res.iv, kdfParams: res.kdf
+            ))
             adopt(walletKey: key, identity: identity)
         } catch {
             authError = Self.authMessage(error)
@@ -238,9 +252,90 @@ public final class AppModel: ObservableObject {
         if let w = try? Wallet(privateKeyData: walletKey) {
             wallet = w
             walletAddress = w.address
+            walletKeyData = walletKey
+            currentIdentity = identity.lowercased()
             status = .idle
         } else {
             authError = "Corrupted wallet key."
+        }
+    }
+
+    // MARK: key backup (download / upload) + trusted device (Secure Enclave)
+
+    private static func backupKey(_ identity: String) -> String { "step.backup.\(identity.lowercased())" }
+
+    static func persistBackup(_ b: KeyBackup) {
+        if let data = try? b.jsonData() { UserDefaults.standard.set(data, forKey: backupKey(b.identity)) }
+    }
+
+    static func loadPersistedBackup(_ identity: String) -> KeyBackup? {
+        guard let data = UserDefaults.standard.data(forKey: backupKey(identity)) else { return nil }
+        return try? KeyBackup.decode(data)
+    }
+
+    /// The signed-in identity, if any (used by the key-management UI).
+    public var signedInIdentity: String? { currentIdentity }
+
+    /// The downloadable encrypted key backup for the signed-in account (#key).
+    public func exportableBackup() -> KeyBackup? {
+        guard let id = currentIdentity else { return nil }
+        return Self.loadPersistedBackup(id)
+    }
+
+    /// Restore/unlock the wallet from an uploaded key backup file + password.
+    /// Decrypts entirely on-device — works on a fresh device (cross-device login).
+    public func unlock(fromBackupData data: Data, password: String) async {
+        authError = nil
+        do {
+            let backup = try KeyBackup.decode(data)
+            let key = try await Self.offMain { try backup.unlock(password: password) }
+            try keyStore.save(key)
+            Self.cacheKdf(backup.kdfParams, for: backup.identity)
+            Self.persistBackup(backup)
+            adopt(walletKey: key, identity: backup.identity)
+        } catch {
+            authError = Self.authMessage(error)
+        }
+    }
+
+    /// Whether this device has biometric hardware for trusted storage.
+    public var biometricsAvailable: Bool { TrustedDeviceStore.biometricsAvailable }
+
+    public func isDeviceTrusted(_ identity: String) -> Bool {
+        TrustedDeviceStore.isTrusted(identity: identity)
+    }
+
+    /// Trust this device: store the wallet key in the Secure Enclave, gated by
+    /// Face ID/Touch ID. Returns false (and sets authError) on failure.
+    @discardableResult
+    public func trustThisDevice() -> Bool {
+        guard let key = walletKeyData, let id = currentIdentity else { return false }
+        do {
+            try TrustedDeviceStore.trust(identity: id, walletKey: key)
+            return true
+        } catch {
+            authError = Self.authMessage(error)
+            return false
+        }
+    }
+
+    public func forgetTrustedDevice() {
+        if let id = currentIdentity { TrustedDeviceStore.forget(identity: id) }
+    }
+
+    /// Load the wallet from this trusted device (prompts Face ID/Touch ID).
+    public func unlockFromTrustedDevice(identity: String) async {
+        authError = nil
+        do {
+            let key = try await Self.offMain {
+                try TrustedDeviceStore.loadTrusted(identity: identity, reason: "Unlock your STEP wallet")
+            }
+            try keyStore.save(key)
+            adopt(walletKey: key, identity: identity)
+        } catch TrustedDeviceError.cancelled {
+            // user cancelled the biometric prompt — no error
+        } catch {
+            authError = Self.authMessage(error)
         }
     }
 

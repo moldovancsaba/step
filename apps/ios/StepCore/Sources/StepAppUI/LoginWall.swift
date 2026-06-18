@@ -12,6 +12,8 @@ public struct LoginWall: View {
     @State private var identity = ""
     @State private var password = ""
     @State private var busy = false
+    @State private var importing = false
+    @State private var importedKey: Data?
     @FocusState private var focused: Field?
 
     enum Mode { case signIn, signUp }
@@ -20,6 +22,11 @@ public struct LoginWall: View {
     public init(model: AppModel) { self.model = model }
 
     private var valid: Bool { identity.trimmingCharacters(in: .whitespaces).count >= 3 && password.count >= 8 }
+
+    private var trimmedIdentity: String { identity.trimmingCharacters(in: .whitespaces) }
+    private var trustedHere: Bool {
+        model.biometricsAvailable && trimmedIdentity.count >= 3 && model.isDeviceTrusted(trimmedIdentity)
+    }
 
     public var body: some View {
         ScrollView {
@@ -66,6 +73,34 @@ public struct LoginWall: View {
                 .disabled(!valid || busy)
                 .accessibilityHint(mode == .signIn ? "Signs in and unlocks your wallet" : "Creates an account and wallet")
 
+                if trustedHere {
+                    Button {
+                        Task { await unlockWithDevice() }
+                    } label: {
+                        HStack {
+                            if busy { ProgressView() }
+                            Label("Unlock with this device", systemImage: "faceid").frame(maxWidth: .infinity)
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.large)
+                    .disabled(busy)
+                    .accessibilityHint("Uses Face ID or Touch ID to load your saved key")
+                }
+
+                Divider().padding(.vertical, StepSpacing.xs)
+
+                Text("Have a key file? Sign in on any device by importing it with your password.")
+                    .font(.caption).foregroundStyle(StepColor.textMuted)
+                Button {
+                    importing = true
+                } label: {
+                    Label("Import a key file", systemImage: "square.and.arrow.up").frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+                .disabled(busy)
+
                 Button(mode == .signIn ? "New to STEP? Create an account" : "Already have an account? Sign in") {
                     mode = mode == .signIn ? .signUp : .signIn
                     model.clearAuthError()
@@ -77,6 +112,9 @@ public struct LoginWall: View {
             .textFieldStyle(.roundedBorder)
         }
         .background(StepColor.background.ignoresSafeArea())
+        .fileImporter(isPresented: $importing, allowedContentTypes: [.json]) { result in
+            handleImport(result)
+        }
     }
 
     @ViewBuilder
@@ -96,5 +134,34 @@ public struct LoginWall: View {
         let id = identity.trimmingCharacters(in: .whitespaces)
         if mode == .signIn { await model.signIn(identity: id, password: password) }
         else { await model.register(identity: id, password: password) }
+    }
+
+    private func unlockWithDevice() async {
+        busy = true
+        defer { busy = false }
+        await model.unlockFromTrustedDevice(identity: trimmedIdentity)
+    }
+
+    /// Read the picked key file (security-scoped) and unlock with the entered
+    /// password. The key file alone is useless without the password.
+    private func handleImport(_ result: Result<URL, Error>) {
+        model.clearAuthError()
+        guard password.count >= 8 else {
+            model.reportAuthError("Enter your password above, then import your key file.")
+            return
+        }
+        guard case let .success(url) = result else { return }
+        let needsStop = url.startAccessingSecurityScopedResource()
+        defer { if needsStop { url.stopAccessingSecurityScopedResource() } }
+        guard let data = try? Data(contentsOf: url) else {
+            model.reportAuthError("Couldn't read that key file.")
+            return
+        }
+        let pwd = password
+        Task {
+            busy = true
+            defer { busy = false }
+            await model.unlock(fromBackupData: data, password: pwd)
+        }
     }
 }

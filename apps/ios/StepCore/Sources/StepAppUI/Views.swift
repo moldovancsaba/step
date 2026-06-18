@@ -136,6 +136,7 @@ struct WalletTabView: View {
                     ForEach(tokens) { NftRow(token: $0) }
                 }
             }
+            KeyManagementSection(model: model)
             Section {
                 NavigationLink { HistoryView(model: model).navigationTitle("Claims") } label: {
                     Label("Claim history", systemImage: "clock")
