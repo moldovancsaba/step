@@ -4,6 +4,7 @@ members = [
     "packages/mesh-engine",
     "packages/validation-rules",
     "services/validator-node",
+    "services/node-agent",
 ]
 
 [workspace.package]

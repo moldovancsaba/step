@@ -1,0 +1,22 @@
+[package]
+name = "step-node-agent"
+version = "0.1.0"
+description = "STEP trust-center supervisor: on-chain-authorized self-update, failsafe rollback, continuous self-integrity"
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "process", "fs", "time", "signal"] }
+axum = "0.8"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+hex = "0.4"
+# HTTP client for chain JSON-RPC reads + artifact fetch. A trust center needs no
+# foundry/repo — only this. rustls (no system OpenSSL) keeps the binary portable.
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "blocking"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+[dev-dependencies]
+tempfile = "3"
