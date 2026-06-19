@@ -54,6 +54,25 @@ const ACCOUNT_DB = join(RUNTIME, "account.db");
  * fresh set each run is the "demo" behaviour we are removing). Stored under
  * .runtime/ (gitignored), never committed.
  */
+/** This machine's Tailscale IPv4, or null if Tailscale isn't available. Used to
+ *  expose the chain RPC to trust-center nodes on the tailnet. Best-effort. */
+function tailnetIp() {
+  const candidates = [
+    "tailscale",
+    "/Applications/Tailscale.app/Contents/MacOS/Tailscale",
+    "/usr/local/bin/tailscale",
+  ];
+  for (const bin of candidates) {
+    try {
+      const ip = execSync(`${bin} ip -4`, { stdio: "pipe" }).toString().trim().split("\n")[0].trim();
+      if (/^\d+\.\d+\.\d+\.\d+$/.test(ip)) return ip;
+    } catch {
+      /* try next */
+    }
+  }
+  return null;
+}
+
 function loadOrCreateSecrets() {
   if (existsSync(SECRETS_FILE)) return JSON.parse(readFileSync(SECRETS_FILE, "utf8"));
   const s = {
@@ -151,14 +170,23 @@ async function main() {
   // 2. Anvil with PERSISTENT state: load prior state if present, dump on exit.
   //    The chain (balances, NFTs, validator registrations) survives a restart.
   log(existsSync(STATE_FILE) ? "starting anvil (loading saved state)…" : "starting anvil…");
+  // Expose the chain RPC on loopback AND (if present) this machine's Tailscale
+  // IP — so trust-center nodes on the tailnet can read/register, WITHOUT exposing
+  // it to the wider LAN. Override with STEP_ANVIL_HOSTS (comma list).
+  const anvilHosts = (process.env.STEP_ANVIL_HOSTS ?? ["127.0.0.1", tailnetIp()].filter(Boolean).join(","))
+    .split(",")
+    .map((h) => h.trim())
+    .filter(Boolean);
   const anvilArgs = [
     "--port", String(PORTS.anvil),
     "--chain-id", "31337",
     "--silent",
+    ...anvilHosts.flatMap((h) => ["--host", h]),
     "--state", STATE_FILE, // load if exists + dump on graceful exit
     "--state-interval", "2", // also dump every 2s so state survives a hard kill
   ];
   start("anvil", "anvil", anvilArgs, {});
+  if (anvilHosts.length > 1) log(`chain RPC exposed on: ${anvilHosts.join(", ")} :${PORTS.anvil}`);
   await portOpen(PORTS.anvil);
 
   // 3. Deploy contracts only if not already on the (persisted) chain. On a

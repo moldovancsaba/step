@@ -182,8 +182,43 @@ Verified locally: a freshly joined node was registered on-chain (active weight
 50), independently validated a real claim from the gateway, and signed an
 approve vote — federation weight 150 → 200.
 
-**Running a node on another machine.** Same command; provide the shared chain in
-the environment instead of reading `.runtime/.env.runtime`:
+### Tailscale federation (this deployment)
+
+The hub is **tribecca** (this machine); the first remote trust center is
+**chappie** (`chappie.tailc0f646.ts.net`), both on the same tailnet. The flow,
+which needs no repo/toolchain on the remote machine and no chain RPC for the
+running node:
+
+```bash
+# On the hub (tribecca): expose the chain on the tailnet (up.mjs does this
+# automatically — binds anvil to 127.0.0.1 + this machine's Tailscale IP).
+
+# 1. Register the remote node on-chain + add it to the gateway directory, but
+#    don't launch it here:
+node scripts/node/join.mjs --name chappie --port 9104 --weight 50 \
+     --type Infrastructure --location "chappie (tailnet)" \
+     --no-launch --url http://chappie.tailc0f646.ts.net:9104
+
+# 2. Build a self-contained run bundle (binary + params + run.sh with the node's
+#    key baked in) and send it to the node over Taildrop (or scp):
+node scripts/node/bundle.mjs --name chappie --port 9104 \
+     --url http://chappie.tailc0f646.ts.net:9104
+tailscale file cp .runtime/remote-chappie.tgz chappie:
+
+# 3. On chappie (the only step that runs there): accept the Taildrop file, then
+tar -xzf remote-chappie.tgz && cd bundle-chappie && ./run.sh
+
+# 4. Back on the hub:
+node scripts/node/list.mjs     # chappie flips DOWN → up, federation weight 150 → 200
+```
+
+The hub's gateway reaches the node at its tailnet hostname (MagicDNS) and fans
+claims to it; the node re-checks and signs. The bundle's binary is built for the
+hub's architecture (arm64 macOS here) — if the target differs, build the
+validator from source there instead.
+
+**Generic remote node (non-Tailscale).** Same `join` command; provide the shared
+chain in the environment instead of reading `.runtime/.env.runtime`:
 
 ```bash
 STEP_RPC_URL=https://<shared-chain-rpc> \

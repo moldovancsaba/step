@@ -160,7 +160,27 @@ if (currentWeight && currentWeight !== "0") {
   log(`on-chain active weight: ${activeWeight}`);
 }
 
-// 3. Operation — run the validator binary (release). Build if missing.
+// The URL the gateway will reach this node at. Local nodes: loopback. Remote
+// nodes: pass --url http://<tailscale-host>:<port> (the node's reachable address).
+const url = args.url ?? `http://127.0.0.1:${port}`;
+const noLaunch = args["no-launch"] === "true";
+
+// 3. Operation. For a LOCAL node we run the validator binary here. For a REMOTE
+//    node (--no-launch) we register + add to the directory only; the binary runs
+//    on the other machine (see `node bundle` / the remote runbook).
+if (noLaunch) {
+  addToDirectory({ name: args.name, address, url, weight, type: typeName, location, status: "active" });
+  log("");
+  log(`✓ node "${args.name}" registered on-chain and added to the federation directory`);
+  log(`  address  ${address}`);
+  log(`  url      ${url}   (the gateway will fan claims here once the node runs)`);
+  log(`  weight   ${weight} (${typeName})`);
+  log("");
+  log(`Now run the validator ON that machine. Build a self-contained bundle with:`);
+  log(`  node scripts/node/bundle.mjs --name ${args.name} --port ${port} --url ${url}`);
+  process.exit(0);
+}
+
 const validatorBin = join(ROOT, "target/release/step-validator-node");
 if (!existsSync(validatorBin)) {
   log("building validator-node (release)…");
@@ -203,17 +223,8 @@ if (existsSync(PID_FILE)) {
 }
 
 // Wait for health, then add to the federation directory so the gateway fans out.
-const url = `http://127.0.0.1:${port}`;
 await waitHealthy(url);
-addToDirectory({
-  name: args.name,
-  address,
-  url,
-  weight,
-  type: typeName,
-  location,
-  status: "active",
-});
+addToDirectory({ name: args.name, address, url, weight, type: typeName, location, status: "active" });
 
 log("");
 log(`✓ node "${args.name}" joined the federation`);
