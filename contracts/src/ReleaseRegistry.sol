@@ -66,7 +66,7 @@ contract ReleaseRegistry is StepManaged {
         bytes32 paramsHash,
         bytes32 configHash,
         uint64 minAgentVersion
-    ) external onlyStepRole(ACCESS.RELEASE_ROLE()) {
+    ) external onlyStepRole(RELEASE_ROLE) {
         uint64 latest = _latestVersion(platform);
         if (version <= latest) revert NonMonotonicVersion(latest, version);
         if (binaryHash == bytes32(0) || paramsHash == bytes32(0) || configHash == bytes32(0)) {
