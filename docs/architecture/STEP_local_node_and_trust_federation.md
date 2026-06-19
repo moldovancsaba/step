@@ -47,6 +47,29 @@ the map renders real triangles served by the local mesh engine.)
 `down.mjs` stops it; `smoke.mjs` checks it. Secrets are generated per run into
 `.runtime/.env.runtime` and never committed.
 
+### Durability — this is a real backend, not a demo
+
+The stack persists across restarts (nothing resets), which is what makes it a
+working solution rather than a throwaway:
+
+- **Accounts + encrypted wallet vaults** — SQLite (`ACCOUNT_DB_FILE`,
+  `.runtime/account.db`) via Node's built-in `node:sqlite`. Registering and
+  logging back in after a restart works.
+- **Sessions** — a stable `SESSION_SIGNING_KEY` (in `.runtime/secrets.json`,
+  generated once) so cookies stay valid across restarts.
+- **The chain** — `anvil --state .runtime/anvil-state.json --state-interval 2`
+  loads prior state on start and dumps periodically + on graceful shutdown;
+  `down.mjs` stops anvil with SIGTERM so it flushes. Contracts are deployed once
+  and **reused** on the next start (balances, NFTs, validator registrations
+  survive).
+- **Node identities** — validator keys live in `.runtime/secrets.json`; each
+  joined node's key is saved under `.runtime/nodes/<name>.json`, so re-running
+  `node join` keeps the same on-chain identity (idempotent — it skips
+  re-registration if already active).
+
+Everything under `.runtime/` is gitignored — secrets and the account DB are
+never committed.
+
 ### Making this Mac reachable from the outside
 
 `scripts/ops/run-mac-online.mjs` runs an **online gateway** (default :8070) in

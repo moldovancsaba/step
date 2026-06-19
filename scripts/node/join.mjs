@@ -124,22 +124,41 @@ if (typeNum === undefined) die(`--type must be one of ${Object.keys(VALIDATOR_TY
 const location = args.location ?? "remote";
 const port = Number(args.port);
 
-// 1. Identity — use the supplied key or mint a fresh one.
-const privateKey =
-  args.key ?? `0x${randomBytes(32).toString("hex")}`;
+// 1. Identity — durable per node: reuse the saved key for this name (so a
+//    restart keeps the same on-chain identity), else the supplied key, else mint.
+const nodeConfigDir = join(RUNTIME, "nodes");
+mkdirSync(nodeConfigDir, { recursive: true });
+const nodeConfigFile = join(nodeConfigDir, `${args.name}.json`);
+const savedConfig = existsSync(nodeConfigFile)
+  ? JSON.parse(readFileSync(nodeConfigFile, "utf8"))
+  : null;
+const privateKey = args.key ?? savedConfig?.privateKey ?? `0x${randomBytes(32).toString("hex")}`;
 const address = sh(`cast wallet address ${privateKey}`).toLowerCase();
-log(`node "${args.name}" identity ${address}`);
+log(`node "${args.name}" identity ${address}${savedConfig ? " (reused)" : ""}`);
+// Persist the node's key + config (gitignored) so this identity is stable.
+writeFileSync(
+  nodeConfigFile,
+  JSON.stringify({ name: args.name, address, privateKey, port, weight, type: typeName, location }, null, 2) + "\n",
+);
 
-// 2. Trust — register the node on-chain (explicit grant; weighted).
-log(`registering on-chain (type ${typeName}=${typeNum}, weight ${weight})…`);
-sh(
-  `cast send ${registry} "registerValidator(address,uint8,uint32)" ${address} ${typeNum} ${weight} ` +
-    `--rpc-url ${rpcUrl} --private-key ${adminKey}`,
-);
-const activeWeight = sh(
+// 2. Trust — register the node on-chain (explicit grant; weighted). Skip if it
+//    is already an active validator (re-registering would revert).
+const currentWeight = sh(
   `cast call ${registry} "activeWeight(address)(uint256)" ${address} --rpc-url ${rpcUrl}`,
-);
-log(`on-chain active weight: ${activeWeight}`);
+).split(" ")[0];
+if (currentWeight && currentWeight !== "0") {
+  log(`already registered on-chain (active weight ${currentWeight}) — skipping registration`);
+} else {
+  log(`registering on-chain (type ${typeName}=${typeNum}, weight ${weight})…`);
+  sh(
+    `cast send ${registry} "registerValidator(address,uint8,uint32)" ${address} ${typeNum} ${weight} ` +
+      `--rpc-url ${rpcUrl} --private-key ${adminKey}`,
+  );
+  const activeWeight = sh(
+    `cast call ${registry} "activeWeight(address)(uint256)" ${address} --rpc-url ${rpcUrl}`,
+  ).split(" ")[0];
+  log(`on-chain active weight: ${activeWeight}`);
+}
 
 // 3. Operation — run the validator binary (release). Build if missing.
 const validatorBin = join(ROOT, "target/release/step-validator-node");

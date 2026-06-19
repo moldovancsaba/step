@@ -34,17 +34,39 @@ const LOGS = join(RUNTIME, "logs");
 const PID_FILE = join(RUNTIME, "pids.json");
 const PATH_EXT = `${process.env.HOME}/.cargo/bin:${process.env.HOME}/.foundry/bin:${process.env.PATH}`;
 
-// Anvil deterministic accounts (test chain only).
+// Chain funding accounts. These are the local chain's pre-funded accounts (it
+// pays its own gas); the user's value lives in their own wallets + the persisted
+// chain state, not these. Admin/relayer/worker MUST be funded on the chain, so
+// they are the chain's genesis accounts.
 const ANVIL_KEYS = {
   admin: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80", // acct 0
   relayer: "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d", // acct 1
   worker: "0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a", // acct 2
 };
-const VALIDATOR_KEYS = [
-  "0x1111111111111111111111111111111111111111111111111111111111111111",
-  "0x2222222222222222222222222222222222222222222222222222222222222222",
-  "0x3333333333333333333333333333333333333333333333333333333333333333",
-];
+
+const SECRETS_FILE = join(RUNTIME, "secrets.json");
+const STATE_FILE = join(RUNTIME, "anvil-state.json");
+const ACCOUNT_DB = join(RUNTIME, "account.db");
+
+/**
+ * Durable secrets + validator identities. Generated ONCE and reused across
+ * restarts so sessions, the nonce HMAC, and validator addresses are stable (a
+ * fresh set each run is the "demo" behaviour we are removing). Stored under
+ * .runtime/ (gitignored), never committed.
+ */
+function loadOrCreateSecrets() {
+  if (existsSync(SECRETS_FILE)) return JSON.parse(readFileSync(SECRETS_FILE, "utf8"));
+  const s = {
+    GATEWAY_NONCE_SECRET: randomBytes(24).toString("hex"),
+    MERCHANT_QR_SECRET: randomBytes(24).toString("hex"),
+    FOUNDATION_API_TOKEN: randomBytes(24).toString("hex"),
+    EVIDENCE_MASTER_KEY: randomBytes(32).toString("hex"),
+    SESSION_SIGNING_KEY: randomBytes(32).toString("hex"),
+    VALIDATOR_KEYS: [0, 1, 2].map(() => `0x${randomBytes(32).toString("hex")}`),
+  };
+  writeFileSync(SECRETS_FILE, JSON.stringify(s, null, 2) + "\n");
+  return s;
+}
 
 const PORTS = {
   anvil: 8545,
@@ -122,45 +144,70 @@ async function main() {
   }
   mkdirSync(LOGS, { recursive: true });
 
-  // 1. Generated secrets for this run (never committed).
-  const secrets = {
-    GATEWAY_NONCE_SECRET: randomBytes(24).toString("hex"),
-    MERCHANT_QR_SECRET: randomBytes(24).toString("hex"),
-    FOUNDATION_API_TOKEN: randomBytes(24).toString("hex"),
-    EVIDENCE_MASTER_KEY: randomBytes(32).toString("hex"),
-  };
+  // 1. Durable secrets + validator identities (generated once, reused).
+  const secrets = loadOrCreateSecrets();
+  const VALIDATOR_KEYS = secrets.VALIDATOR_KEYS;
 
-  // 2. Anvil.
-  log("starting anvil…");
-  start("anvil", "anvil", ["--port", String(PORTS.anvil), "--chain-id", "31337", "--silent"], {});
+  // 2. Anvil with PERSISTENT state: load prior state if present, dump on exit.
+  //    The chain (balances, NFTs, validator registrations) survives a restart.
+  log(existsSync(STATE_FILE) ? "starting anvil (loading saved state)…" : "starting anvil…");
+  const anvilArgs = [
+    "--port", String(PORTS.anvil),
+    "--chain-id", "31337",
+    "--silent",
+    "--state", STATE_FILE, // load if exists + dump on graceful exit
+    "--state-interval", "2", // also dump every 2s so state survives a hard kill
+  ];
+  start("anvil", "anvil", anvilArgs, {});
   await portOpen(PORTS.anvil);
 
-  // 3. Deploy contracts (param delay 0 for dev so admin can tune live).
-  log("deploying contracts…");
-  sh(
-    `forge script script/Deploy.s.sol --rpc-url http://127.0.0.1:${PORTS.anvil} --broadcast`,
-    {
-      cwd: join(ROOT, "contracts"),
-      env: { ...process.env, PATH: PATH_EXT, DEPLOYER_PRIVATE_KEY: ANVIL_KEYS.admin, STEP_PARAM_DELAY: "0" },
-    },
-  );
-  const deployments = JSON.parse(
-    readFileSync(join(ROOT, "contracts/deployments/31337.json"), "utf8"),
-  );
-  log(`deployed; verifier ${deployments.MiningClaimVerifier}`);
+  // 3. Deploy contracts only if not already on the (persisted) chain. On a
+  //    restored chain the contracts already exist — redeploying would orphan the
+  //    state, so we skip straight to reusing them.
+  const deployFile = join(ROOT, "contracts/deployments/31337.json");
+  const codeAt = (addr) =>
+    sh(`cast code ${addr} --rpc-url http://127.0.0.1:${PORTS.anvil}`).replace(/\s/g, "");
+  let deployments;
+  const alreadyDeployed =
+    existsSync(deployFile) &&
+    (() => {
+      try {
+        const d = JSON.parse(readFileSync(deployFile, "utf8"));
+        return d.MiningClaimVerifier && codeAt(d.MiningClaimVerifier) !== "0x";
+      } catch {
+        return false;
+      }
+    })();
 
-  // 4. Register the three protocol validators on-chain (weight 50, quorum 100).
-  log("registering validators on-chain…");
-  for (const pk of VALIDATOR_KEYS) {
-    const addr = sh(`cast wallet address ${pk}`);
+  if (alreadyDeployed) {
+    deployments = JSON.parse(readFileSync(deployFile, "utf8"));
+    log(`reusing deployed contracts; verifier ${deployments.MiningClaimVerifier}`);
+  } else {
+    log("deploying contracts…");
     sh(
-      `cast send ${deployments.ValidatorRegistry} "registerValidator(address,uint8,uint32)" ${addr} 5 50 ` +
-        `--rpc-url http://127.0.0.1:${PORTS.anvil} --private-key ${ANVIL_KEYS.admin}`,
+      `forge script script/Deploy.s.sol --rpc-url http://127.0.0.1:${PORTS.anvil} --broadcast`,
+      {
+        cwd: join(ROOT, "contracts"),
+        env: { ...process.env, PATH: PATH_EXT, DEPLOYER_PRIVATE_KEY: ANVIL_KEYS.admin, STEP_PARAM_DELAY: "0" },
+      },
     );
+    deployments = JSON.parse(readFileSync(deployFile, "utf8"));
+    log(`deployed; verifier ${deployments.MiningClaimVerifier}`);
+
+    // Register the protocol validators on-chain (weight 50, quorum 100) — once,
+    // on first deploy. (Idempotent guard: registering an active validator again
+    // would revert, so this only runs on the fresh-deploy path.)
+    log("registering validators on-chain…");
+    for (const pk of VALIDATOR_KEYS) {
+      const addr = sh(`cast wallet address ${pk}`);
+      sh(
+        `cast send ${deployments.ValidatorRegistry} "registerValidator(address,uint8,uint32)" ${addr} 5 50 ` +
+          `--rpc-url http://127.0.0.1:${PORTS.anvil} --private-key ${ANVIL_KEYS.admin}`,
+      );
+    }
   }
 
   // 5. Write the runtime env file (operator + smoke test read this).
-  const deployFile = join(ROOT, "contracts/deployments/31337.json");
   const envLines = {
     STEP_CHAIN_ID: "31337",
     STEP_RPC_URL: `http://127.0.0.1:${PORTS.anvil}`,
@@ -207,8 +254,9 @@ async function main() {
   });
   await Promise.all(PORTS.validators.map((p) => httpOk(`http://127.0.0.1:${p}/healthz`)));
 
-  // Seed the federation directory with the 3 base trust centers (Protocol class,
-  // weight 50). `node list`/`node join` read and extend this file.
+  // Seed/refresh the federation directory with the 3 base trust centers
+  // (Protocol class, weight 50), MERGING with any nodes added via `node join` so
+  // they survive a restart. `node list`/`node join` read and extend this file.
   const baseNodes = PORTS.validators.map((port, i) => ({
     name: `validator-${i}`,
     address: sh(`cast wallet address ${VALIDATOR_KEYS[i]}`).toLowerCase(),
@@ -218,7 +266,16 @@ async function main() {
     location: "this-machine",
     status: "active",
   }));
-  writeFileSync(envLines.NODE_DIRECTORY_FILE, JSON.stringify({ nodes: baseNodes }, null, 2) + "\n");
+  const baseAddrs = new Set(baseNodes.map((n) => n.address));
+  const existingExtra = existsSync(envLines.NODE_DIRECTORY_FILE)
+    ? (JSON.parse(readFileSync(envLines.NODE_DIRECTORY_FILE, "utf8")).nodes ?? []).filter(
+        (n) => !baseAddrs.has((n.address ?? "").toLowerCase()),
+      )
+    : [];
+  writeFileSync(
+    envLines.NODE_DIRECTORY_FILE,
+    JSON.stringify({ nodes: [...baseNodes, ...existingExtra] }, null, 2) + "\n",
+  );
 
   // 7. TypeScript services via tsx.
   const tsService = (name, dir, port, extraEnv) => {
@@ -271,6 +328,8 @@ async function main() {
     ACCOUNT_PORT: String(PORTS.account),
     SECURE_COOKIES: "false", // local http dev
     COOKIE_SAMESITE: "Lax", // same-site across localhost ports; sent on credentialed fetch
+    ACCOUNT_DB_FILE: ACCOUNT_DB, // durable accounts (survive restart)
+    SESSION_SIGNING_KEY: secrets.SESSION_SIGNING_KEY, // stable → sessions survive restart
   });
   await httpOk(`http://127.0.0.1:${PORTS.account}/healthz`);
 

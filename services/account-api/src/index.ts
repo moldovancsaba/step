@@ -10,19 +10,19 @@
 import { serve } from "@hono/node-server";
 import { randomBytes } from "node:crypto";
 import { createApp } from "./app.js";
-import { InMemoryAccountStore } from "./store.js";
+import { InMemoryAccountStore, type AccountStore } from "./store.js";
+import { SqliteAccountStore } from "./sqlite-store.js";
 
 const sessionSecret = process.env.SESSION_SIGNING_KEY;
 if (!sessionSecret && process.env.NODE_ENV === "production") {
   throw new Error("SESSION_SIGNING_KEY is required in production");
 }
 
-const store = new InMemoryAccountStore();
-if (process.env.DATABASE_URL) {
-  console.warn(
-    "DATABASE_URL set but Postgres adapter not enabled in this build; using in-memory store",
-  );
-}
+// Durable by default: ACCOUNT_DB_FILE points at a SQLite file so accounts and
+// their encrypted wallet vaults survive a restart. Unset (tests) → in-memory.
+const dbFile = process.env.ACCOUNT_DB_FILE;
+const store: AccountStore = dbFile ? new SqliteAccountStore(dbFile) : new InMemoryAccountStore();
+console.log(dbFile ? `account-api store: SQLite (${dbFile})` : "account-api store: in-memory");
 
 // Browser origins allowed to call this API with credentials. Local-first dev
 // serves the web app from a different port (localhost:3020) than this API
