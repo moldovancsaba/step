@@ -22,6 +22,12 @@ pub struct NodeConfig {
     /// Browser origins allowed to read the public mesh endpoints (CORS). Empty =
     /// no CORS headers (server-to-server only). Set via STEP_CORS_ORIGINS.
     pub cors_origins: Vec<String>,
+    /// Operator-facing identity for the federation directory (NODE_NAME,
+    /// NODE_TYPE, NODE_LOCATION). Descriptive only — on-chain ValidatorRegistry
+    /// is the trust anchor.
+    pub node_name: String,
+    pub node_type: String,
+    pub node_location: String,
 }
 
 impl NodeConfig {
@@ -74,6 +80,9 @@ impl NodeConfig {
                 .map(|s| s.trim().to_string())
                 .filter(|s| !s.is_empty())
                 .collect(),
+            node_name: std::env::var("NODE_NAME").unwrap_or_else(|_| "step-node".into()),
+            node_type: std::env::var("NODE_TYPE").unwrap_or_else(|_| "Independent".into()),
+            node_location: std::env::var("NODE_LOCATION").unwrap_or_else(|_| "unspecified".into()),
         })
     }
 }

@@ -8,7 +8,7 @@
  * PROOF_STORAGE_URL, STEP_PROTOCOL_PARAMS, GATEWAY_PORT.
  */
 import { serve } from "@hono/node-server";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import {
   createPublicClient,
@@ -93,11 +93,38 @@ async function submitFinalise(
   return txHash;
 }
 
+const staticValidatorUrls = env("VALIDATOR_URLS").split(",").map((s) => s.trim());
+
+// Node directory (NODE_DIRECTORY_FILE): the live federation of trust-center
+// nodes. The `node join` operator command appends a node here when it registers
+// on-chain; the gateway unions it with the static list so a node that joined
+// after startup participates in quorum — no gateway restart.
+interface NodeDirectoryEntry {
+  address: string;
+  url: string;
+  name?: string;
+  weight?: number;
+  status?: string;
+}
+function directoryUrls(): string[] {
+  const file = process.env.NODE_DIRECTORY_FILE;
+  if (!file || !existsSync(file)) return [];
+  try {
+    const dir = JSON.parse(readFileSync(file, "utf8")) as { nodes?: NodeDirectoryEntry[] };
+    return (dir.nodes ?? [])
+      .filter((n) => (n.status ?? "active") === "active" && typeof n.url === "string")
+      .map((n) => n.url.trim());
+  } catch {
+    return []; // a malformed/half-written directory must never break quorum
+  }
+}
+
 const deps: GatewayDeps = {
   nonceSecret: env("GATEWAY_NONCE_SECRET"),
   nonceTtlSeconds: params.nonceTtlSeconds,
   quorumThresholdWeight: BigInt(params.quorumThresholdWeight),
-  validatorUrls: env("VALIDATOR_URLS").split(",").map((s) => s.trim()),
+  validatorUrls: staticValidatorUrls,
+  listValidatorUrls: () => [...new Set([...staticValidatorUrls, ...directoryUrls()])],
 
   async validate(url: string, claim: Claim) {
     const resp = await fetch(`${url}/v1/validate`, {

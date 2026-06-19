@@ -132,17 +132,57 @@ your security exposure. The options (Phase 2):
 These differ in how much of your home machine gets exposed and how much new
 infrastructure you stand up — which is why it's your call, not a default.
 
-## 6. Phased plan
+## 6. Adding a trust-center node (delivered)
 
-- **Phase 1 — local-first (DONE).** Whole backend on this Mac; web app wired to
-  it; map/login/wallet work in-browser. CORS + session-cookie fixes landed.
-- **Phase 2 — add a second trust-center node.** A `node join` operator script:
-  generate a key, register on-chain with a weight, run the validator pointed at
-  the shared chain, over the chosen transport (§5). Prove a 2-location quorum.
+A node joins the federation with one command:
+
+```bash
+# Add a node (here on this machine at :9104; on another machine it's the same
+# command pointed at the shared chain — see the remote env vars below).
+node scripts/node/join.mjs --name vienna --port 9104 --weight 50 \
+     --type Infrastructure --location "Vienna, AT"
+
+# See the whole federation: directory ∪ on-chain weight ∪ live health.
+node scripts/node/list.mjs
+```
+
+`join.mjs` performs the three acts of §3: it mints (or accepts) the node's key,
+**registers it on-chain** in `ValidatorRegistry` with a weight (the trust grant),
+runs the validator, then appends it to the federation directory
+(`.runtime/nodes.json`). The **gateway reads that directory live**
+(`listValidatorUrls`), so the new node is fanned claims and its weighted vote
+counts toward quorum **without a restart**. `list.mjs` cross-checks each node's
+directory entry against its on-chain `activeWeight` and its live `/v1/node/info`
+— a node is only trusted when all three agree.
+
+Verified locally: a freshly joined node was registered on-chain (active weight
+50), independently validated a real claim from the gateway, and signed an
+approve vote — federation weight 150 → 200.
+
+**Running a node on another machine.** Same command; provide the shared chain in
+the environment instead of reading `.runtime/.env.runtime`:
+
+```bash
+STEP_RPC_URL=https://<shared-chain-rpc> \
+STEP_CHAIN_ID=<id> \
+STEP_DEPLOYMENTS_FILE=/path/to/deployments.json \   # or VERIFIER_CONTRACT_ADDRESS + VALIDATOR_REGISTRY
+GATEWAY_NONCE_SECRET=<shared-secret> \
+STEP_PROTOCOL_PARAMS=/path/to/protocol-params.json \
+STEP_ADMIN_KEY=<foundation-admin-key> \             # authorises registerValidator
+  node scripts/node/join.mjs --name budapest --port 9104 --weight 50 --type Infrastructure
+```
+
+How the remote node reaches the shared chain + how the gateway reaches the remote
+node (tunnel vs public endpoint) is the §5 networking decision.
+
+## 7. Remaining phases
+
 - **Phase 3 — P2P gossip.** Replace/augment the gateway hub with libp2p gossip so
-  nodes exchange claims/votes peer-to-peer; submit on quorum.
-- **Phase 4 — shared public chain + node onboarding docs.** Move off the local
-  devchain to a shared chain so locations agree without trusting this Mac's chain.
+  nodes exchange claims/votes peer-to-peer; submit on quorum. (Message shapes are
+  already transport-independent.)
+- **Phase 4 — shared public chain.** Move off the local devchain to a shared
+  chain so locations agree without trusting this Mac's chain; wire the chosen
+  §5 transport so remote nodes connect.
 
 ## 7. Why this is honest about trust
 

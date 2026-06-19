@@ -171,6 +171,9 @@ async function main() {
     VALIDATOR_URLS: PORTS.validators.map((p) => `http://127.0.0.1:${p}`).join(","),
     GATEWAY_URL: `http://127.0.0.1:${PORTS.gateway}`,
     MESH_API_URL: `http://127.0.0.1:${PORTS.validators[0]}`,
+    // Federation directory: trust-center nodes (incl. the base 3) the gateway
+    // fans claims out to. `scripts/node/join.mjs` appends new nodes here.
+    NODE_DIRECTORY_FILE: join(RUNTIME, "nodes.json"),
     INDEXER_URL: `http://127.0.0.1:${PORTS.indexer}`,
     PROOF_STORAGE_URL: `http://127.0.0.1:${PORTS.proofStorage}`,
     EXCHANGE_URL: `http://127.0.0.1:${PORTS.exchange}`,
@@ -203,6 +206,19 @@ async function main() {
     });
   });
   await Promise.all(PORTS.validators.map((p) => httpOk(`http://127.0.0.1:${p}/healthz`)));
+
+  // Seed the federation directory with the 3 base trust centers (Protocol class,
+  // weight 50). `node list`/`node join` read and extend this file.
+  const baseNodes = PORTS.validators.map((port, i) => ({
+    name: `validator-${i}`,
+    address: sh(`cast wallet address ${VALIDATOR_KEYS[i]}`).toLowerCase(),
+    url: `http://127.0.0.1:${port}`,
+    weight: 50,
+    type: "Protocol",
+    location: "this-machine",
+    status: "active",
+  }));
+  writeFileSync(envLines.NODE_DIRECTORY_FILE, JSON.stringify({ nodes: baseNodes }, null, 2) + "\n");
 
   // 7. TypeScript services via tsx.
   const tsService = (name, dir, port, extraEnv) => {

@@ -76,6 +76,10 @@ export interface GatewayDeps {
   nonceTtlSeconds: number;
   quorumThresholdWeight: bigint;
   validatorUrls: string[];
+  /** Current validator endpoints for fan-out. Defaults to `validatorUrls`, but a
+   *  deployment can supply a live view (e.g. a node directory that trust-center
+   *  nodes join) so an added node participates without restarting the gateway. */
+  listValidatorUrls?(): string[] | Promise<string[]>;
   /** POST a claim to one validator node, returns its signed vote. */
   validate(url: string, claim: Claim): Promise<ValidateResponse>;
   /** On-chain active weight for a validator (ValidatorRegistry.activeWeight). */
@@ -185,10 +189,15 @@ export function createApp(deps: GatewayDeps) {
     };
     records.set(ch, record);
 
-    // Fan out to all configured validators in parallel; tolerate node failures
-    // (quorum decides, not availability of every node).
+    // Fan out to the current federation in parallel; tolerate node failures
+    // (quorum decides, not availability of every node). The validator set is the
+    // live directory when provided, so trust-center nodes that joined since
+    // startup are included.
+    const validatorUrls = deps.listValidatorUrls
+      ? await deps.listValidatorUrls()
+      : deps.validatorUrls;
     const results = await Promise.allSettled(
-      deps.validatorUrls.map((url) => deps.validate(url, claim)),
+      validatorUrls.map((url) => deps.validate(url, claim)),
     );
     const votes: WeightedVote[] = [];
     const rejectReasons = new Set<string>();

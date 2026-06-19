@@ -48,10 +48,28 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/v1/mesh/resolve", get(mesh_resolve))
         .route("/v1/mesh/cover", get(mesh_cover))
         .route("/v1/mesh/triangle/{id}", get(mesh_triangle))
+        .route("/v1/node/info", get(node_info))
         .route("/healthz", get(healthz))
         .route("/metrics", get(metrics))
         .layer(cors)
         .with_state(state)
+}
+
+/// Self-identification for the federation directory: this trust center's
+/// on-chain address, declared weight class, and human labels. The address is the
+/// key registered in ValidatorRegistry — clients cross-check it against the chain
+/// (the trust anchor), so this endpoint is descriptive, not authoritative.
+async fn node_info(State(state): State<Arc<AppState>>) -> Json<serde_json::Value> {
+    Json(serde_json::json!({
+        "validator": format_address(&state.validator_address),
+        "name": state.config.node_name,
+        "type": state.config.node_type,
+        "location": state.config.node_location,
+        "chain_id": state.config.chain_id,
+        "verifier_contract": format_address(&state.verifier_contract),
+        "mesh_spec_version": step_mesh_engine::MESH_SPEC_VERSION,
+        "software_version": env!("CARGO_PKG_VERSION"),
+    }))
 }
 
 /// CORS for the public, read-only mesh endpoints. Specific allow-listed origins
@@ -314,6 +332,9 @@ mod tests {
             .into(),
             wallet_rate_limit_per_hour: 5,
             cors_origins: vec![],
+            node_name: "test".into(),
+            node_type: "Independent".into(),
+            node_location: "test".into(),
         };
         let key = SigningKey::from_slice(&[0x11; 32]).unwrap();
         Arc::new(AppState::new(config, key))
@@ -532,6 +553,9 @@ mod mesh_api_tests {
             .into(),
             wallet_rate_limit_per_hour: 5,
             cors_origins: vec![],
+            node_name: "test".into(),
+            node_type: "Independent".into(),
+            node_location: "test".into(),
         };
         Arc::new(AppState::new(
             config,
