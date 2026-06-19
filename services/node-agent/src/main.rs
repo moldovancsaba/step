@@ -93,12 +93,12 @@ fn control_loop(cfg: AgentConfig, status: Shared) {
     let chain = ChainReader::new(&cfg.rpc_url, &cfg.release_registry, &cfg.platform_id)
         .expect("chain reader");
     let secrets = step_node_agent::secrets::Secrets::from_env(&cfg.node_address);
-    let supervisor = ProcessSupervisor::new(&layout, 9101, secrets);
+    let supervisor = ProcessSupervisor::new(&layout, 9101, secrets.clone());
     let fetcher = cfg
         .artifact_base_url
         .as_deref()
         .map(|u| HttpFetcher::new(u, &cfg.platform, &layout));
-    let canary = HealthCanary::new(cfg.agent_port.wrapping_add(1000));
+    let canary = HealthCanary::new(cfg.agent_port.wrapping_add(1000), secrets);
 
     // Start the validator if we already have a current release.
     if layout.current().is_some() {

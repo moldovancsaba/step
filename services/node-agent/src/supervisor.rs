@@ -190,13 +190,15 @@ impl Fetcher for HttpFetcher {
 /// the trait shape supports it without changing callers.)
 pub struct HealthCanary {
     probe_port: u16,
+    secrets: Secrets,
     client: reqwest::blocking::Client,
 }
 
 impl HealthCanary {
-    pub fn new(probe_port: u16) -> Self {
+    pub fn new(probe_port: u16, secrets: Secrets) -> Self {
         Self {
             probe_port,
+            secrets,
             client: reqwest::blocking::Client::builder()
                 .timeout(Duration::from_secs(2))
                 .build()
@@ -208,12 +210,25 @@ impl HealthCanary {
 impl Canary for HealthCanary {
     fn run(&self, staged_dir: &Path) -> Result<bool, String> {
         let bin = staged_dir.join("step-validator-node");
+        // The canary runs the candidate binary with the node's real identity (from
+        // the secure store) + non-secret config inherited from the agent's env, so
+        // it exercises the actual startup path, not a stub.
+        let key = self
+            .secrets
+            .get("validatorKey")
+            .ok_or("canary: validator key unavailable")?;
+        let nonce = self
+            .secrets
+            .get("nonceSecret")
+            .ok_or("canary: nonce secret unavailable")?;
         let mut child = std::process::Command::new(&bin)
             .env("VALIDATOR_PORT", self.probe_port.to_string())
             .env(
                 "STEP_PROTOCOL_PARAMS",
                 staged_dir.join("protocol-params.json"),
             )
+            .env("VALIDATOR_PRIVATE_KEY", key)
+            .env("GATEWAY_NONCE_SECRET", nonce)
             .spawn()
             .map_err(|e| format!("canary spawn: {e}"))?;
         let url = format!("http://127.0.0.1:{}/healthz", self.probe_port);
