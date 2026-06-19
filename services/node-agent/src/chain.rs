@@ -8,6 +8,8 @@ use std::time::Duration;
 
 /// ABI selector for `effectiveTarget(address,bytes32)` (computed via `cast sig`).
 const SEL_EFFECTIVE_TARGET: [u8; 4] = [0x17, 0x4a, 0x31, 0x6d];
+/// ABI selector for `release(bytes32,uint64)`.
+const SEL_RELEASE: [u8; 4] = [0x5c, 0xe8, 0xc9, 0xc4];
 
 pub struct ChainReader {
     client: reqwest::blocking::Client,
@@ -41,6 +43,19 @@ impl ChainReader {
         data.extend_from_slice(&[0u8; 12]);
         data.extend_from_slice(&node); // left-padded address
         data.extend_from_slice(&self.platform_id);
+        let out = self.eth_call(&data)?;
+        Ok(decode_release(&out))
+    }
+
+    /// The authorized release for an exact version on this platform — used by the
+    /// integrity check to get the baseline hashes for the version actually running
+    /// (NOT the target, which may be newer). `None` if unknown/revoked.
+    pub fn release_of(&self, version: u64) -> Result<Option<ReleaseRef>, String> {
+        let mut data = Vec::with_capacity(4 + 64);
+        data.extend_from_slice(&SEL_RELEASE);
+        data.extend_from_slice(&self.platform_id);
+        data.extend_from_slice(&[0u8; 24]);
+        data.extend_from_slice(&version.to_be_bytes()); // left-padded uint64
         let out = self.eth_call(&data)?;
         Ok(decode_release(&out))
     }

@@ -190,12 +190,9 @@ fn run_integrity(
             return;
         }
     };
-    // Authorized baseline for the running version (None => fail-closed).
-    let expected = chain
-        .effective_target(&cfg.node_address)
-        .ok()
-        .flatten()
-        .filter(|r| r.version == current);
+    // Authorized baseline for the version actually RUNNING (not the target, which
+    // may be newer). None => fail-closed.
+    let expected = chain.release_of(current).ok().flatten();
     match evaluate(&measured, expected.as_ref()) {
         Verdict::Ok => set(status, |s| s.integrity = "ok".into()),
         Verdict::Tampered { field } => {
