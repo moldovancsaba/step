@@ -109,17 +109,35 @@ copyFileSync(
 );
 
 const corsOrigins = pick("STEP_CORS_ORIGINS") ?? "";
+const keychainService = "app.step.node";
+const acct = (k) => `step.node.${cfg.address.toLowerCase()}.${k}`;
+
+// #43: secrets are NOT baked into run.sh. provision-secrets.sh stores them once
+// in the OS keychain; run.sh reads them back at start, so the persisted scripts
+// hold no plaintext key/secret at rest.
+const provisionSh = `#!/usr/bin/env bash
+# Store this node's secrets in the macOS keychain (run ONCE). Linux: use
+# secret-tool store --label step "account" "${acct("validatorKey")}".
+set -euo pipefail
+security add-generic-password -U -s "${keychainService}" -a "${acct("validatorKey")}" -w "${cfg.privateKey}"
+security add-generic-password -U -s "${keychainService}" -a "${acct("nonceSecret")}" -w "${nonceSecret}"
+echo "secrets provisioned to keychain for ${cfg.name}; you may delete any plaintext copies."
+`;
+writeFileSync(join(stage, "provision-secrets.sh"), provisionSh, { mode: 0o700 });
+
 const runSh = `#!/usr/bin/env bash
 # STEP trust-center node "${cfg.name}" — run this on the target machine.
-# Built for: ${arch}
+# Built for: ${arch}.  Run ./provision-secrets.sh ONCE first.
 set -euo pipefail
 cd "$(dirname "$0")"
 chmod +x ./step-validator-node
+# Secrets are read from the keychain at start — never stored in this script (#43).
+VALIDATOR_PRIVATE_KEY="$(security find-generic-password -s "${keychainService}" -a "${acct("validatorKey")}" -w)"
+GATEWAY_NONCE_SECRET="$(security find-generic-password -s "${keychainService}" -a "${acct("nonceSecret")}" -w)"
+export VALIDATOR_PRIVATE_KEY GATEWAY_NONCE_SECRET
 export VALIDATOR_PORT=${port}
 export STEP_CHAIN_ID=${chainId}
 export VERIFIER_CONTRACT_ADDRESS=${verifier}
-export VALIDATOR_PRIVATE_KEY=${cfg.privateKey}
-export GATEWAY_NONCE_SECRET=${nonceSecret}
 export STEP_PROTOCOL_PARAMS=./protocol-params.json
 export STEP_CORS_ORIGINS='${corsOrigins}'
 export VALIDATOR_ALLOW_DEV_CLAIMS=${process.env.VALIDATOR_ALLOW_DEV_CLAIMS ?? "true"}

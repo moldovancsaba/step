@@ -4,6 +4,7 @@
 
 use crate::hashes::sha256_file;
 use crate::layout::Layout;
+use crate::secrets::Secrets;
 use crate::update::{Canary, Fetcher, Supervisor};
 use crate::ReleaseRef;
 use std::io::Read;
@@ -17,16 +18,18 @@ pub struct ProcessSupervisor {
     current_bin: PathBuf,
     params_path: PathBuf,
     validator_port: u16,
+    secrets: Secrets,
     child: Mutex<Option<Child>>,
     client: reqwest::blocking::Client,
 }
 
 impl ProcessSupervisor {
-    pub fn new(layout: &Layout, validator_port: u16) -> Self {
+    pub fn new(layout: &Layout, validator_port: u16, secrets: Secrets) -> Self {
         Self {
             current_bin: layout.current_link().join("step-validator-node"),
             params_path: layout.current_link().join("protocol-params.json"),
             validator_port,
+            secrets,
             child: Mutex::new(None),
             client: reqwest::blocking::Client::builder()
                 .timeout(Duration::from_secs(3))
@@ -56,12 +59,23 @@ impl Supervisor for ProcessSupervisor {
             let _ = c.kill();
             let _ = c.wait();
         }
-        // The child inherits the agent's environment (validator key + nonce secret
-        // provisioned via the secure store, #43), and runs the symlinked `current`
-        // binary + params so a version swap is picked up on restart.
+        // Secrets are loaded from the OS secure store (#43) and injected in-process
+        // — never from a plaintext file/unit. Fail-closed: no identity, no child.
+        let key = self
+            .secrets
+            .get("validatorKey")
+            .ok_or("validator key unavailable from the secure store (fail-closed)")?;
+        let nonce = self
+            .secrets
+            .get("nonceSecret")
+            .ok_or("nonce secret unavailable from the secure store (fail-closed)")?;
+        // Non-secret config (verifier address, chain id) is inherited from env; the
+        // symlinked `current` binary + params mean a version swap is picked up here.
         let child = std::process::Command::new(&self.current_bin)
             .env("VALIDATOR_PORT", self.validator_port.to_string())
             .env("STEP_PROTOCOL_PARAMS", &self.params_path)
+            .env("VALIDATOR_PRIVATE_KEY", key)
+            .env("GATEWAY_NONCE_SECRET", nonce)
             .spawn()
             .map_err(|e| format!("spawn validator: {e}"))?;
         *guard = Some(child);

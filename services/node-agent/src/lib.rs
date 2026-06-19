@@ -14,6 +14,7 @@ pub mod config;
 pub mod hashes;
 pub mod integrity;
 pub mod layout;
+pub mod secrets;
 pub mod supervisor;
 pub mod update;
 
