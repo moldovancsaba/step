@@ -16,6 +16,11 @@ import {StepAccess, StepManaged} from "./StepAccess.sol";
 ///         per-node), promote a fleet default, and revoke (emergency kill-switch);
 ///         agents resolve their effective target deterministically.
 contract ReleaseRegistry is StepManaged {
+    /// Local role constant (== StepAccess.RELEASE_ROLE). Defined here so the
+    /// contract works against any StepAccess version without depending on it
+    /// exposing the constant as a function.
+    bytes32 public constant RELEASE_ROLE = keccak256("RELEASE_ROLE");
+
     struct Release {
         uint64 version; // packed semver: (major<<32)|(minor<<16)|patch
         bytes32 binaryHash; // sha256 of the agent/validator binary
@@ -86,7 +91,7 @@ contract ReleaseRegistry is StepManaged {
     /// @notice Make an already-published, non-revoked version the fleet default.
     function promote(bytes32 platform, uint64 version)
         external
-        onlyStepRole(ACCESS.RELEASE_ROLE())
+        onlyStepRole(RELEASE_ROLE)
     {
         Release storage r = _release[platform][version];
         if (r.version == 0) revert UnknownRelease(platform, version);
@@ -99,7 +104,7 @@ contract ReleaseRegistry is StepManaged {
     ///         Pass version 0 to clear the pin and follow the platform default.
     function setNodeTarget(address node, uint64 version)
         external
-        onlyStepRole(ACCESS.RELEASE_ROLE())
+        onlyStepRole(RELEASE_ROLE)
     {
         nodeTargetVersion[node] = version;
         emit NodeTargeted(node, version);
@@ -110,7 +115,7 @@ contract ReleaseRegistry is StepManaged {
     ///         version below it.
     function revoke(bytes32 platform, uint64 version)
         external
-        onlyStepRole(ACCESS.RELEASE_ROLE())
+        onlyStepRole(RELEASE_ROLE)
     {
         Release storage r = _release[platform][version];
         if (r.version == 0) revert UnknownRelease(platform, version);

@@ -236,6 +236,35 @@ async function main() {
     }
   }
 
+  // 4b. Additive M8 upgrade: if the trust-update contracts aren't on this
+  //     (possibly persisted) chain yet, deploy them WITHOUT touching existing
+  //     state, and merge their addresses into the address book.
+  const hasReleaseRegistry =
+    deployments.ReleaseRegistry && codeAt(deployments.ReleaseRegistry) !== "0x";
+  if (!hasReleaseRegistry) {
+    log("upgrading: deploying ReleaseRegistry + IntegrityAttestation (M8)…");
+    const out = sh(
+      `forge script script/UpgradeM8.s.sol --rpc-url http://127.0.0.1:${PORTS.anvil} --broadcast`,
+      {
+        cwd: join(ROOT, "contracts"),
+        env: {
+          ...process.env,
+          PATH: PATH_EXT,
+          DEPLOYER_PRIVATE_KEY: ANVIL_KEYS.admin,
+          STEP_ACCESS: deployments.StepAccess,
+          VALIDATOR_REGISTRY: deployments.ValidatorRegistry,
+        },
+      },
+    );
+    const grab = (name) => (out.match(new RegExp(`${name}\\s+(0x[0-9a-fA-F]{40})`)) || [])[1];
+    deployments.ReleaseRegistry = grab("ReleaseRegistry");
+    deployments.IntegrityAttestation = grab("IntegrityAttestation");
+    if (!deployments.ReleaseRegistry) throw new Error("UpgradeM8 did not report a ReleaseRegistry address");
+    writeFileSync(deployFile, JSON.stringify(deployments, null, 2) + "\n");
+    log(`  ReleaseRegistry ${deployments.ReleaseRegistry}`);
+    log(`  IntegrityAttestation ${deployments.IntegrityAttestation}`);
+  }
+
   // 5. Write the runtime env file (operator + smoke test read this).
   const envLines = {
     STEP_CHAIN_ID: "31337",
@@ -244,6 +273,10 @@ async function main() {
     STEP_PROTOCOL_PARAMS: join(ROOT, "config/protocol-params.alpha.json"),
     RELAYER_PRIVATE_KEY: ANVIL_KEYS.relayer,
     WORKER_PRIVATE_KEY: ANVIL_KEYS.worker,
+    RELEASE_REGISTRY: deployments.ReleaseRegistry,
+    INTEGRITY_ATTESTATION: deployments.IntegrityAttestation,
+    RELEASE_SIGNER_KEY: ANVIL_KEYS.admin, // dev: admin holds RELEASE_ROLE (prod: timelock)
+    STEP_ADMIN_KEY: ANVIL_KEYS.admin,
     VALIDATOR_URLS: PORTS.validators.map((p) => `http://127.0.0.1:${p}`).join(","),
     GATEWAY_URL: `http://127.0.0.1:${PORTS.gateway}`,
     MESH_API_URL: `http://127.0.0.1:${PORTS.validators[0]}`,

@@ -15,6 +15,11 @@ import {ValidatorRegistry} from "./ValidatorRegistry.sol";
 ///         This contract must hold VALIDATOR_ADMIN_ROLE so it can transition node
 ///         status; only the two functions below mutate status, both role-gated.
 contract IntegrityAttestation is StepManaged {
+    /// Local role constant (== StepAccess.INTEGRITY_ROLE) so the contract works
+    /// against any StepAccess version. VALIDATOR_ADMIN_ROLE predates this contract
+    /// and is read from ACCESS.
+    bytes32 public constant INTEGRITY_ROLE = keccak256("INTEGRITY_ROLE");
+
     ValidatorRegistry public immutable VALIDATORS;
 
     struct Finding {
@@ -47,7 +52,7 @@ contract IntegrityAttestation is StepManaged {
         bytes32 measuredParams,
         bytes32 measuredConfig,
         bytes32 evidenceHash
-    ) external onlyStepRole(ACCESS.INTEGRITY_ROLE()) {
+    ) external onlyStepRole(INTEGRITY_ROLE) {
         lastFinding[node] = Finding({
             measuredBinary: measuredBinary,
             measuredParams: measuredParams,
