@@ -9,7 +9,7 @@ import Testing
 /// built from the account-api/web vector opens on iOS.
 @Suite struct KeyBackupTests {
     // Same account-api (@noble) parity vector as AccountVaultTests.
-    let password = "pilot-parity-pass-123"
+    let password = "pilot-parity-pass-123" // gitleaks:allow — cross-impl test vector, not a real secret
     let saltB64 = "BwcHBwcHBwcHBwcHBwcHBw=="
     let ivB64 = "CQkJCQkJCQkJCQkJ"
     let ctB64 = "ik0kg57NvE+fnQYOquWdaJUPvRplhtEmsYk5LKLMsDwOXoCB3INh5Iz2kAeBRQcm"

@@ -10,11 +10,11 @@ import Testing
 /// wallet key — proving a vault written on the web opens on iOS (and vice-versa).
 @Suite struct AccountVaultTests {
     // Fixed inputs the vector was generated from.
-    let password = "pilot-parity-pass-123"
+    let password = "pilot-parity-pass-123" // gitleaks:allow — cross-impl test vector, not a real secret
     let saltB64 = "BwcHBwcHBwcHBwcHBwcHBw=="
     let ivB64 = "CQkJCQkJCQkJCQkJ"
     let m = 8192, t = 2, p = 1
-    let expectedAuthKeyB64 = "8LUcmmWVXX5hHQCzp4C2Gv6SLmwi9sRQZpOer5RfdLg="
+    let expectedAuthKeyB64 = "8LUcmmWVXX5hHQCzp4C2Gv6SLmwi9sRQZpOer5RfdLg=" // gitleaks:allow — test vector
     let ctB64 = "ik0kg57NvE+fnQYOquWdaJUPvRplhtEmsYk5LKLMsDwOXoCB3INh5Iz2kAeBRQcm"
     let walletKey = Data(repeating: 0x42, count: 32)
 

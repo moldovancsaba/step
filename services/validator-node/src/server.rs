@@ -9,13 +9,13 @@ use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use tower_http::cors::{AllowOrigin, CorsLayer};
 use step_validation_rules::sign::{
     claim_hash, eip712_vote_digest, format_address, parse_address, sign_digest, triangle_id_hash,
 };
 use step_validation_rules::{validate_claim, Claim, PreviousClaim, ValidationContext, Verdict};
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
+use tower_http::cors::{AllowOrigin, CorsLayer};
 
 #[derive(Debug, Deserialize)]
 pub struct ValidateRequest {

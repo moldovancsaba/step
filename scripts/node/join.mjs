@@ -48,7 +48,7 @@ const VALIDATOR_TYPES = {
 };
 // Anvil deterministic admin (acct 0) — the local dev StepManaged admin. On a
 // real chain the foundation admin key is supplied via STEP_ADMIN_KEY.
-const DEV_ADMIN_KEY = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+const DEV_ADMIN_KEY = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"; // gitleaks:allow — public Anvil/Hardhat account #0 key, local-dev only
 
 function die(msg) {
   console.error(`[join] ${msg}`);
