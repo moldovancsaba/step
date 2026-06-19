@@ -93,7 +93,7 @@ fn control_loop(cfg: AgentConfig, status: Shared) {
     let chain = ChainReader::new(&cfg.rpc_url, &cfg.release_registry, &cfg.platform_id)
         .expect("chain reader");
     let secrets = step_node_agent::secrets::Secrets::from_env(&cfg.node_address);
-    let supervisor = ProcessSupervisor::new(&layout, 9101, secrets.clone());
+    let supervisor = ProcessSupervisor::new(&layout, cfg.validator_port, secrets.clone());
     let fetcher = cfg
         .artifact_base_url
         .as_deref()

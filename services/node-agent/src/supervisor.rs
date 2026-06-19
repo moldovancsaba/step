@@ -156,9 +156,13 @@ impl Fetcher for HttpFetcher {
         let dir = self.releases_dir.join(target.version.to_string());
         std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
         let bin = dir.join("step-validator-node");
+        // Artifacts are addressed by human semver (matching publish/serve), not the
+        // packed-u64 used for the local release directory.
         let url = format!(
             "{}/artifacts/{}/{}",
-            self.base_url, self.platform, target.version
+            self.base_url,
+            self.platform,
+            crate::format_semver(target.version)
         );
         self.download_to(&url, &bin)?;
 

@@ -20,6 +20,8 @@ pub struct AgentConfig {
     pub platform: String,
     /// Agent status server port.
     pub agent_port: u16,
+    /// Port the supervised validator listens on (VALIDATOR_PORT, default 9101).
+    pub validator_port: u16,
     /// Hub artifact base URL (artifacts fetched here, verified vs chain).
     pub artifact_base_url: Option<String>,
     /// How often to poll the chain for the target version.
@@ -55,6 +57,10 @@ impl AgentConfig {
                 .ok()
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(9200),
+            validator_port: std::env::var("VALIDATOR_PORT")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(9101),
             artifact_base_url: std::env::var("ARTIFACT_BASE_URL").ok(),
             poll_interval: secs("AGENT_POLL_INTERVAL", 60),
             integrity_interval: secs("AGENT_INTEGRITY_INTERVAL", 600),

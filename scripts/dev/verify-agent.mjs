@@ -133,6 +133,7 @@ async function main() {
       PLATFORM: platform,
       ARTIFACT_BASE_URL: `http://127.0.0.1:${ARTIFACT_PORT}`,
       AGENT_PORT: String(AGENT_PORT),
+      VALIDATOR_PORT: "9301", // unique — avoid colliding with the main stack's validators
       AGENT_POLL_INTERVAL: "3",
       AGENT_INTEGRITY_INTERVAL: "5",
       AGENT_WATCH_ATTEMPTS: "15",
