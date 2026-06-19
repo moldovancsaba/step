@@ -10,23 +10,31 @@
 import { useState, type ReactNode } from "react";
 import { AppShell, EmptyState } from "@doneisbetter/gds";
 import { Button, Center, Group, Loader, NavLink, Stack, Text } from "@mantine/core";
-import { IconMap2, IconWallet, IconPick, IconBuildingStore } from "@tabler/icons-react";
+import {
+  IconMap2,
+  IconWallet,
+  IconPick,
+  IconBuildingStore,
+  IconServer2,
+} from "@tabler/icons-react";
 import { useSession } from "./session.js";
 import { LoginWall } from "./LoginWall.js";
 import { MapView } from "./MapView.js";
+import { FleetView } from "./FleetView.js";
 import { WalletView } from "./WalletView.js";
 import { WalletUnlock } from "./WalletUnlock.js";
 import { Footer } from "./Footer.js";
 import { loadBackup, downloadBackup } from "./keybackup.js";
 import { isDeviceTrusted, untrustDevice } from "./trusteddevice.js";
 
-type Tab = "map" | "wallet" | "mine" | "market";
+type Tab = "map" | "wallet" | "mine" | "market" | "fleet";
 
 const NAV: { key: Tab; label: string; icon: ReactNode }[] = [
   { key: "map", label: "Map", icon: <IconMap2 size={18} /> },
   { key: "wallet", label: "Wallet", icon: <IconWallet size={18} /> },
   { key: "mine", label: "Mine", icon: <IconPick size={18} /> },
   { key: "market", label: "Marketplace", icon: <IconBuildingStore size={18} /> },
+  { key: "fleet", label: "Fleet", icon: <IconServer2 size={18} /> },
 ];
 
 export function App() {
@@ -116,6 +124,7 @@ export function App() {
       showThemeToggle
     >
       {tab === "map" && <MapView />}
+      {tab === "fleet" && <FleetView />}
       {tab === "wallet" && gate(<WalletView />, "Your wallet is protected by your key.")}
       {tab === "mine" &&
         gate(
