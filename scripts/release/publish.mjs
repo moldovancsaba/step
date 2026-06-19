@@ -116,7 +116,8 @@ const manifest = {
 };
 const manifestPath = join(RUNTIME, "releases", `release-${args.version}.json`);
 writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
-writeFileSync(join(RUNTIME, "releases", `config-${args.version}.json`), configStr + "\n");
+// Write EXACTLY the hashed bytes (no trailing newline) so sha256(file) == configHash.
+writeFileSync(join(RUNTIME, "releases", `config-${args.version}.json`), configStr);
 log(`manifest      ${manifestPath}`);
 
 if (dryRun) {
