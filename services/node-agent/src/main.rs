@@ -143,7 +143,7 @@ fn control_loop(cfg: AgentConfig, status: Shared) {
         // 2. continuous self-integrity
         if last_integrity.elapsed() >= cfg.integrity_interval {
             last_integrity = Instant::now();
-            run_integrity(&cfg, &layout, &chain, &supervisor, &status);
+            run_integrity(&layout, &chain, &supervisor, &status);
         }
 
         // 3. reflect health + sleep until next poll
@@ -174,7 +174,6 @@ fn record_outcome(status: &Shared, outcome: &Outcome) {
 }
 
 fn run_integrity(
-    cfg: &AgentConfig,
     layout: &Layout,
     chain: &ChainReader,
     supervisor: &ProcessSupervisor,
