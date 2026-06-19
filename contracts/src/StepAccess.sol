@@ -23,6 +23,12 @@ contract StepAccess is AccessControl {
     bytes32 public constant VERIFIER_ROLE = keccak256("VERIFIER_ROLE");
     /// @dev Held only by the MiningClaimVerifier; authorises minting slot NFTs (#4/#5).
     bytes32 public constant NFT_MINTER_ROLE = keccak256("NFT_MINTER_ROLE");
+    /// @dev Authorises publishing/targeting node releases in ReleaseRegistry (#34/#35).
+    ///      Held by the release timelock/multisig (#37), never a bare CI key in prod.
+    bytes32 public constant RELEASE_ROLE = keccak256("RELEASE_ROLE");
+    /// @dev Authorises on-chain tamper reports that demote a node from quorum (#36).
+    ///      Held by node agents (self-report) and the hub attestor.
+    bytes32 public constant INTEGRITY_ROLE = keccak256("INTEGRITY_ROLE");
 
     bytes32 public constant PAUSE_MINTING = keccak256("PAUSE_MINTING");
     bytes32 public constant PAUSE_CAMPAIGNS = keccak256("PAUSE_CAMPAIGNS");

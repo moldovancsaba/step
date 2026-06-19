@@ -7,6 +7,7 @@ import {TrinityToken} from "../src/TrinityToken.sol";
 import {MeshRegistry} from "../src/MeshRegistry.sol";
 import {SafetyRegistry} from "../src/SafetyRegistry.sol";
 import {ValidatorRegistry} from "../src/ValidatorRegistry.sol";
+import {ReleaseRegistry} from "../src/ReleaseRegistry.sol";
 import {TriangleMiningState} from "../src/TriangleMiningState.sol";
 import {FoundationTreasury} from "../src/FoundationTreasury.sol";
 import {ProofRegistry} from "../src/ProofRegistry.sol";
@@ -33,6 +34,7 @@ contract Deploy is Script {
     MeshRegistry internal mesh;
     SafetyRegistry internal safety;
     ValidatorRegistry internal validators;
+    ReleaseRegistry internal releases;
     TriangleMiningState internal state;
     FoundationTreasury internal treasury;
     ProofRegistry internal proofs;
@@ -64,6 +66,7 @@ contract Deploy is Script {
         mesh = new MeshRegistry(access, "step-mesh-v1", levels);
         safety = new SafetyRegistry(access);
         validators = new ValidatorRegistry(access);
+        releases = new ReleaseRegistry(access);
         state = new TriangleMiningState(
             access, paramDelay, SLOTS, BASE_REWARD, OPENING_DELAY, COOLDOWN
         );
@@ -95,6 +98,11 @@ contract Deploy is Script {
         access.grantRole(access.CAMPAIGN_MODERATOR_ROLE(), admin);
         access.grantRole(access.VALIDATOR_ADMIN_ROLE(), admin);
         access.grantRole(access.MESH_ADMIN_ROLE(), admin);
+        // Dev: admin holds RELEASE_ROLE + INTEGRITY_ROLE directly. Production moves
+        // RELEASE_ROLE to the timelock/multisig (#37) and grants INTEGRITY_ROLE to
+        // node agents + the hub attestor (#36/#42).
+        access.grantRole(access.RELEASE_ROLE(), admin);
+        access.grantRole(access.INTEGRITY_ROLE(), admin);
         campaigns.setRewardPool(address(pool));
 
         vm.stopBroadcast();
@@ -105,6 +113,7 @@ contract Deploy is Script {
         vm.serializeAddress(json, "MeshRegistry", address(mesh));
         vm.serializeAddress(json, "SafetyRegistry", address(safety));
         vm.serializeAddress(json, "ValidatorRegistry", address(validators));
+        vm.serializeAddress(json, "ReleaseRegistry", address(releases));
         vm.serializeAddress(json, "TriangleMiningState", address(state));
         vm.serializeAddress(json, "FoundationTreasury", address(treasury));
         vm.serializeAddress(json, "ProofRegistry", address(proofs));
