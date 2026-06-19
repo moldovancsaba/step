@@ -97,6 +97,7 @@ const PORTS = {
   merchant: 8097,
   account: 8091,
   nftIndexer: 8092,
+  fleet: 8099,
 };
 
 const procs = [];
@@ -370,6 +371,14 @@ async function main() {
   });
   await httpOk(`http://127.0.0.1:${PORTS.nftIndexer}/healthz`);
 
+  // fleet-api (#45): aggregated trust-center fleet health + alerts for the console.
+  start("fleet-api", "pnpm", ["--filter", "@step/fleet-api", "exec", "tsx", "src/index.ts"], {
+    ...envLines,
+    FLEET_PORT: String(PORTS.fleet),
+    STEP_QUORUM_THRESHOLD: "100",
+  });
+  await httpOk(`http://127.0.0.1:${PORTS.fleet}/healthz`);
+
   writeFileSync(PID_FILE, JSON.stringify(procs, null, 2));
 
   log("");
@@ -382,6 +391,7 @@ async function main() {
   log(`  exchange  http://127.0.0.1:${PORTS.exchange}`);
   log(`  account   http://127.0.0.1:${PORTS.account}  (wallet vault / login)`);
   log(`  nft-index http://127.0.0.1:${PORTS.nftIndexer}  (NFT + marketplace)`);
+  log(`  fleet     http://127.0.0.1:${PORTS.fleet}/v1/fleet  (trust-center fleet health)`);
   log("");
   log("verify:  node scripts/dev/smoke.mjs");
   log("stop:    node scripts/dev/down.mjs");

@@ -11,6 +11,7 @@ packages:
   - "services/proof-storage"
   - "services/exchange-service"
   - "services/campaign-worker"
+  - "services/fleet-api"
   - "apps/web"
   - "apps/web-app"
   - "apps/web-miner"
