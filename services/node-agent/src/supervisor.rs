@@ -165,6 +165,12 @@ impl Fetcher for HttpFetcher {
             crate::format_semver(target.version)
         );
         self.download_to(&url, &bin)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o755))
+                .map_err(|e| e.to_string())?;
+        }
 
         // verify binary hash vs the on-chain authority — fail-closed
         let measured = sha256_file(&bin).map_err(|e| e.to_string())?;
