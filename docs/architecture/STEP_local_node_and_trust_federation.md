@@ -233,6 +233,10 @@ STEP_ADMIN_KEY=<foundation-admin-key> \             # authorises registerValidat
 How the remote node reaches the shared chain + how the gateway reaches the remote
 node (tunnel vs public endpoint) is the §5 networking decision.
 
+> **Operations:** day-to-day procedures (install, update, rollback, tamper
+> response, kill-switch, secrets) live in the
+> [trust-center runbook](../operations/STEP_trust_center_runbook.md).
+
 ## 7. Remaining phases
 
 - **Phase 3 — P2P gossip.** Replace/augment the gateway hub with libp2p gossip so
