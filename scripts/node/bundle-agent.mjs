@@ -53,14 +53,22 @@ const platformId = sh(`cast keccak "${platform}"`);
 const advertiseHost = args["advertise-host"] ?? "127.0.0.1";
 const port = Number(args.port ?? node.port ?? 9104);
 const agentPort = Number(args["agent-port"] ?? 9200);
+// Hub host resolution (#48), in priority order — third-party-free first:
+//   --hub-host <name|ip>  (LAN mDNS like `tribecca.local`, a reserved IP, or a
+//                          self-hosted WireGuard tunnel IP) → derives both ports
+//   --hub-rpc / --hub-artifacts  (full override)
+//   else Tailscale IP (OPTIONAL convenience), else loopback.
 const tailnetIp = (() => {
   for (const b of ["tailscale", "/Applications/Tailscale.app/Contents/MacOS/Tailscale"]) {
     try { const ip = execSync(`${b} ip -4`, { stdio: "pipe" }).toString().trim().split("\n")[0].trim(); if (/^\d+\.\d+\.\d+\.\d+$/.test(ip)) return ip; } catch { /* next */ }
   }
   return "127.0.0.1";
 })();
-const hubRpc = args["hub-rpc"] ?? `http://${tailnetIp}:8545`;
-const hubArtifacts = args["hub-artifacts"] ?? `http://${tailnetIp}:8078`;
+const hubHost = args["hub-host"]; // explicit, third-party-free
+const defaultHost = hubHost ?? tailnetIp;
+const transport = hubHost ? (/^\d/.test(hubHost) ? "lan/wireguard (ip)" : "lan (mDNS)") : "tailscale (optional)";
+const hubRpc = args["hub-rpc"] ?? `http://${defaultHost}:8545`;
+const hubArtifacts = args["hub-artifacts"] ?? `http://${defaultHost}:8078`;
 const verifier = JSON.parse(readFileSync(env.STEP_DEPLOYMENTS_FILE, "utf8")).MiningClaimVerifier;
 const keychainService = "app.step.node";
 const acct = (k) => `step.node.${node.address.toLowerCase()}.${k}`;
@@ -153,6 +161,7 @@ rmSync(stage, { recursive: true, force: true });
 log("");
 log(`✓ agent bundle ready: ${tgz}`);
 log(`  built for:  ${arch}`);
+log(`  transport:  ${transport}`);
 log(`  hub RPC:    ${hubRpc}`);
 log(`  artifacts:  ${hubArtifacts}`);
 log(`  advertised: ${advertiseHost}:${port}`);
