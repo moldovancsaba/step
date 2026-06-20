@@ -7,8 +7,9 @@ use std::time::Duration;
 pub struct AgentConfig {
     /// Agent root holding releases/, current, state.json.
     pub root: PathBuf,
-    /// Chain JSON-RPC endpoint (reachable over the tailnet).
-    pub rpc_url: String,
+    /// Chain JSON-RPC endpoints in failover order (so no single host/chain node is
+    /// a SPOF, #50). STEP_RPC_URLS (comma) or the legacy single STEP_RPC_URL.
+    pub rpc_urls: Vec<String>,
     /// ReleaseRegistry contract address (0x…).
     pub release_registry: String,
     /// This node's validator address (0x…) — its on-chain identity.
@@ -50,7 +51,20 @@ impl AgentConfig {
     pub fn from_env() -> Result<Self, String> {
         Ok(Self {
             root: PathBuf::from(req("AGENT_ROOT")?),
-            rpc_url: req("STEP_RPC_URL")?,
+            rpc_urls: {
+                let raw = std::env::var("STEP_RPC_URLS")
+                    .or_else(|_| std::env::var("STEP_RPC_URL"))
+                    .map_err(|_| "missing env STEP_RPC_URLS (or STEP_RPC_URL)")?;
+                let urls: Vec<String> = raw
+                    .split(',')
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+                    .collect();
+                if urls.is_empty() {
+                    return Err("STEP_RPC_URLS is empty".into());
+                }
+                urls
+            },
             release_registry: req("RELEASE_REGISTRY")?,
             node_address: req("NODE_ADDRESS")?,
             platform_id: req("PLATFORM_ID")?,

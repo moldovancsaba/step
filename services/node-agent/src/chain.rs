@@ -13,22 +13,25 @@ const SEL_RELEASE: [u8; 4] = [0x5c, 0xe8, 0xc9, 0xc4];
 
 pub struct ChainReader {
     client: reqwest::blocking::Client,
-    rpc_url: String,
+    rpc_urls: Vec<String>,
     registry: String,
     platform_id: [u8; 32],
 }
 
 impl ChainReader {
-    pub fn new(rpc_url: &str, registry: &str, platform_id_hex: &str) -> Result<Self, String> {
+    pub fn new(rpc_urls: &[String], registry: &str, platform_id_hex: &str) -> Result<Self, String> {
         let platform_id =
             parse_b32(platform_id_hex).ok_or("bad PLATFORM_ID (need 0x + 32 bytes)")?;
+        if rpc_urls.is_empty() {
+            return Err("no RPC endpoints configured".into());
+        }
         let client = reqwest::blocking::Client::builder()
             .timeout(Duration::from_secs(10))
             .build()
             .map_err(|e| e.to_string())?;
         Ok(Self {
             client,
-            rpc_url: rpc_url.to_string(),
+            rpc_urls: rpc_urls.to_vec(),
             registry: registry.to_string(),
             platform_id,
         })
@@ -60,6 +63,10 @@ impl ChainReader {
         Ok(decode_release(&out))
     }
 
+    /// eth_call with RPC failover: try endpoints in order; the first that responds
+    /// (transport success) serves the read. A contract-level revert is returned as
+    /// an error from the first reachable endpoint (no point retrying the same
+    /// deterministic revert elsewhere).
     fn eth_call(&self, data: &[u8]) -> Result<Vec<u8>, String> {
         let body = serde_json::json!({
             "jsonrpc": "2.0",
@@ -67,23 +74,29 @@ impl ChainReader {
             "method": "eth_call",
             "params": [{ "to": self.registry, "data": format!("0x{}", hex::encode(data)) }, "latest"]
         });
-        let resp: serde_json::Value = self
-            .client
-            .post(&self.rpc_url)
-            .json(&body)
-            .send()
-            .map_err(|e| format!("rpc send: {e}"))?
-            .json()
-            .map_err(|e| format!("rpc decode: {e}"))?;
-        if let Some(err) = resp.get("error") {
-            return Err(format!("rpc error: {err}"));
+        let mut last_err = String::from("no RPC endpoints");
+        for url in &self.rpc_urls {
+            match self.client.post(url).json(&body).send() {
+                Err(e) => {
+                    last_err = format!("rpc {url} unreachable: {e}");
+                    continue; // transport failure → try the next endpoint
+                }
+                Ok(resp) => {
+                    let v: serde_json::Value =
+                        resp.json().map_err(|e| format!("rpc decode: {e}"))?;
+                    if let Some(err) = v.get("error") {
+                        return Err(format!("rpc error: {err}")); // deterministic — don't fail over
+                    }
+                    let result = v
+                        .get("result")
+                        .and_then(|r| r.as_str())
+                        .ok_or("rpc: no result")?;
+                    let trimmed = result.strip_prefix("0x").unwrap_or(result);
+                    return hex::decode(trimmed).map_err(|e| format!("hex: {e}"));
+                }
+            }
         }
-        let result = resp
-            .get("result")
-            .and_then(|r| r.as_str())
-            .ok_or("rpc: no result")?;
-        let trimmed = result.strip_prefix("0x").unwrap_or(result);
-        hex::decode(trimmed).map_err(|e| format!("hex: {e}"))
+        Err(last_err)
     }
 }
 
