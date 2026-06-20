@@ -105,5 +105,3 @@ function detectLanHost() {
   }
   return "tribecca.local";
 }
-
-void cap; // reserved for future capture-based steps
