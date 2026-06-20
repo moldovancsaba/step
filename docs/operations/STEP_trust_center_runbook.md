@@ -201,6 +201,24 @@ execute — no single admin key. The emergency kill-switch (release `revoke`, §
 stays on a guarded role outside the vote. See `test/StepGovernor.t.sol` for the
 end-to-end flow.
 
+**P2P gossip (#54) — delivered.** `step-gossip-node` (`services/gossip-node`) is a
+libp2p gossipsub mesh where any node receives a claim, asks its co-located
+validator to validate+sign, gossips the EIP-712 vote, aggregates peers' votes by
+claim, and — at weighted on-chain quorum — submits the bundle. No central gateway
+sits in the claim→finalise path. Peer identity is the validator's secp256k1 key;
+discovery is mDNS on the LAN plus explicit self-hosted bootstrap peers (no
+third-party signaling). Run alongside a validator with `VALIDATOR_URL`,
+`STEP_QUORUM_THRESHOLD`, and optional `GOSSIP_BOOTSTRAP`. The protocol core
+(message auth, weighted-quorum assembly, replay/dedup) is pure and unit-tested.
+
+**Shared ledger (#50) — in progress (trust-minimised reads delivered).** Two slices
+landed toward replacing the single-hub devchain: RPC failover (`STEP_RPC_URLS`,
+agent) and **multi-endpoint read agreement** (gossip node) — a weight that affects
+quorum is accepted only when a majority of independent chain endpoints agree on it,
+and a lone divergent endpoint is flagged, not trusted (`STEP_RPC_URLS`,
+`STEP_RPC_MIN_AGREE`). The full replicated-ledger migration (multiple consensus
+nodes replacing the devchain) remains the open infrastructure track.
+
 ## 9. Quick reference
 
 ```bash
