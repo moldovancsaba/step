@@ -5,6 +5,7 @@ members = [
     "packages/validation-rules",
     "services/validator-node",
     "services/node-agent",
+    "services/gossip-node",
 ]
 
 [workspace.package]

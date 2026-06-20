@@ -1,0 +1,47 @@
+[package]
+name = "step-gossip-node"
+version = "0.1.0"
+description = "STEP P2P validator gossip: claim/vote propagation + peer quorum assembly (no central gateway, #54)"
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "step_gossip"
+path = "src/lib.rs"
+
+[[bin]]
+name = "step-gossip-node"
+path = "src/main.rs"
+
+[dependencies]
+# Reused workspace EIP-712 vote digest + recovery + quorum types, so gossip votes
+# are byte-compatible with the gateway/validator path (no parallel vote format).
+step-validation-rules = { path = "../../packages/validation-rules" }
+# P2P transport. libp2p gossipsub is the issue-mandated substrate (#54); it owns
+# peer discovery (mDNS on LAN + explicit bootstrap peers cross-location), so there
+# is NO third-party signaling server. Identity is the validator's secp256k1 key.
+libp2p = { version = "0.54", features = [
+    "tokio",
+    "gossipsub",
+    "mdns",
+    "noise",
+    "yamux",
+    "tcp",
+    "macros",
+    "secp256k1",
+] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "signal", "sync"] }
+futures = "0.3"
+# Async HTTP to (a) ask the co-located validator to validate+sign a claim and
+# (b) read ValidatorRegistry.activeWeight + submit the quorum bundle via JSON-RPC.
+# rustls (no system OpenSSL) keeps the binary portable, matching node-agent.
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+hex = "0.4"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+[dev-dependencies]
+# Sign test votes with the same secp256k1 key type the validator uses.
+k256 = { version = "0.13", features = ["ecdsa"] }
