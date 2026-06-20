@@ -120,15 +120,22 @@ Two layers make the resource *shared*:
   node reads and writes: who is a validator (`ValidatorRegistry`), which claims
   finalised (`MiningClaimVerifier`), who owns which triangle NFT. This is the
   "blockchain" in "blockchain trust service". Today it is a local `anvil`
-  devchain; a real federation runs a shared chain (see §5).
-- **Shared transport = gossip (the P2P upgrade).** Today the gateway is a hub: it
-  fans a claim out to validators and collects votes. The documented next step
-  (already noted in `validator-node/src/main.rs`) is a **libp2p gossip** mesh so
-  nodes exchange claims and votes **peer-to-peer**, with no central hub — any
-  node can receive a claim, gossip it, collect signed votes from peers, and once
-  weighted quorum is met, submit the bundle to the chain. The vote/claim message
-  shapes are already transport-independent, so this is an additive transport, not
-  a rewrite.
+  devchain; a real federation runs a shared chain (see §5). Reads are already
+  **trust-minimised** toward that end-state (#50): the agent fails over across
+  `STEP_RPC_URLS`, and the gossip node cross-checks `activeWeight` across multiple
+  endpoints, accepting only a value a majority agree on — a lone divergent chain
+  node is outvoted and flagged, not trusted.
+- **Shared transport = gossip (delivered, #54).** Originally the gateway was a
+  hub: it fanned a claim out to validators and collected votes. The **libp2p
+  gossip** mesh is now delivered as `services/gossip-node` (`step-gossip-node`):
+  nodes exchange claims and votes **peer-to-peer**, with no central hub — any node
+  receives a claim, has its co-located validator validate+sign, gossips the
+  EIP-712 vote, aggregates peers' votes by claim, and once weighted quorum is met
+  submits the bundle to the chain. Peer identity is the validator's secp256k1 key;
+  discovery is mDNS on the LAN plus explicit self-hosted bootstrap peers
+  cross-location (no third-party signaling). The vote/claim message shapes are
+  byte-compatible with the contract, so this is an additive transport, not a
+  rewrite, and the gateway becomes an optional edge for non-P2P clients.
 
 Net trust property (unchanged by transport): **a claim is real iff a weighted
 quorum of registered trust centers independently signed it.** Compromising one
@@ -237,16 +244,38 @@ node (tunnel vs public endpoint) is the §5 networking decision.
 > response, kill-switch, secrets) live in the
 > [trust-center runbook](../operations/STEP_trust_center_runbook.md).
 
-## 7. Remaining phases
+## 7. Self-sovereign delivery & operation (M9 — delivered)
 
-- **Phase 3 — P2P gossip.** Replace/augment the gateway hub with libp2p gossip so
-  nodes exchange claims/votes peer-to-peer; submit on quorum. (Message shapes are
-  already transport-independent.)
-- **Phase 4 — shared public chain.** Move off the local devchain to a shared
-  chain so locations agree without trusting this Mac's chain; wire the chosen
-  §5 transport so remote nodes connect.
+M9 made the federation reliably operable **with no third parties** and moved it
+materially toward the P2P/DAO end-state. Delivered:
 
-## 7. Why this is honest about trust
+- **Third-party-free transport (#48).** LAN/mDNS (`--hub-host <name>.local`) or
+  self-hosted WireGuard (`scripts/net/wg-gen.mjs`) — no Tailscale or SaaS required.
+- **One-command onboarding + boot-persistence (#53, #49).**
+  `scripts/node/onboard.mjs` registers, sets up transport, and builds a
+  boot-persistent agent bundle (launchd/systemd: start-at-login, crash-restart).
+- **Hub-outage resilience + multi-source artifacts (#51, #52).** A node keeps
+  running its current *verified* version, retries with backoff, reports `degraded`,
+  and fetches artifacts from `ARTIFACT_BASE_URLS` (each chain-hash-verified).
+- **Signed fleet heartbeats (#56).** Agents sign a heartbeat with the node key;
+  the hub verifies it against the registered on-chain address (anti-spoof) and
+  surfaces four states — up / degraded / suspended / dark — with deduped alerts.
+- **P2P gossip (#54).** `services/gossip-node` — libp2p gossipsub claim/vote
+  propagation + peer quorum assembly (see §4). The gateway is no longer required
+  in the finalise path.
+- **DAO governance (#55).** `StepGovernor` (audited OZ Governor + `StepGovToken`
+  ERC20Votes) governs RELEASE/PARAM/VALIDATOR_ADMIN roles through the existing
+  timelock — privileged actions execute only after an on-chain vote, no admin key.
+- **Trust-minimised reads (#50, partial).** RPC failover + multi-endpoint read
+  agreement (see §4).
+
+**Remaining infrastructure track (#50, open).** Replace the single `anvil`
+devchain with a genuinely shared/replicated ledger (multiple consensus nodes).
+The application layer is already prepared to consume one: reads fail over and
+require cross-endpoint agreement, and the gossip mesh submits the quorum bundle to
+whatever chain endpoint a node is configured with.
+
+## 8. Why this is honest about trust
 
 - Adding a node is an **explicit on-chain grant** (`registerValidator`) — trust is
   never implicit or ambient. Removing/slashing is `setStatus`/`ValidatorSlashed`.

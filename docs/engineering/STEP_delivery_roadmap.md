@@ -148,6 +148,34 @@ Alpha success criteria (DEV §21.3): ≥95% valid claims processed correctly in 
 
 ---
 
+### M8 — Trust-center hardening (delivered)
+
+Self-maintaining, on-chain-authorized trust centers so federation members get updates from us and maintain themselves with failsafe rollback, with no third-party injection. Issues #34–#47.
+
+| # | Work item | Output |
+|---|---|---|
+| 8.1 | On-chain `ReleaseRegistry` (authorized release hashes, weighted rollout/revoke) + `IntegrityAttestation` (tamper → quorum auto-suspend) behind a `TimelockController` (#34–#37) | Contracts + forge tests |
+| 8.2 | `step-node-agent` (Rust): self-update from chain, hash-verified artifacts, functional canary, atomic activation, **failsafe rollback**, continuous self-integrity, secrets isolation (#40–#43) | Agent crate + tests |
+| 8.3 | Release pipeline (`publish.mjs`), artifact distribution (`serve-artifacts.mjs`), system service install (launchd/systemd) (#38, #39, #44) | Scripts + service units |
+| 8.4 | Fleet observability: `fleet-api` + GDS Fleet console; ops runbook (#45–#47) | Console + `docs/operations/STEP_trust_center_runbook.md` |
+
+### M9 — Reliable self-sovereign trust-center delivery & operation (delivered, bar one infra track)
+
+Operate and supervise the federation reliably with **no third parties**, and move materially toward the P2P/DAO end-state. Issues #48–#57. Architecture: [STEP_local_node_and_trust_federation.md](../architecture/STEP_local_node_and_trust_federation.md) §7; decisions: ADR-018…ADR-022.
+
+| # | Work item | Output |
+|---|---|---|
+| 9.1 | Third-party-free transport: LAN/mDNS + self-hosted WireGuard; one-command onboarding; boot-persistent service (#48, #53, #49) | `scripts/net/*`, `scripts/node/onboard.mjs`, install scripts |
+| 9.2 | Resilience: hub-outage tolerance (keep-running, backoff, degraded), multi-source hash-verified artifacts (#51, #52) | Agent changes + tests |
+| 9.3 | Signed fleet heartbeats — hub-independent, anti-spoof, four-state view + deduped alerts (#56) | `fleet-api` + agent + tests |
+| 9.4 | DAO governance: `StepGovernor` (audited OZ Governor) + `StepGovToken` over releases/params/admission via timelock (#55) | Contracts + forge tests |
+| 9.5 | P2P gossip: `step-gossip-node` (libp2p gossipsub) — claim/vote propagation + peer quorum assembly, no central gateway (#54) | New crate + tests |
+| 9.6 | Trust-minimised reads: RPC failover + multi-endpoint read agreement (#50, partial) | Agent + gossip-node changes |
+
+Open infrastructure track (#50): replace the single `anvil` devchain with a shared/replicated (multi-consensus-node) ledger. The application layer is ready to consume one (read failover + cross-endpoint agreement in place).
+
+---
+
 ## 3. Cross-cutting tracks (run across all milestones)
 
 | Track | Content | Owner cadence |

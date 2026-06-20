@@ -97,6 +97,7 @@ Deviations from the literal master-prompt tree, with reasons (documented as requ
 **Context:** SYS §12.1 prescribes progressive decentralisation ("Alpha: controlled services + testnet contracts"). DEV §6.1 says iOS networking is "URLSession for HTTP; libp2p integration via Rust FFI or gateway in alpha". DEV §9.5 limits alpha to foundation-operated validators.
 **Decision:** In alpha, the iOS app talks HTTPS to `gateway-api` (claim intake, nonce challenge, status). The gateway fans claims out to validator nodes. Validator nodes carry a rust-libp2p gossip layer behind a feature flag, exercised in integration tests, so the MVP/V1 move to true P2P propagation is a topology change, not a rewrite. Claim and vote message formats are identical in both transports.
 **Consequences:** Honest about alpha centralisation (it is documented and intended by SYS §12.1); no fake P2P claims in docs or marketing; the P2P path stays continuously tested.
+**Update (M9):** the libp2p gossip transport is now delivered as `services/gossip-node` — see **ADR-019**.
 
 ---
 
@@ -208,6 +209,51 @@ Deviations from the literal master-prompt tree, with reasons (documented as requ
 **Context:** SYS §8.3 claim format allows "server_or_p2p_challenge". A P2P challenge protocol needs the open validator network that alpha explicitly does not have (DEV §9.5).
 **Decision:** Gateway-issued nonces in alpha: single-use, short TTL (default 120 s, configurable), bound to wallet address and attestation key, persisted for replay rejection. Protocol-level challenge (validator-issued, threshold-style) is a documented MVP/V1 upgrade.
 **Consequences:** Replay protection (POP-005) fully real in alpha; one more documented alpha-centralisation point per SYS §12.1's progressive-decentralisation model.
+
+---
+
+## ADR-018: Self-hosted, third-party-free trust-center transport (M9 #48)
+
+**Status:** ACCEPTED
+**Context:** Trust centers must be operable and supervisable by us with no SaaS in the path (the operator requirement: "maintained and updated and supervised easily without Tailscale and other 3rd parties"). Tailscale bootstrapped the first federation but is a third party.
+**Decision:** Two transports, both self-hosted: (1) same LAN — point a node at the hub by mDNS name (`<host>.local`) or a reserved IP, no tunnel; (2) cross-location — self-hosted **WireGuard** with keys generated locally (`scripts/net/wg-gen.mjs`, Node X25519), no signaling SaaS. Tailscale is demoted to an optional fallback. `scripts/node/onboard.mjs` wires either transport in one command, producing a boot-persistent agent bundle (launchd/systemd).
+**Consequences:** No third party can observe or gate the fleet; operators hold all keys. WireGuard peer config is a manual append on the hub side (documented in the runbook).
+
+---
+
+## ADR-019: P2P validator gossip via rust-libp2p (M9 #54)
+
+**Status:** ACCEPTED
+**Context:** ADR-005 committed to a libp2p-ready, transport-independent vote shape with the gateway as the alpha hub. The north-star requires removing the central coordinator from the claim→finalise path.
+**Decision:** Deliver `services/gossip-node` (`step-gossip-node`), a rust-libp2p **gossipsub** mesh in its own crate (keeping libp2p out of the validator binary). Peer identity is the validator's secp256k1 key; discovery is mDNS (LAN) + explicit self-hosted bootstrap peers (no third-party signaling). Any node validates a gossiped claim via its co-located validator, signs the existing EIP-712 vote, gossips it, aggregates peers' votes by claim, and submits the weighted-quorum bundle itself. The protocol core (message auth, quorum assembly, replay/dedup, orchestration) is pure and unit-tested; libp2p is justified as the issue-mandated, right-tool dependency (ENG rule 5).
+**Consequences:** The gateway becomes an optional edge for non-P2P clients (mobile); finalisation no longer has a single coordinator. libp2p enlarges the dependency tree, contained to one crate.
+
+---
+
+## ADR-020: DAO governance via audited OZ Governor (M9 #55)
+
+**Status:** ACCEPTED
+**Context:** ADR-003-era privileged powers (release authorization, params, validator admission) sat on admin keys; #37 put RELEASE_ROLE behind a TimelockController but the proposer was still a single key. The north-star DAO requires participant governance.
+**Decision:** Add `StepGovernor` — a pure composition of audited OpenZeppelin Governor modules (Settings, CountingSimple, Votes, VotesQuorumFraction, TimelockControl) — as the sole proposer on the existing timelock, which holds RELEASE/PARAM/VALIDATOR_ADMIN roles. Voting weight comes from `StepGovToken`, a dedicated `ERC20Votes` token kept separate from the decimals-0 `TrinityToken` accounting unit (minting gated by a new `GOV_ROLE`). No bespoke governance crypto. The emergency revoke kill-switch stays on a guarded role outside the vote.
+**Consequences:** Privileged actions execute only after propose → vote → quorum+majority → queue → timelock delay → execute. Token economics/weighting policy is deliberately left open (use validator weights and/or a gov token).
+
+---
+
+## ADR-021: Signed, hub-independent fleet heartbeats (M9 #56)
+
+**Status:** ACCEPTED
+**Context:** Supervision was a hub-side pull; if the hub was down the fleet was invisible, and a degraded-but-alive node looked identical to a dead one.
+**Decision:** Agents sign a periodic heartbeat with the node key (EIP-191, reusing the workspace signer — no new crypto dependency) and POST it to the hub. The hub verifies the signature against the node's **registered on-chain address** (anti-spoof) and stamps its own receive time. State is derived as up / degraded / suspended / dark, with on-chain weight authoritative for `suspended`; alerts (missed-heartbeat, quarantine, drift, below-quorum) are deduped + rate-limited.
+**Consequences:** A degraded node is distinguishable from a dead one; supervision no longer depends on the hub being the sole observer. The chain remains authoritative for quorum.
+
+---
+
+## ADR-022: Trust-minimised multi-endpoint chain reads (M9 #50, partial)
+
+**Status:** ACCEPTED (read-side); ledger replication OPEN
+**Context:** A single chain RPC endpoint is a single point of trust that can lie about state (e.g. a validator's weight) and skew quorum. Replacing the single devchain with a replicated ledger is a large infra effort.
+**Decision:** As the read-side slice toward a shared ledger: the agent fails over across `STEP_RPC_URLS`, and the gossip node reads `activeWeight` from every configured endpoint and accepts only a value a majority agree on (`STEP_RPC_MIN_AGREE`), flagging a lone divergent endpoint and conservatively excluding an un-agreed weight. The full replicated/consensus-node ledger remains an open infrastructure track.
+**Consequences:** Reads no longer trust a single chain node; the application layer is ready to consume a replicated ledger. Standing up the replicated chain itself is deferred and tracked on issue #50.
 
 ---
 

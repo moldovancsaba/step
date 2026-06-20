@@ -1,5 +1,18 @@
 # STEP Release Log
 
+## alpha-0.5 — 2026-06-21 (self-sovereign trust centers — M8 + M9)
+
+Hardened, self-maintaining trust centers (M8, #34–#47) and reliable, **third-party-free** operation that moves materially toward the P2P/DAO end-state (M9, #48–#57). All landed CI-green on `feat/v2-mining-nfts`. Decisions recorded as ADR-018…ADR-022; architecture in [STEP_local_node_and_trust_federation.md](../architecture/STEP_local_node_and_trust_federation.md) §7; operations in [STEP_trust_center_runbook.md](STEP_trust_center_runbook.md).
+
+- **On-chain trust layer (M8):** `ReleaseRegistry` (authorized release hashes, weighted rollout/revoke) + `IntegrityAttestation` (tamper → quorum auto-suspend) behind a `TimelockController`; `step-node-agent` self-updates from chain with hash-verified artifacts, functional canary, **failsafe rollback**, continuous self-integrity, and keychain secrets isolation; release pipeline + artifact distribution + launchd/systemd service; `fleet-api` + GDS Fleet console.
+- **Third-party-free operation (M9 #48/#49/#53):** LAN/mDNS or self-hosted WireGuard transport (no SaaS); one-command `onboard.mjs`; boot-persistent service.
+- **Resilience (M9 #51/#52):** hub-outage tolerance (keep-running, backoff, `degraded` status); multi-source hash-verified artifacts.
+- **Signed fleet heartbeats (M9 #56):** node-key-signed, verified against the registered on-chain address (anti-spoof); four-state view (up/degraded/suspended/dark) + deduped, rate-limited alerts.
+- **DAO governance (M9 #55):** `StepGovernor` (audited OZ Governor) + `StepGovToken` (ERC20Votes) govern RELEASE/PARAM/VALIDATOR_ADMIN roles through the timelock — privileged actions execute only after an on-chain vote, no admin key.
+- **P2P gossip (M9 #54):** `step-gossip-node` (libp2p gossipsub) — claim/vote propagation + peer weighted-quorum assembly; no central gateway in the finalise path; identity = validator secp256k1 key; discovery = mDNS + self-hosted bootstrap.
+- **Trust-minimised reads (M9 #50, partial):** RPC failover + multi-endpoint read agreement (a lone divergent chain node is outvoted, not trusted). Full replicated-ledger migration remains the open infra track on #50.
+- **Verification:** full CI gate green by real exit codes before every push (`cargo fmt`/`clippy -D warnings`/`test --workspace`, `pnpm typecheck`/`test`/`build`, `forge test` 83, gitleaks v8.21.2 0 leaks). New Rust tests: node-agent 33, gossip-node 32; fleet-api 30; contracts +3 (StepGovernor).
+
 ## alpha-0.4 — 2026-06-16 (reference normalization pass)
 
 - Aligned denominator and reward-curve text in all published tokenomics/contract-adjacent docs:

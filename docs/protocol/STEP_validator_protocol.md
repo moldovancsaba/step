@@ -14,7 +14,7 @@ Determinism guarantee: two honest nodes with the same parameter registry and his
 
 ## 3. Quorum and finalisation
 
-`Σ activeWeight(approvals) ≥ verifier.quorum_threshold_weight` with signatures sorted by ascending validator address (cheap on-chain dedup). The gateway aggregates and relays in alpha (DEV §9.3 "chain **or relayer**"); the contract re-verifies everything, so the relayer is an availability dependency, not a trust dependency. Vote shape is transport-independent — the MVP libp2p gossip swap changes propagation, not the protocol.
+`Σ activeWeight(approvals) ≥ verifier.quorum_threshold_weight` with signatures sorted by ascending validator address (cheap on-chain dedup). Two transports produce the same bundle, because the vote shape is transport-independent and the contract re-verifies everything (so any relayer is an availability dependency, not a trust dependency): (1) the **gateway** aggregates and relays in alpha (DEV §9.3 "chain **or relayer**"); (2) the delivered **libp2p gossip mesh** (`services/gossip-node`, #54) lets any node aggregate gossiped votes by claim and submit the bundle itself, with no central coordinator — see [STEP_local_node_and_trust_federation.md](../architecture/STEP_local_node_and_trust_federation.md) §4. On the gossip path each peer reads `activeWeight` from multiple chain endpoints and uses only a value a majority agree on (#50), so a single divergent chain node cannot skew quorum weights.
 
 ## 4. Incentives and penalties (alpha → target)
 
