@@ -9,12 +9,12 @@ use axum::{extract::State, routing::get, Json, Router};
 use serde::Serialize;
 use step_node_agent::chain::ChainReader;
 use step_node_agent::config::AgentConfig;
-use step_node_agent::format_semver;
 use step_node_agent::hashes::measure_dir;
 use step_node_agent::integrity::{evaluate, Verdict};
 use step_node_agent::layout::Layout;
 use step_node_agent::supervisor::{HealthCanary, HttpFetcher, ProcessSupervisor};
 use step_node_agent::update::{perform_update, Outcome, Supervisor};
+use step_node_agent::{backoff_ms, format_semver};
 
 #[derive(Clone, Serialize, Default)]
 struct StatusReport {
@@ -24,6 +24,9 @@ struct StatusReport {
     target_version: Option<String>,
     child_health: String,
     integrity: String,
+    /// Set when the hub/chain is unreachable: the node keeps running its current
+    /// verified version and retries; it does NOT roll back or run unverified code.
+    degraded: Option<String>,
     last_action: String,
     updated_at: String,
 }
@@ -94,10 +97,15 @@ fn control_loop(cfg: AgentConfig, status: Shared) {
         .expect("chain reader");
     let secrets = step_node_agent::secrets::Secrets::from_env(&cfg.node_address);
     let supervisor = ProcessSupervisor::new(&layout, cfg.validator_port, secrets.clone());
-    let fetcher = cfg
-        .artifact_base_url
-        .as_deref()
-        .map(|u| HttpFetcher::new(u, &cfg.platform, &layout));
+    let fetcher = if cfg.artifact_base_urls.is_empty() {
+        None
+    } else {
+        Some(HttpFetcher::new(
+            &cfg.artifact_base_urls,
+            &cfg.platform,
+            &layout,
+        ))
+    };
     let canary = HealthCanary::new(cfg.agent_port.wrapping_add(1000), secrets);
 
     // Start the validator if we already have a current release.
@@ -108,13 +116,18 @@ fn control_loop(cfg: AgentConfig, status: Shared) {
     let mut last_integrity = Instant::now()
         .checked_sub(cfg.integrity_interval)
         .unwrap_or_else(Instant::now);
+    // Consecutive hub-unreachable failures → exponential backoff + degraded status
+    // (#51). The node keeps running its current verified version throughout.
+    let mut fail_streak: u32 = 0;
 
     loop {
         // 1. resolve the authorized target from chain
+        let mut hub_unreachable = false;
         match chain.effective_target(&cfg.node_address) {
             Ok(Some(target)) => {
                 set(&status, |s| {
-                    s.target_version = Some(format_semver(target.version))
+                    s.target_version = Some(format_semver(target.version));
+                    s.degraded = None;
                 });
                 if let Some(fetcher) = &fetcher {
                     let outcome = perform_update(
@@ -130,28 +143,45 @@ fn control_loop(cfg: AgentConfig, status: Shared) {
                 }
             }
             Ok(None) => set(&status, |s| {
+                s.degraded = None;
                 s.last_action = "no active on-chain release".into()
             }),
             Err(e) => {
+                hub_unreachable = true;
                 tracing::warn!("chain read failed: {e}");
                 set(&status, |s| {
-                    s.last_action = format!("chain read failed: {e}")
+                    s.degraded = Some(format!("hub/chain unreachable: {e}"));
                 });
             }
         }
 
-        // 2. continuous self-integrity
-        if last_integrity.elapsed() >= cfg.integrity_interval {
+        // 2. continuous self-integrity (skip while the hub is unreachable — the
+        //    baseline is unreadable; fail-closed means hold, not quarantine).
+        if !hub_unreachable && last_integrity.elapsed() >= cfg.integrity_interval {
             last_integrity = Instant::now();
             run_integrity(&layout, &chain, &supervisor, &status);
         }
 
-        // 3. reflect health + sleep until next poll
+        // 3. reflect health
         set(&status, |s| {
             s.current_version = layout.current().map(format_semver);
             s.child_health = if supervisor.healthy() { "up" } else { "down" }.into();
         });
-        std::thread::sleep(cfg.poll_interval);
+
+        // 4. sleep until next poll — normal cadence, or exponential backoff (+jitter)
+        //    while the hub is unreachable so we don't hammer it or flap.
+        if hub_unreachable {
+            fail_streak = fail_streak.saturating_add(1);
+            let base = cfg.poll_interval.as_millis().min(u128::from(u64::MAX)) as u64;
+            let backoff = backoff_ms(fail_streak, base.max(1000), 60_000);
+            // deterministic small jitter from the node address (no RNG dependency)
+            let jitter = (cfg.node_address.bytes().map(u64::from).sum::<u64>() % 1000)
+                .saturating_mul(fail_streak.min(10) as u64);
+            std::thread::sleep(Duration::from_millis(backoff.saturating_add(jitter)));
+        } else {
+            fail_streak = 0;
+            std::thread::sleep(cfg.poll_interval);
+        }
     }
 }
 

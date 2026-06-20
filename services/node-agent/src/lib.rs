@@ -66,6 +66,15 @@ pub fn format_semver(v: u64) -> String {
     format!("{major}.{minor}.{patch}")
 }
 
+/// Exponential backoff in ms for retry `attempt` (0-based), capped. Jitter is
+/// added by the caller. Used when the hub/chain/artifact source is unreachable so
+/// a trust center keeps running its current verified version instead of bricking
+/// (#51).
+pub fn backoff_ms(attempt: u32, base_ms: u64, cap_ms: u64) -> u64 {
+    let factor = 1u64.checked_shl(attempt.min(32)).unwrap_or(u64::MAX);
+    base_ms.saturating_mul(factor).min(cap_ms)
+}
+
 /// Parse `major.minor.patch` into packed semver.
 pub fn parse_semver(s: &str) -> Option<u64> {
     let mut it = s.split('.');
@@ -94,6 +103,15 @@ mod semver_tests {
         assert_eq!(parse_semver("1.2"), None);
         assert_eq!(parse_semver("1.2.3.4"), None);
         assert_eq!(parse_semver("x.y.z"), None);
+    }
+
+    #[test]
+    fn backoff_is_exponential_and_capped() {
+        assert_eq!(backoff_ms(0, 1000, 60_000), 1000);
+        assert_eq!(backoff_ms(1, 1000, 60_000), 2000);
+        assert_eq!(backoff_ms(3, 1000, 60_000), 8000);
+        assert_eq!(backoff_ms(20, 1000, 60_000), 60_000); // capped
+        assert_eq!(backoff_ms(64, 1000, 60_000), 60_000); // no overflow panic
     }
 
     #[test]

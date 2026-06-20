@@ -95,7 +95,7 @@ impl Supervisor for ProcessSupervisor {
 /// on-chain release BEFORE staging it. Fail-closed: any mismatch returns an error
 /// and nothing is staged for activation.
 pub struct HttpFetcher {
-    base_url: String,
+    base_urls: Vec<String>,
     platform: String,
     releases_dir: PathBuf,
     params_path: PathBuf,
@@ -105,9 +105,12 @@ pub struct HttpFetcher {
 }
 
 impl HttpFetcher {
-    pub fn new(base_url: &str, platform: &str, layout: &Layout) -> Self {
+    pub fn new(base_urls: &[String], platform: &str, layout: &Layout) -> Self {
         Self {
-            base_url: base_url.trim_end_matches('/').to_string(),
+            base_urls: base_urls
+                .iter()
+                .map(|u| u.trim_end_matches('/').to_string())
+                .collect(),
             platform: platform.to_string(),
             releases_dir: layout.releases_dir(),
             // params/config travel alongside the binary in the artifact; for the
@@ -157,26 +160,38 @@ impl Fetcher for HttpFetcher {
         std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
         let bin = dir.join("step-validator-node");
         // Artifacts are addressed by human semver (matching publish/serve), not the
-        // packed-u64 used for the local release directory.
-        let url = format!(
-            "{}/artifacts/{}/{}",
-            self.base_url,
-            self.platform,
-            crate::format_semver(target.version)
-        );
-        self.download_to(&url, &bin)?;
+        // packed-u64 used for the local release directory. Try sources in order;
+        // each is independently hash-verified, so a bad/dead mirror is just skipped.
+        let semver = crate::format_semver(target.version);
+        let mut measured = [0u8; 32];
+        let mut got = false;
+        let mut last_err = String::from("no artifact sources configured");
+        for base in &self.base_urls {
+            let url = format!("{}/artifacts/{}/{}", base, self.platform, semver);
+            if let Err(e) = self.download_to(&url, &bin) {
+                last_err = e;
+                continue;
+            }
+            match sha256_file(&bin) {
+                Ok(h) if h == target.binary => {
+                    measured = h;
+                    got = true;
+                    break;
+                }
+                Ok(_) => last_err = format!("hash mismatch from {base}"),
+                Err(e) => last_err = e.to_string(),
+            }
+        }
+        if !got {
+            let _ = std::fs::remove_dir_all(&dir);
+            return Err(format!("no source served a matching artifact: {last_err}"));
+        }
+        let _ = measured; // measured == target.binary (verified above)
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
             std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o755))
                 .map_err(|e| e.to_string())?;
-        }
-
-        // verify binary hash vs the on-chain authority — fail-closed
-        let measured = sha256_file(&bin).map_err(|e| e.to_string())?;
-        if measured != target.binary {
-            let _ = std::fs::remove_dir_all(&dir);
-            return Err("binary hash mismatch vs on-chain release".into());
         }
         // params/config: copy the verified shared files into the release dir
         for (src, name, expected) in [
