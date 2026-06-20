@@ -1,9 +1,12 @@
 # STEP trust-center operations runbook
 
 > Authoritative operational guide for the hardened, self-maintaining trust
-> centers (M8). Covers install, automatic updates + failsafe rollback,
-> integrity/tamper response, the emergency kill-switch, and secret/key custody.
-> Each procedure lists prerequisites, exact commands, and verification.
+> centers (M8) and their reliable, **third-party-free** operation (M9). Covers
+> install, automatic updates + failsafe rollback, integrity/tamper response, the
+> kill-switch, secret/key custody, third-party-free transport (LAN/mDNS +
+> self-hosted WireGuard), boot-persistence, outage resilience, one-command
+> onboarding, and the roadmap to the P2P/DAO end-state. Each procedure lists
+> prerequisites, exact commands, and verification.
 
 Related: the on-chain trust layer is `contracts/src/ReleaseRegistry.sol` (#34/#35),
 `contracts/src/IntegrityAttestation.sol` (#36); the agent is `services/node-agent`
@@ -137,7 +140,68 @@ a shorter-delay emergency role is configured.
 | keychain locked / secret missing | `provision-secrets.sh` run? | re-provision; the agent is fail-closed until secrets resolve |
 | fleet below quorum | `GET /v1/fleet/alerts` | bring nodes back up; quorum needs ≥ threshold active weight |
 
-## 8. Quick reference
+## 8. Operate with NO third parties (M9)
+
+The whole update/supervise system is ours — the only thing that can be a third
+party is the network transport. Two transport options, both third-party-free:
+
+**Same LAN (no tunnel at all).** Point nodes at the hub by its mDNS name or a
+reserved IP — no Tailscale:
+```bash
+node scripts/node/bundle-agent.mjs --name <node> --hub-host tribecca.local
+# (or a router-reserved IP). Tailscale can be OFF on both machines.
+```
+
+**Different location (self-hosted WireGuard — our keys, no SaaS):**
+```bash
+node scripts/net/wg-gen.mjs --peer <node> --hub-endpoint <hub-public-or-lan>:51820
+#   → .runtime/wg/<node>.conf   (install on the node as wg0)
+#   → .runtime/wg/hub-<node>.peer (append to the hub's wg0.conf; `wg syncconf`)
+node scripts/node/bundle-agent.mjs --name <node> --hub-host <hub-wg-tunnel-ip>
+```
+
+## 8c. Add ANY future trust center (one command, #53)
+```bash
+node scripts/node/onboard.mjs --name <node> --transport lan --advertise <node>.local
+# or: --transport wireguard --hub-endpoint <hub>:51820
+# then on the node (one command it prints):
+tar -xzf agent-<node>.tgz && cd agent-bundle-<node> \
+  && ./provision-secrets.sh && ./install-service.sh
+```
+`install-service.sh` makes the node **boot-persistent** (LaunchAgent: starts at
+login, restarts on crash, #49). For the hub: `sudo node scripts/ops/install-hub.mjs`.
+
+## 8d. Reliability behavior (M9)
+- **Hub outage (#51):** a node keeps running its current *verified* version, sets
+  `degraded` in `/v1/agent/status`, retries with exponential backoff, and recovers
+  automatically when the hub returns. It never runs unverified code and never
+  false-quarantines on an unreadable baseline.
+- **RPC failover (#50):** set `STEP_RPC_URLS=url1,url2,…`; the agent fails over if
+  one chain endpoint is down.
+- **Artifact failover (#52):** set `ARTIFACT_BASE_URLS=url1,url2,…`; the agent tries
+  each, hash-verifying against the chain — a dead/corrupt mirror is skipped.
+- **Signed heartbeats (#56):** set `FLEET_URL=http://<hub>:8099`; each agent signs a
+  periodic heartbeat with its node key and POSTs it. The hub verifies the signature
+  against the node's registered on-chain address (no spoofing) and surfaces four
+  states — **up / degraded / suspended / dark** — at `GET /v1/fleet/heartbeats`, with
+  deduped alerts on missed-heartbeat, quarantine, drift, and below-quorum. A degraded
+  (self-recovering) node is now distinguishable from a dead one.
+
+## 8e. Roadmap to the P2P/DAO north star
+Today is hub-and-spoke (a bootstrap). The single-hub dependency is removed by, in
+order: **shared chain** (#50, replicated ledger), **libp2p gossip** (#54, no central
+gateway), **DAO governance** (#55).
+
+**DAO governance (#55) — delivered.** `StepGovernor` (`contracts/src/StepGovernor.sol`)
+is an audited-OZ Governor that votes (weighted by `StepGovToken`, an `ERC20Votes`)
+over privileged actions and executes them through the existing `TimelockController`
+(#37), which holds RELEASE_ROLE / PARAM_ROLE / VALIDATOR_ADMIN_ROLE. A release is
+authorized only after propose → vote → quorum+majority → queue → timelock delay →
+execute — no single admin key. The emergency kill-switch (release `revoke`, §5)
+stays on a guarded role outside the vote. See `test/StepGovernor.t.sol` for the
+end-to-end flow.
+
+## 9. Quick reference
 
 ```bash
 # hub
