@@ -29,6 +29,9 @@ contract StepAccess is AccessControl {
     /// @dev Authorises on-chain tamper reports that demote a node from quorum (#36).
     ///      Held by node agents (self-report) and the hub attestor.
     bytes32 public constant INTEGRITY_ROLE = keccak256("INTEGRITY_ROLE");
+    /// @dev Authorises minting governance voting power in StepGovToken (#55).
+    ///      Held by the admin/DAO; controls the voter set behind StepGovernor.
+    bytes32 public constant GOV_ROLE = keccak256("GOV_ROLE");
 
     bytes32 public constant PAUSE_MINTING = keccak256("PAUSE_MINTING");
     bytes32 public constant PAUSE_CAMPAIGNS = keccak256("PAUSE_CAMPAIGNS");
