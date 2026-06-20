@@ -96,6 +96,21 @@ fn control_loop(cfg: AgentConfig, status: Shared) {
     let chain = ChainReader::new(&cfg.rpc_urls, &cfg.release_registry, &cfg.platform_id)
         .expect("chain reader");
     let secrets = step_node_agent::secrets::Secrets::from_env(&cfg.node_address);
+    // Cache the node key bytes once for signed heartbeats (#56). Absent ⇒ no
+    // heartbeats (the node still runs; the hub just sees it via on-chain weight).
+    let hb_key: Option<Vec<u8>> = cfg.fleet_url.as_ref().and_then(|_| {
+        secrets
+            .get("validatorKey")
+            .and_then(|k| hex::decode(k.strip_prefix("0x").unwrap_or(&k)).ok())
+            .filter(|b| b.len() == 32)
+    });
+    if cfg.fleet_url.is_some() && hb_key.is_none() {
+        tracing::warn!("FLEET_URL set but node key unavailable — heartbeats disabled");
+    }
+    let hb_client = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+        .expect("heartbeat client");
     let supervisor = ProcessSupervisor::new(&layout, cfg.validator_port, secrets.clone());
     let fetcher = if cfg.artifact_base_urls.is_empty() {
         None
@@ -115,6 +130,10 @@ fn control_loop(cfg: AgentConfig, status: Shared) {
 
     let mut last_integrity = Instant::now()
         .checked_sub(cfg.integrity_interval)
+        .unwrap_or_else(Instant::now);
+    // Emit the first heartbeat promptly (so the hub sees a fresh node fast).
+    let mut last_heartbeat = Instant::now()
+        .checked_sub(cfg.heartbeat_interval)
         .unwrap_or_else(Instant::now);
     // Consecutive hub-unreachable failures → exponential backoff + degraded status
     // (#51). The node keeps running its current verified version throughout.
@@ -168,6 +187,15 @@ fn control_loop(cfg: AgentConfig, status: Shared) {
             s.child_health = if supervisor.healthy() { "up" } else { "down" }.into();
         });
 
+        // 3b. emit a signed heartbeat to the hub (#56) — hub-independent, anti-spoof
+        //     supervision signal. Best-effort: a delivery failure is non-fatal.
+        if let (Some(fleet_url), Some(key)) = (&cfg.fleet_url, &hb_key) {
+            if last_heartbeat.elapsed() >= cfg.heartbeat_interval {
+                last_heartbeat = Instant::now();
+                emit_heartbeat(&hb_client, fleet_url, key, &status);
+            }
+        }
+
         // 4. sleep until next poll — normal cadence, or exponential backoff (+jitter)
         //    while the hub is unreachable so we don't hammer it or flap.
         if hub_unreachable {
@@ -182,6 +210,45 @@ fn control_loop(cfg: AgentConfig, status: Shared) {
             fail_streak = 0;
             std::thread::sleep(cfg.poll_interval);
         }
+    }
+}
+
+/// Build and POST a signed heartbeat from the current status snapshot (#56).
+fn emit_heartbeat(
+    client: &reqwest::blocking::Client,
+    fleet_url: &str,
+    key: &[u8],
+    status: &Shared,
+) {
+    let (version, health, integrity, degraded) = {
+        let s = status.lock().expect("status lock");
+        (
+            s.current_version.clone().unwrap_or_else(|| "0.0.0".into()),
+            // The wire contract is health ∈ {up,down}; "quarantined" is carried in
+            // the integrity field, so map a quarantined child to down here.
+            if s.child_health == "up" { "up" } else { "down" }.to_string(),
+            if s.integrity.starts_with("quarantined") {
+                "quarantined"
+            } else {
+                "ok"
+            }
+            .to_string(),
+            s.degraded.clone(),
+        )
+    };
+    let Some(hb) = step_node_agent::heartbeat::build_signed(
+        key,
+        &version,
+        &health,
+        &integrity,
+        &now_iso(),
+        degraded.as_deref(),
+    ) else {
+        tracing::warn!("could not build heartbeat (bad node key)");
+        return;
+    };
+    if let Err(e) = step_node_agent::heartbeat::post(client, fleet_url, &hb) {
+        tracing::debug!("heartbeat delivery failed (non-fatal): {e}");
     }
 }
 

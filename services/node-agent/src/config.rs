@@ -33,6 +33,11 @@ pub struct AgentConfig {
     pub integrity_interval: Duration,
     /// Health-gate poll attempts after an update restart.
     pub watch_attempts: u32,
+    /// Hub fleet-api base URL for signed heartbeats (#56). `None` disables
+    /// heartbeats (the node still runs; the hub just can't see live signal).
+    pub fleet_url: Option<String>,
+    /// How often to emit a signed heartbeat to the hub.
+    pub heartbeat_interval: Duration,
 }
 
 fn req(key: &str) -> Result<String, String> {
@@ -90,6 +95,11 @@ impl AgentConfig {
                 .ok()
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(20),
+            fleet_url: std::env::var("FLEET_URL")
+                .ok()
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty()),
+            heartbeat_interval: secs("AGENT_HEARTBEAT_INTERVAL", 30),
         })
     }
 }

@@ -12,6 +12,7 @@ import { readFileSync, existsSync } from "node:fs";
 import { createPublicClient, defineChain, http, type Address } from "viem";
 import { createApp } from "./app.js";
 import type { DirectoryNode, NodeProbe } from "./fleet.js";
+import { HeartbeatStore } from "./heartbeat.js";
 
 const ACTIVE_WEIGHT_ABI = [
   {
@@ -87,7 +88,16 @@ const corsOrigins = process.env.STEP_CORS_ORIGINS
   ? process.env.STEP_CORS_ORIGINS.split(",").map((s) => s.trim()).filter(Boolean)
   : undefined;
 
-const { app } = createApp({ listNodes, probe, quorumThreshold, corsOrigins });
+// Signed-heartbeat intake (#56): only the directory's registered validator
+// addresses may heartbeat, and only for their own (signature-recovered) address.
+const heartbeatStore = new HeartbeatStore();
+const heartbeats = {
+  store: heartbeatStore,
+  registered: () => new Set(listNodes().map((n) => n.address.toLowerCase())),
+  now: () => Date.now(),
+};
+
+const { app } = createApp({ listNodes, probe, quorumThreshold, corsOrigins, heartbeats });
 const port = Number(process.env.FLEET_PORT ?? 8099);
 console.log(`fleet-api listening on :${port}`);
 serve({ fetch: app.fetch, port });

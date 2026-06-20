@@ -6,6 +6,10 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+# Reused workspace signer (EIP-191 personal_sign) for anti-spoof heartbeats (#56):
+# the agent signs with the node key exactly as the validator signs votes, so no
+# new crypto dependency is introduced.
+step-validation-rules = { path = "../../packages/validation-rules" }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "process", "fs", "time", "signal"] }
 axum = "0.8"
 serde = { version = "1", features = ["derive"] }

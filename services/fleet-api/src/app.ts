@@ -6,6 +6,9 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import type { DirectoryNode, FleetView, NodeProbe } from "./fleet.js";
 import { buildFleetView } from "./fleet.js";
+import type { Heartbeat } from "./heartbeat.js";
+import { classifyState, HeartbeatStore, verifyHeartbeat } from "./heartbeat.js";
+import { deriveAlerts, type NodeStatus } from "./alerts.js";
 
 export interface FleetDeps {
   /** Current federation nodes (from the node directory). */
@@ -14,6 +17,16 @@ export interface FleetDeps {
   probe(node: DirectoryNode): Promise<NodeProbe>;
   quorumThreshold: bigint;
   corsOrigins?: string[];
+  /** Signed-heartbeat intake (#56). When omitted, the endpoint is disabled. */
+  heartbeats?: {
+    store: HeartbeatStore;
+    /** lowercased addresses allowed to heartbeat (the registered validators) */
+    registered(): Set<string>;
+    /** server clock in epoch ms (injectable for tests) */
+    now(): number;
+    /** a heartbeat older than this (ms) marks the node `dark`. Default 90s. */
+    staleThresholdMs?: number;
+  };
 }
 
 export function createApp(deps: FleetDeps) {
@@ -38,6 +51,65 @@ export function createApp(deps: FleetDeps) {
   }
 
   app.get("/healthz", (c) => c.text("ok"));
+
+  // Signed heartbeat intake (#56): hub-independent supervision signal. The hub
+  // verifies the node's signature against its REGISTERED on-chain address (no
+  // spoofing) and stamps its own receive time (the staleness clock).
+  if (deps.heartbeats) {
+    const hb = deps.heartbeats;
+    app.post("/v1/fleet/heartbeat", async (c) => {
+      let body: Heartbeat;
+      try {
+        body = (await c.req.json()) as Heartbeat;
+      } catch {
+        return c.json({ error: "bad json" }, 400);
+      }
+      const node = await verifyHeartbeat(body, hb.registered());
+      if (!node) return c.json({ error: "unverified heartbeat" }, 401);
+      hb.store.upsert(node, body, hb.now());
+      return c.json({ ok: true, node });
+    });
+
+    // Four-state heartbeat view (#56): up | degraded | suspended | dark, with
+    // deduped alerts derived from those states. On-chain weight (from probe) is
+    // authoritative for `suspended`; staleness uses the hub's receive time.
+    app.get("/v1/fleet/heartbeats", async (c) => {
+      const stale = hb.staleThresholdMs ?? 90_000;
+      const now = hb.now();
+      const nodes = deps.listNodes();
+      const weights: Record<string, bigint> = {};
+      await Promise.all(
+        nodes.map(async (n) => {
+          try {
+            weights[n.address.toLowerCase()] = (await deps.probe(n)).onChainWeight;
+          } catch {
+            weights[n.address.toLowerCase()] = 0n;
+          }
+        }),
+      );
+      // Drift is detected against the on-chain target by the main /v1/fleet view;
+      // heartbeats carry only the running version, so no targetVersion here.
+      const rows = nodes.map((n) => {
+        const rec = hb.store.get(n.address);
+        const weight = weights[n.address.toLowerCase()] ?? 0n;
+        const state = classifyState(rec, weight, now, stale);
+        const status: NodeStatus = { name: n.name, state, version: rec?.hb.version };
+        const view = {
+          name: n.name,
+          address: n.address,
+          location: n.location,
+          state,
+          last_seen: rec?.receivedAtMs ?? null,
+          on_chain_weight: weight.toString(),
+          degraded: rec?.hb.degraded,
+          version: rec?.hb.version,
+        };
+        return { status, view };
+      });
+      const alerts = deriveAlerts(rows.map((r) => r.status), true);
+      return c.json({ nodes: rows.map((r) => r.view), alerts });
+    });
+  }
 
   app.get("/v1/fleet", async (c) => c.json(await view()));
 

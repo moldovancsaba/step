@@ -85,6 +85,20 @@ pub fn signer_address(key: &SigningKey) -> Address {
     address_of(key.verifying_key())
 }
 
+/// EIP-191 `personal_sign` over `message` using a raw 32-byte secp256k1 key.
+/// Convenience for callers (e.g. the node-agent's signed heartbeats, #56) that
+/// hold key material as bytes and shouldn't depend on `k256` directly. Returns
+/// `None` if the bytes are not a valid key.
+pub fn personal_sign_with_key_bytes(key_bytes: &[u8], message: &[u8]) -> Option<[u8; 65]> {
+    let key = SigningKey::from_slice(key_bytes).ok()?;
+    Some(sign_digest(&personal_digest(message), &key))
+}
+
+/// The Ethereum address for a raw 32-byte secp256k1 key. `None` if invalid.
+pub fn address_from_key_bytes(key_bytes: &[u8]) -> Option<Address> {
+    Some(signer_address(&SigningKey::from_slice(key_bytes).ok()?))
+}
+
 const EIP712_DOMAIN_TYPEHASH: &str =
     "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)";
 const VOTE_TYPEHASH: &str =

@@ -12,6 +12,7 @@
 pub mod chain;
 pub mod config;
 pub mod hashes;
+pub mod heartbeat;
 pub mod integrity;
 pub mod layout;
 pub mod secrets;
