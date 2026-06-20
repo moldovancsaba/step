@@ -126,6 +126,40 @@ echo "It will fetch + verify + activate the authorized release from the hub."
 exec ./step-node-agent
 `, { mode: 0o755 });
 
+// Self-contained boot-persistence (#49): install run-agent.sh as a LaunchAgent so
+// the node-agent starts at login and restarts on crash — no repo needed on the
+// target. (LaunchAgent runs on user login; for a headless Mac mini enable
+// auto-login, or adapt to a LaunchDaemon with sudo for true boot start.)
+const svcLabel = "app.step.node-agent";
+writeFileSync(join(stage, "install-service.sh"), `#!/usr/bin/env bash
+# Make this trust center boot-persistent (LaunchAgent). Run after provision-secrets.sh.
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+DEST="$HOME/Library/Application Support/step-node-agent"
+mkdir -p "$DEST" "$HOME/Library/LaunchAgents"
+cp -f "$HERE"/step-node-agent "$HERE"/protocol-params.json "$HERE"/config.json "$HERE"/run-agent.sh "$DEST"/
+chmod +x "$DEST/step-node-agent" "$DEST/run-agent.sh"
+PLIST="$HOME/Library/LaunchAgents/${svcLabel}.plist"
+cat > "$PLIST" <<PL
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>${svcLabel}</string>
+  <key>ProgramArguments</key><array><string>$DEST/run-agent.sh</string></array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
+  <key>StandardOutPath</key><string>$DEST/agent.out.log</string>
+  <key>StandardErrorPath</key><string>$DEST/agent.err.log</string>
+</dict></plist>
+PL
+launchctl bootout "gui/$(id -u)/${svcLabel}" 2>/dev/null || true
+launchctl bootstrap "gui/$(id -u)" "$PLIST"
+launchctl enable "gui/$(id -u)/${svcLabel}"
+echo "✓ ${args.name} installed as a LaunchAgent (starts at login, restarts on crash)."
+echo "  stop:    launchctl bootout gui/$(id -u)/${svcLabel}"
+echo "  logs:    $DEST/agent.out.log"
+`, { mode: 0o755 });
+
 writeFileSync(join(stage, "README.txt"), `STEP self-maintaining trust center: ${args.name}
 ================================================
 Built for: ${arch}
@@ -142,9 +176,9 @@ Prerequisites on this machine:
 
 Run (in this folder):
   1. ./provision-secrets.sh           # store key + nonce in the keychain (once)
-  2. ./run-agent.sh                   # start the agent (foreground)
-     # for boot-persistence, install as a service instead (see the hub repo's
-     # scripts/node/install-agent.mjs and trust-center runbook).
+  2a. ./run-agent.sh                  # foreground (stops when the terminal closes)
+  2b. ./install-service.sh            # RECOMMENDED: boot-persistent LaunchAgent
+                                      #   (starts at login, restarts on crash; no repo needed)
 
 Verify on the hub:
   node scripts/node/list.mjs          # ${args.name} flips DOWN -> up
