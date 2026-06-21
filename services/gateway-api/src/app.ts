@@ -111,7 +111,14 @@ export interface GatewayDeps {
   corsOrigins?: string[];
   /** Optional mesh API URL; defaults to the first validator URL. */
   meshUrl?: string;
+  /** On-chain `TriangleMiningState.status(keccak256(id))` for a triangle id, as the
+   *  raw enum index (0 Locked, 1 Open, 2 Cooldown, 3 Exhausted). Used to resolve
+   *  the mineable frontier. Optional: when absent, the frontier endpoint is off. */
+  triangleStatus?(triangleId: string): Promise<number>;
 }
+
+/** TriangleStatus enum index → name (TriangleMiningState.sol). */
+const TRIANGLE_STATUS = ["Locked", "Open", "Cooldown", "Exhausted"] as const;
 
 export function createApp(deps: GatewayDeps) {
   const app = new Hono();
@@ -146,6 +153,52 @@ export function createApp(deps: GatewayDeps) {
     if (!meshUrl) return c.json({ error: "mesh API unavailable" }, 503);
     const resp = await fetch(`${meshUrl}/v1/mesh/triangle/${c.req.param("id")}`);
     return c.json(await resp.json(), resp.status as never);
+  });
+
+  // Mining frontier (Mesh ID v2): a location resolves to a level-21 triangle, but
+  // a triangle at level N>1 is only mineable once its parent is Exhausted (genesis
+  // level 1 has no parent). The miner must therefore mine the deepest currently-
+  // mineable ANCESTOR of its location — the shallowest ancestor that is not yet
+  // Exhausted. This walks that ancestor chain and returns it, so web/iOS miners
+  // (and the validator/contract) agree on what to mine instead of guessing L21.
+  app.get("/v1/mesh/mineable", async (c) => {
+    if (!meshUrl) return c.json({ error: "mesh API unavailable" }, 503);
+    if (!deps.triangleStatus) return c.json({ error: "frontier resolver unavailable" }, 503);
+    const url = new URL(`${meshUrl}/v1/mesh/resolve`);
+    for (const key of ["lat", "lon"]) {
+      const value = c.req.query(key);
+      if (value !== undefined) url.searchParams.set(key, value);
+    }
+    url.searchParams.set("level", "21");
+    const resp = await fetch(url);
+    if (!resp.ok) return c.json({ error: "mesh resolve failed" }, 502);
+    const resolved = (await resp.json()) as { triangle_id?: string };
+    const full = resolved.triangle_id;
+    if (!full) return c.json({ error: "no triangle for location" }, 404);
+
+    const segs = full.split(".");
+    for (let level = 1; level <= segs.length; level++) {
+      const triangleId = segs.slice(0, level).join(".");
+      const status = await deps.triangleStatus(triangleId);
+      if (status !== 3 /* Exhausted */) {
+        return c.json({
+          triangle_id: triangleId,
+          level,
+          status: TRIANGLE_STATUS[status] ?? "Unknown",
+          mineable: status === 1 /* Open */,
+          location_triangle_id: full,
+        });
+      }
+    }
+    // Whole ancestor chain exhausted → this location is fully mined.
+    return c.json({
+      triangle_id: full,
+      level: segs.length,
+      status: "Exhausted",
+      mineable: false,
+      fully_mined: true,
+      location_triangle_id: full,
+    });
   });
 
   app.post("/v1/nonce", async (c) => {

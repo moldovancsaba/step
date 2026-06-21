@@ -4,7 +4,7 @@
  * routing, validator-failure tolerance, idempotent resubmission, chain-revert
  * handling, sponsored-path routing.
  */
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   canonicalClaimMessage,
   claimHash,
@@ -110,6 +110,60 @@ function makeDeps(behaviour: {
   };
   return { deps, submitNatural, submitSponsored, storeEvidence };
 }
+
+describe("mining frontier (/v1/mesh/mineable)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+  // a 4-segment location id is enough to exercise the ancestor walk
+  const LOC = "1.2.3.4";
+
+  function frontierApp(statusByLevel: number[]) {
+    const { deps } = makeDeps({ validatorApproves: [true] });
+    const calls: string[] = [];
+    deps.meshUrl = "http://mesh";
+    deps.triangleStatus = async (id: string) => {
+      calls.push(id);
+      return statusByLevel[id.split(".").length - 1] ?? 1;
+    };
+    // Mesh resolve returns the full level-21-style location id.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: true, json: async () => ({ triangle_id: LOC }) }) as unknown as Response),
+    );
+    const { app } = createApp(deps);
+    return { app, calls };
+  }
+
+  it("returns the level-1 genesis triangle on a fresh mesh (all Open)", async () => {
+    const { app } = frontierApp([1, 1, 1, 1]); // Open everywhere
+    const resp = await app.request("/v1/mesh/mineable?lat=47.5&lon=19.0");
+    expect(resp.status).toBe(200);
+    const body = (await resp.json()) as { triangle_id: string; level: number; mineable: boolean };
+    expect(body).toMatchObject({ triangle_id: "1", level: 1, mineable: true });
+  });
+
+  it("descends past Exhausted ancestors to the first non-exhausted one", async () => {
+    // L1 + L2 Exhausted(3), L3 Open(1) ⇒ frontier is the level-3 ancestor
+    const { app } = frontierApp([3, 3, 1, 1]);
+    const resp = await app.request("/v1/mesh/mineable?lat=47.5&lon=19.0");
+    const body = (await resp.json()) as { triangle_id: string; level: number; mineable: boolean };
+    expect(body).toMatchObject({ triangle_id: "1.2.3", level: 3, mineable: true });
+  });
+
+  it("reports a Locked frontier as not yet mineable", async () => {
+    const { app } = frontierApp([3, 0, 1, 1]); // L1 Exhausted, L2 Locked(0)
+    const resp = await app.request("/v1/mesh/mineable?lat=47.5&lon=19.0");
+    const body = (await resp.json()) as { level: number; status: string; mineable: boolean };
+    expect(body).toMatchObject({ level: 2, status: "Locked", mineable: false });
+  });
+
+  it("reports fully_mined when the whole ancestor chain is Exhausted", async () => {
+    const { app } = frontierApp([3, 3, 3, 3]);
+    const resp = await app.request("/v1/mesh/mineable?lat=47.5&lon=19.0");
+    const body = (await resp.json()) as { fully_mined?: boolean; mineable: boolean };
+    expect(body.fully_mined).toBe(true);
+    expect(body.mineable).toBe(false);
+  });
+});
 
 describe("nonce issuance", () => {
   it("issues wallet-bound nonces with TTL", async () => {

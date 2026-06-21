@@ -16,6 +16,7 @@ import {
   defineChain,
   http,
   keccak256,
+  stringToHex,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { parseProtocolParams, type Address, type Claim, type Hex } from "@step/shared-types";
@@ -195,6 +196,18 @@ const deps: GatewayDeps = {
     ? process.env.STEP_CORS_ORIGINS.split(",").map((s) => s.trim()).filter(Boolean)
     : undefined,
   meshUrl: process.env.MESH_API_URL,
+  async triangleStatus(triangleId: string) {
+    // Contract keys mining state by keccak256 of the triangle-id STRING bytes
+    // (MiningClaimVerifier.parseTriangle), so hash the UTF-8 id the same way.
+    const idHash = keccak256(stringToHex(triangleId));
+    const status = await publicClient.readContract({
+      address: deployments.TriangleMiningState as Address,
+      abi: TriangleMiningStateAbi,
+      functionName: "status",
+      args: [idHash],
+    });
+    return Number(status);
+  },
 };
 
 const { app } = createApp(deps);

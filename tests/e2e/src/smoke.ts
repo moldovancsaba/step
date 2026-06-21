@@ -87,12 +87,19 @@ async function naturalMine() {
   const tri = await mesh.resolve(lat, lon, 21);
   check("mesh resolves a level-21 triangle", tri.triangle_id.split(".").length === 21);
 
+  // Mesh v2: a triangle at level N>1 is only mineable once its parent is
+  // Exhausted, so the miner mines the deepest currently-mineable ANCESTOR of its
+  // location (the mining frontier), which the gateway resolves on-chain.
+  const frontierResp = await fetch(`${env.GATEWAY_URL}/v1/mesh/mineable?lat=${lat}&lon=${lon}`);
+  const frontier = (await frontierResp.json()) as { triangle_id: string; level: number; mineable: boolean };
+  check("gateway resolves a mineable frontier", frontier.mineable === true, JSON.stringify(frontier));
+
   const { nonce } = await gw.nonce(miner.address);
   const claim = await signClaim(
     buildUnsignedClaim({
       wallet: miner.address,
-      triangleId: tri.triangle_id,
-      meshLevel: 21,
+      triangleId: frontier.triangle_id,
+      meshLevel: frontier.level,
       latitude: lat,
       longitude: lon,
       horizontalAccuracyM: 5,
