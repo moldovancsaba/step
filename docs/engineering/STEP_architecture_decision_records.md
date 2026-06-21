@@ -257,6 +257,31 @@ Deviations from the literal master-prompt tree, with reasons (documented as requ
 
 ---
 
+## ADR-023: Trust-center packaging — signed self-contained bundle, not npm/dmg
+
+**Status:** ACCEPTED
+**Context:** A new dedicated trust center (chappie or any machine) must install the
+node software easily, anywhere. Candidate mechanisms considered: an npm package, a
+downloadable macOS dmg, or the self-contained bundle already produced by
+`scripts/node/onboard.mjs` + `bundle-agent.mjs`.
+**Decision:** Keep the self-contained bundle (a tarball: static Rust
+`step-node-agent` binary + protocol params + config + `provision-secrets.sh` +
+`install-service.sh`). It is built per-node on the hub (which registers the node
+on-chain), delivered over a TRUSTED channel, and self-installs as a boot-persistent
+service that thereafter self-updates from chain (ADR-019/M8). **Reject npm and dmg:**
+(1) the bundle carries the node's **private key**, so it can never sit on a public
+registry or download URL — it must travel over a trusted channel only; (2) npm needs
+Node on every node and is a third-party registry (against the no-3rd-party goal);
+(3) a dmg is macOS-only (trust centers may be Linux), needs Apple notarization, and
+is a GUI installer for a headless service — the wrong shape. The "package" is the
+tarball; the "installer" is `install-service.sh`; updates come from the chain, not a
+re-package.
+**Consequences:** One enable path for every platform (`onboard.mjs` → deliver →
+`install-service.sh`). No registry/notarization toolchain to maintain. The trusted-
+channel delivery (scp/Taildrop/USB) is a deliberate, documented step, not a gap.
+
+---
+
 ## OPEN decisions (no safe default — owner/legal input required)
 
 | # | Decision | Blocks | Owner type |

@@ -160,16 +160,37 @@ node scripts/net/wg-gen.mjs --peer <node> --hub-endpoint <hub-public-or-lan>:518
 node scripts/node/bundle-agent.mjs --name <node> --hub-host <hub-wg-tunnel-ip>
 ```
 
-## 8c. Add ANY future trust center (one command, #53)
+## 8c. Add a dedicated trust center — chappie or any new machine (#53)
+
+Two steps: build the node's bundle on the hub, deliver it over a **trusted
+channel**, run one command on the node. There is no npm/dmg/registry — the bundle
+**carries the node's private key**, so it must never touch a public host (see
+ADR-023 for the packaging rationale).
+
 ```bash
-node scripts/node/onboard.mjs --name <node> --transport lan --advertise <node>.local
-# or: --transport wireguard --hub-endpoint <hub>:51820
-# then on the node (one command it prints):
-tar -xzf agent-<node>.tgz && cd agent-bundle-<node> \
+# 1. ON THE HUB (tribecca): register the node on-chain + build its self-contained
+#    bundle. Same-network node → LAN/mDNS; different location → self-hosted WireGuard.
+node scripts/node/onboard.mjs --name chappie --transport lan --advertise chappie.local
+# cross-location instead:
+#   node scripts/node/onboard.mjs --name vienna --transport wireguard --hub-endpoint <hub>:51820
+
+# 2. DELIVER .runtime/agent-<node>.tgz over a trusted channel (scp/Taildrop/USB —
+#    NOT a public link; it holds the node key).
+
+# 3. ON THE NODE — one command (onboard prints it):
+tar -xzf agent-chappie.tgz && cd agent-bundle-chappie \
   && ./provision-secrets.sh && ./install-service.sh
 ```
-`install-service.sh` makes the node **boot-persistent** (LaunchAgent: starts at
-login, restarts on crash, #49). For the hub: `sudo node scripts/ops/install-hub.mjs`.
+
+`provision-secrets.sh` stores the key + nonce secret in the OS keychain (run once);
+`install-service.sh` makes the node **boot-persistent** (LaunchAgent/systemd: starts
+at login, restarts on crash, #49). After this first install the agent **self-updates
+from chain** (M8) — you never re-package or re-deliver. For the hub itself:
+`sudo node scripts/ops/install-hub.mjs`.
+
+> Optional P2P layer: a center that should also gossip claims/votes peer-to-peer
+> runs `step-gossip-node` alongside the validator (#54) — see the architecture doc
+> §4. Not needed for a standard trust center; the validator + agent are the system.
 
 ## 8d. Reliability behavior (M9)
 - **Hub outage (#51):** a node keeps running its current *verified* version, sets
