@@ -24,6 +24,11 @@ libp2p = { version = "0.54", features = [
     "tokio",
     "gossipsub",
     "mdns",
+    "kad",        # Kademlia DHT: decentralized peer discovery, no central registry / DNS
+    "identify",   # peers learn each other's addresses (feeds the DHT + NAT traversal)
+    "relay",      # public nodes relay for NAT'd peers (circuit relay v2)
+    "dcutr",      # hole-punch a relayed connection up to a direct one
+    "quic",       # better NAT traversal than TCP
     "noise",
     "yamux",
     "tcp",

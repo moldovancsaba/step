@@ -12,17 +12,42 @@ use crate::config::GossipConfig;
 use crate::engine::{Action, Engine};
 use crate::messages::{ClaimMsg, Gossip, VoteMsg};
 use futures::StreamExt;
+use libp2p::kad::store::MemoryStore;
+use libp2p::multiaddr::Protocol;
 use libp2p::swarm::{NetworkBehaviour, SwarmEvent};
-use libp2p::{gossipsub, identity, mdns, noise, tcp, yamux, Multiaddr};
+use libp2p::{
+    dcutr, gossipsub, identify, identity, kad, mdns, noise, relay, tcp, yamux, Multiaddr,
+};
 use std::time::Duration;
 
 pub const CLAIMS_TOPIC: &str = "step/claims/v1";
 pub const VOTES_TOPIC: &str = "step/votes/v1";
+const IDENTIFY_PROTO: &str = "/step/1.0.0";
 
+/// Full web3 peer stack — no DNS, no central registry:
+/// - gossipsub: claim/vote propagation
+/// - mdns: zero-config discovery on the LAN
+/// - kademlia (DHT): decentralized global peer discovery
+/// - identify: peers exchange their addresses (feeds the DHT + hole-punching)
+/// - relay (server) + relay-client + dcutr: NAT traversal so home nodes connect
+///   without a public IP or port-forward
 #[derive(NetworkBehaviour)]
 struct Behaviour {
     gossipsub: gossipsub::Behaviour,
     mdns: mdns::tokio::Behaviour,
+    kademlia: kad::Behaviour<MemoryStore>,
+    identify: identify::Behaviour,
+    relay: relay::Behaviour,
+    relay_client: relay::client::Behaviour,
+    dcutr: dcutr::Behaviour,
+}
+
+/// Extract the `/p2p/<PeerId>` component of a bootstrap multiaddr, if present.
+fn peer_id_of(addr: &Multiaddr) -> Option<libp2p::PeerId> {
+    addr.iter().find_map(|p| match p {
+        Protocol::P2p(id) => Some(id),
+        _ => None,
+    })
 }
 
 /// Build a libp2p keypair from the validator's secp256k1 secret key bytes, so the
@@ -86,7 +111,11 @@ where
             yamux::Config::default,
         )
         .map_err(|e| format!("tcp transport: {e}"))?
-        .with_behaviour(|key| {
+        .with_quic()
+        .with_relay_client(noise::Config::new, yamux::Config::default)
+        .map_err(|e| format!("relay client: {e}"))?
+        .with_behaviour(|key, relay_client| {
+            let peer_id = key.public().to_peer_id();
             let gossipsub = gossipsub::Behaviour::new(
                 gossipsub::MessageAuthenticity::Signed(key.clone()),
                 gossipsub::ConfigBuilder::default()
@@ -95,12 +124,33 @@ where
                     .map_err(|e| std::io::Error::other(e.to_string()))?,
             )
             .map_err(std::io::Error::other)?;
-            let mdns =
-                mdns::tokio::Behaviour::new(mdns::Config::default(), key.public().to_peer_id())?;
-            Ok(Behaviour { gossipsub, mdns })
+            let mdns = mdns::tokio::Behaviour::new(mdns::Config::default(), peer_id)?;
+            let kademlia = kad::Behaviour::new(peer_id, MemoryStore::new(peer_id));
+            let identify = identify::Behaviour::new(identify::Config::new(
+                IDENTIFY_PROTO.into(),
+                key.public(),
+            ));
+            let relay = relay::Behaviour::new(peer_id, relay::Config::default());
+            let dcutr = dcutr::Behaviour::new(peer_id);
+            Ok(Behaviour {
+                gossipsub,
+                mdns,
+                kademlia,
+                identify,
+                relay,
+                relay_client,
+                dcutr,
+            })
         })
         .map_err(|e| format!("behaviour: {e}"))?
         .build();
+
+    // Kademlia in server mode so this node answers DHT queries (helps the network
+    // self-organize without any central directory).
+    swarm
+        .behaviour_mut()
+        .kademlia
+        .set_mode(Some(kad::Mode::Server));
 
     let claims_topic = gossipsub::IdentTopic::new(CLAIMS_TOPIC);
     let votes_topic = gossipsub::IdentTopic::new(VOTES_TOPIC);
@@ -121,10 +171,24 @@ where
                 .parse()
                 .map_err(|e| format!("bad GOSSIP_LISTEN: {e}"))?,
         )
-        .map_err(|e| format!("listen: {e}"))?;
+        .map_err(|e| format!("listen tcp: {e}"))?;
+    // Also listen on QUIC (UDP) — better through NATs than TCP.
+    if let Ok(quic) = "/ip4/0.0.0.0/udp/0/quic-v1".parse::<Multiaddr>() {
+        let _ = swarm.listen_on(quic);
+    }
+
+    // Seed peers: a multi-entry bootstrap list (like Bitcoin's seeds) — no single
+    // rendezvous point, no DNS. Each is a multiaddr ending in /p2p/<PeerId>; we add
+    // it to the DHT routing table and dial it, then let Kademlia discover the rest.
     for b in &cfg.bootstrap {
         match b.parse::<Multiaddr>() {
             Ok(addr) => {
+                if let Some(peer) = peer_id_of(&addr) {
+                    swarm
+                        .behaviour_mut()
+                        .kademlia
+                        .add_address(&peer, addr.clone());
+                }
                 if let Err(e) = swarm.dial(addr) {
                     tracing::warn!("dial {b} failed: {e}");
                 }
@@ -132,6 +196,9 @@ where
             Err(e) => tracing::warn!("bad bootstrap addr {b}: {e}"),
         }
     }
+    // Kick off a DHT bootstrap (ok to fail when there are no seeds yet — mDNS still
+    // finds LAN peers, and later joiners will seed us).
+    let _ = swarm.behaviour_mut().kademlia.bootstrap();
 
     let mut engine = Engine::new(
         cfg.chain_id,
@@ -150,9 +217,21 @@ where
         let event = swarm.select_next_some().await;
         match event {
             SwarmEvent::Behaviour(BehaviourEvent::Mdns(mdns::Event::Discovered(list))) => {
-                for (peer, _addr) in list {
+                for (peer, addr) in list {
                     swarm.behaviour_mut().gossipsub.add_explicit_peer(&peer);
+                    swarm.behaviour_mut().kademlia.add_address(&peer, addr);
                     tracing::debug!(%peer, "mDNS discovered peer");
+                }
+            }
+            // identify tells us a peer's reachable addresses → feed the DHT so the
+            // network can route to it without any name service.
+            SwarmEvent::Behaviour(BehaviourEvent::Identify(identify::Event::Received {
+                peer_id,
+                info,
+                ..
+            })) => {
+                for addr in info.listen_addrs {
+                    swarm.behaviour_mut().kademlia.add_address(&peer_id, addr);
                 }
             }
             SwarmEvent::Behaviour(BehaviourEvent::Mdns(mdns::Event::Expired(list))) => {

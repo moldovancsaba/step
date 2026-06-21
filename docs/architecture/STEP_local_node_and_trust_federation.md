@@ -131,11 +131,17 @@ Two layers make the resource *shared*:
   nodes exchange claims and votes **peer-to-peer**, with no central hub — any node
   receives a claim, has its co-located validator validate+sign, gossips the
   EIP-712 vote, aggregates peers' votes by claim, and once weighted quorum is met
-  submits the bundle to the chain. Peer identity is the validator's secp256k1 key;
-  discovery is mDNS on the LAN plus explicit self-hosted bootstrap peers
-  cross-location (no third-party signaling). The vote/claim message shapes are
-  byte-compatible with the contract, so this is an additive transport, not a
-  rewrite, and the gateway becomes an optional edge for non-P2P clients.
+  submits the bundle to the chain. Peer identity is the validator's secp256k1 key
+  (a libp2p **PeerID**); peers are addressed by **multiaddr**, never DNS. Discovery
+  is a full web3 stack: **mDNS** (LAN), a **Kademlia DHT** (decentralized global
+  discovery — no central registry), **identify** (peers exchange addresses), and a
+  **multi-seed bootstrap list** (like Bitcoin's seeds — no single rendezvous). For
+  home nodes behind NAT, **circuit-relay v2 + DCUtR hole-punching + QUIC** let them
+  connect without a public IP or port-forward. So the network keeps running if any
+  DNS provider dies — DNS is used only for the human-facing website/app. The
+  vote/claim message shapes are byte-compatible with the contract, so this is an
+  additive transport, not a rewrite, and the gateway becomes an optional edge for
+  non-P2P clients.
 
 Net trust property (unchanged by transport): **a claim is real iff a weighted
 quorum of registered trust centers independently signed it.** Compromising one
