@@ -22,6 +22,12 @@ pub struct GossipConfig {
     pub bootstrap: Vec<String>,
     /// Bounded seen-set capacity for replay protection.
     pub seen_capacity: usize,
+    /// #67: run the circuit-relay SERVER (relay for NAT'd peers). Default OFF —
+    /// only designated public relays enable it; every node is still a relay-client
+    /// + dcutr. When on, the limits below bound abuse.
+    pub relay_server: bool,
+    pub relay_max_reservations: usize,
+    pub relay_max_circuits: usize,
 }
 
 fn req(k: &str) -> Result<String, String> {
@@ -59,6 +65,15 @@ impl GossipConfig {
                 .ok()
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(8192),
+            relay_server: std::env::var("GOSSIP_RELAY_SERVER").as_deref() == Ok("1"),
+            relay_max_reservations: std::env::var("GOSSIP_RELAY_MAX_RESERVATIONS")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(128),
+            relay_max_circuits: std::env::var("GOSSIP_RELAY_MAX_CIRCUITS")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(16),
         })
     }
 }

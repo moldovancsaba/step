@@ -14,6 +14,7 @@ use crate::messages::{ClaimMsg, Gossip, VoteMsg};
 use futures::StreamExt;
 use libp2p::kad::store::MemoryStore;
 use libp2p::multiaddr::Protocol;
+use libp2p::swarm::behaviour::toggle::Toggle;
 use libp2p::swarm::{NetworkBehaviour, SwarmEvent};
 use libp2p::{
     dcutr, gossipsub, identify, identity, kad, mdns, noise, relay, tcp, yamux, Multiaddr,
@@ -29,15 +30,18 @@ const IDENTIFY_PROTO: &str = "/step/1.0.0";
 /// - mdns: zero-config discovery on the LAN
 /// - kademlia (DHT): decentralized global peer discovery
 /// - identify: peers exchange their addresses (feeds the DHT + hole-punching)
-/// - relay (server) + relay-client + dcutr: NAT traversal so home nodes connect
-///   without a public IP or port-forward
+/// - relay-client + dcutr: NAT traversal so home nodes connect without a public
+///   IP or port-forward
+/// - relay (server): OFF by default (#67) — only designated public relays serve
+///   circuits, with bounded reservations/circuits; ordinary nodes are not open
+///   relays.
 #[derive(NetworkBehaviour)]
 struct Behaviour {
     gossipsub: gossipsub::Behaviour,
     mdns: mdns::tokio::Behaviour,
     kademlia: kad::Behaviour<MemoryStore>,
     identify: identify::Behaviour,
-    relay: relay::Behaviour,
+    relay: Toggle<relay::Behaviour>,
     relay_client: relay::client::Behaviour,
     dcutr: dcutr::Behaviour,
 }
@@ -130,7 +134,15 @@ where
                 IDENTIFY_PROTO.into(),
                 key.public(),
             ));
-            let relay = relay::Behaviour::new(peer_id, relay::Config::default());
+            // #67: relay SERVER only when explicitly enabled, and then bounded.
+            let relay = Toggle::from(cfg.relay_server.then(|| {
+                let rcfg = relay::Config {
+                    max_reservations: cfg.relay_max_reservations,
+                    max_circuits: cfg.relay_max_circuits,
+                    ..Default::default()
+                };
+                relay::Behaviour::new(peer_id, rcfg)
+            }));
             let dcutr = dcutr::Behaviour::new(peer_id);
             Ok(Behaviour {
                 gossipsub,
@@ -211,7 +223,11 @@ where
     // here across votes. Weights change rarely; a missing one is resolved once.
     let mut weights: std::collections::HashMap<step_validation_rules::sign::Address, u128> =
         std::collections::HashMap::new();
-    tracing::info!(peer = %swarm.local_peer_id(), "gossip node started");
+    tracing::info!(
+        peer = %swarm.local_peer_id(),
+        relay_server = cfg.relay_server,
+        "gossip node started (relay-client+dcutr always on; relay-server opt-in)"
+    );
 
     loop {
         let event = swarm.select_next_some().await;
