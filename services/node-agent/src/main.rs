@@ -43,6 +43,15 @@ fn now_iso() -> String {
 
 #[tokio::main]
 async fn main() {
+    // Keyless provisioning: `--init` generates the node's own identity key, stores
+    // it in the OS secret store, prints its address, and exits — so a public
+    // installer can stand up a node with NO secret ever travelling. The operator
+    // then registers the printed address on the hub.
+    if std::env::args().any(|a| a == "--init") {
+        init_identity();
+        return;
+    }
+
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
@@ -79,6 +88,30 @@ async fn main() {
         .expect("bind agent port");
     tracing::info!("node-agent status on {addr}");
     axum::serve(listener, app).await.expect("serve");
+}
+
+/// `--init`: generate the node identity key, store it, print `NODE_ADDRESS=0x…`.
+fn init_identity() {
+    use step_validation_rules::sign::{address_from_key_bytes, generate_key_bytes};
+    let key = generate_key_bytes().unwrap_or_else(|e| {
+        eprintln!("entropy error: {e}");
+        std::process::exit(2);
+    });
+    let addr = address_from_key_bytes(&key).expect("generated key is valid");
+    let address = format!("0x{}", hex::encode(addr));
+    let secrets = step_node_agent::secrets::Secrets::from_env(&address);
+    if let Err(e) = secrets.store("validatorKey", &format!("0x{}", hex::encode(key))) {
+        eprintln!("could not store key: {e}");
+        std::process::exit(1);
+    }
+    // The shared gateway nonce secret is federation config (not node-generated);
+    // store it alongside if the installer passed it.
+    if let Ok(ns) = std::env::var("GATEWAY_NONCE_SECRET") {
+        let _ = secrets.store("nonceSecret", &ns);
+    }
+    // The one line the installer captures to wire the service + that the operator
+    // registers on the hub. Keep it the ONLY stdout line.
+    println!("NODE_ADDRESS={address}");
 }
 
 async fn status_handler(State(s): State<Shared>) -> Json<StatusReport> {

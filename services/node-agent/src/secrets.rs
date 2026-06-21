@@ -87,6 +87,67 @@ impl Secrets {
             Backend::File { path } => read_secret_file(path)?.get(&self.account(key)).cloned(),
         }
     }
+
+    /// Store a secret in the OS store (keyless provisioning). Used by `--init` so
+    /// the node's self-generated key never touches plaintext on disk (except the
+    /// `file` backend, which is written 0600). Returns Err on backend failure.
+    pub fn store(&self, key: &str, value: &str) -> Result<(), String> {
+        match &self.backend {
+            Backend::Keychain { service } => Command::new("security")
+                .args([
+                    "add-generic-password",
+                    "-U",
+                    "-s",
+                    service,
+                    "-a",
+                    &self.account(key),
+                    "-w",
+                    value,
+                ])
+                .status()
+                .map_err(|e| e.to_string())
+                .and_then(|s| {
+                    s.success()
+                        .then_some(())
+                        .ok_or("security add failed".into())
+                }),
+            Backend::SecretService { collection } => Command::new("secret-tool")
+                .args([
+                    "store",
+                    "--label=step-node",
+                    "collection",
+                    collection,
+                    "account",
+                    &self.account(key),
+                ])
+                .stdin(std::process::Stdio::piped())
+                .spawn()
+                .and_then(|mut c| {
+                    use std::io::Write;
+                    c.stdin.take().unwrap().write_all(value.as_bytes())?;
+                    c.wait()
+                })
+                .map_err(|e| e.to_string())
+                .and_then(|s| {
+                    s.success()
+                        .then_some(())
+                        .ok_or("secret-tool store failed".into())
+                }),
+            Backend::File { path } => {
+                let mut map = read_secret_file(path).unwrap_or_default();
+                map.insert(self.account(key), value.to_string());
+                let json = serde_json::to_string(&map).map_err(|e| e.to_string())?;
+                std::fs::write(path, json).map_err(|e| e.to_string())?;
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
+                        .map_err(|e| e.to_string())?;
+                }
+                Ok(())
+            }
+        }
+    }
 }
 
 /// Read an 0600 JSON secret file. Refuses (returns `None`) if the file is group/

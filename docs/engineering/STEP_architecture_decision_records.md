@@ -279,6 +279,15 @@ re-package.
 **Consequences:** One enable path for every platform (`onboard.mjs` → deliver →
 `install-service.sh`). No registry/notarization toolchain to maintain. The trusted-
 channel delivery (scp/Taildrop/USB) is a deliberate, documented step, not a gap.
+**Keyless public install (delivered):** for "install anywhere" without moving a
+secret, `scripts/node/install.sh` is a `curl … | sh` installer that downloads the
+(non-secret) static binary and runs `step-node-agent --init` — the node **generates
+its own key locally**, stores it in the OS keychain, and prints only its address;
+the operator admits it with `scripts/node/register.mjs <address>`. This is the
+global path (no key in transit, no registry); the keyed bundle above remains the
+zero-touch private-federation path. The one public endpoint it needs is the chain
+RPC — which is why genuine global operation still depends on the production chain
+(#50), not the dev `anvil` (whose well-known keys must never be exposed publicly).
 
 ---
 

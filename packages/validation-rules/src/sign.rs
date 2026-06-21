@@ -99,6 +99,21 @@ pub fn address_from_key_bytes(key_bytes: &[u8]) -> Option<Address> {
     Some(signer_address(&SigningKey::from_slice(key_bytes).ok()?))
 }
 
+/// Generate a fresh secp256k1 private key as 32 bytes, for keyless node
+/// provisioning (the node makes its own identity; nothing secret ever travels).
+/// Reads OS entropy from `/dev/urandom` and rejects the negligibly-rare draw that
+/// isn't a valid scalar — no RNG-feature dependency on k256.
+pub fn generate_key_bytes() -> std::io::Result<[u8; 32]> {
+    use std::io::Read;
+    loop {
+        let mut buf = [0u8; 32];
+        std::fs::File::open("/dev/urandom")?.read_exact(&mut buf)?;
+        if SigningKey::from_slice(&buf).is_ok() {
+            return Ok(buf);
+        }
+    }
+}
+
 const EIP712_DOMAIN_TYPEHASH: &str =
     "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)";
 const VOTE_TYPEHASH: &str =
@@ -187,6 +202,15 @@ mod tests {
             recover_address(&digest, &sig).unwrap(),
             signer_address(&key)
         );
+    }
+
+    #[test]
+    fn generated_key_is_valid_and_unique() {
+        let a = generate_key_bytes().unwrap();
+        let b = generate_key_bytes().unwrap();
+        assert_ne!(a, b, "two draws must differ");
+        assert!(address_from_key_bytes(&a).is_some());
+        assert!(personal_sign_with_key_bytes(&a, b"hi").is_some());
     }
 
     #[test]
