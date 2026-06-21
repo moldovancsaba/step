@@ -12,7 +12,7 @@
 # After that the node self-updates from chain forever (ADR-019/M8).
 set -eu
 
-RPC=""; REGISTRY=""; PLATFORM_ID=""; ARTIFACT=""; NONCE_SECRET=""; FLEET=""
+RPC=""; REGISTRY=""; PLATFORM_ID=""; ARTIFACT=""; NONCE_SECRET=""; FLEET=""; SHA256=""
 PLATFORM="${STEP_PLATFORM:-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m)}"
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -22,17 +22,34 @@ while [ $# -gt 0 ]; do
     --artifact) ARTIFACT="$2"; shift 2;;
     --nonce-secret) NONCE_SECRET="$2"; shift 2;;
     --fleet) FLEET="$2"; shift 2;;
+    --sha256) SHA256="$2"; shift 2;;
     *) echo "unknown arg: $1" >&2; exit 2;;
   esac
 done
 [ -n "$RPC" ] && [ -n "$REGISTRY" ] && [ -n "$PLATFORM_ID" ] && [ -n "$ARTIFACT" ] && [ -n "$NONCE_SECRET" ] || {
   echo "required: --rpc --registry --platform-id --artifact --nonce-secret" >&2; exit 2; }
+# #60: fail-closed binary integrity. The agent self-update verifies sha256 against
+# the on-chain ReleaseRegistry; the bootstrap installer must too. No hash ⇒ refuse.
+[ -n "$SHA256" ] || { echo "[step-install] refusing: --sha256 <expected hex> is required (the hub prints it; it is the on-chain ReleaseRegistry binary hash)" >&2; exit 2; }
 
 ROOT="$HOME/.step-node"
 mkdir -p "$ROOT"
 echo "[step-install] downloading agent for $PLATFORM …"
-curl -fsSL "$ARTIFACT" -o "$ROOT/step-node-agent"
+curl -fsSL "$ARTIFACT" -o "$ROOT/step-node-agent.unverified"
+# Verify BEFORE making it executable or running anything.
+if command -v sha256sum >/dev/null 2>&1; then GOT=$(sha256sum "$ROOT/step-node-agent.unverified" | awk '{print $1}')
+elif command -v shasum >/dev/null 2>&1; then GOT=$(shasum -a 256 "$ROOT/step-node-agent.unverified" | awk '{print $1}')
+else echo "[step-install] no sha256 tool (sha256sum/shasum) — cannot verify; aborting" >&2; rm -f "$ROOT/step-node-agent.unverified"; exit 1; fi
+WANT=$(printf '%s' "$SHA256" | tr 'A-Z' 'a-z' | sed 's/^0x//')
+if [ "$GOT" != "$WANT" ]; then
+  echo "[step-install] HASH MISMATCH — refusing to run downloaded binary." >&2
+  echo "[step-install]   expected: $WANT" >&2
+  echo "[step-install]   got:      $GOT" >&2
+  rm -f "$ROOT/step-node-agent.unverified"; exit 1
+fi
+mv "$ROOT/step-node-agent.unverified" "$ROOT/step-node-agent"
 chmod +x "$ROOT/step-node-agent"
+echo "[step-install] ✓ binary sha256 verified"
 [ "$(uname -s)" = "Darwin" ] && xattr -dr com.apple.quarantine "$ROOT/step-node-agent" 2>/dev/null || true
 
 # Generate the node identity locally (idempotent: reuse a prior address).
