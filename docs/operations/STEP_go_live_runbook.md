@@ -124,6 +124,35 @@ The **iOS** app is then pointed at `https://step.regiominer.com` (replacing the
 `*.step.example` placeholders) and re-uploaded to TestFlight (build 0.1.0(2)) with
 the App Store Connect API key (see `apps/ios/App/store/PUBLISHING.md`).
 
+## 5c. Sovereign chain (CometBFT + EVM) — the decentralized ledger (#50, ADR-024)
+
+The real ledger is a self-hosted **cosmos/evm** chain (CometBFT BFT consensus + a
+full EVM), replacing the single dev `anvil`. Your Solidity contracts run unchanged.
+
+```bash
+# 1. build the chain binary (fetches Go locally — no package manager):
+sh scripts/chain/build-evmd.sh                 # → ~/.local/bin/evmd
+# 2. first (genesis) node — one-time init then start:
+#    (init via the cosmos/evm local_node.sh, or reuse the committed chain/genesis.json)
+sh scripts/chain/start.sh                       # EVM JSON-RPC on :8645, P2P :26656
+# 3. deploy STEP to it (EVM chain-id 262144 / 0x40000, gas denom atest):
+KEY=$(evmd keys unsafe-export-eth-key dev0 --keyring-backend test --home ~/.evmd)
+DEPLOYER_PRIVATE_KEY=0x$KEY forge script script/Deploy.s.sol \
+  --rpc-url http://127.0.0.1:8645 --broadcast --slow --legacy   # (in contracts/)
+```
+
+**Add a validator on ANY other machine (no DNS — node-id addressing):**
+```bash
+sh scripts/chain/build-evmd.sh
+STEP_GENESIS=./chain/genesis.json \
+STEP_SEED=<genesis-node-id>@<host>:26656 \
+  sh scripts/chain/join.sh <moniker>            # syncs; prints the create-validator tx
+sh scripts/chain/start.sh
+```
+The genesis node-id is `evmd comet show-node-id --home ~/.evmd`. For BFT fault
+tolerance you want **≥4 validators**. Cutover (re-point gateway/validators/agent/
+gossip from anvil :8545 → :8645) happens once enough validators are live.
+
 ## 6. Exit to MVP
 
 The pilot ends with the alpha report (KPIs in `STEP_alpha_scope.md` §5). MVP go/no-go requires: hard criteria met, no open critical security findings, tokenomics constitution drafted→ratified, and the next-phase legal gates engaged with counsel.

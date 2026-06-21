@@ -53,3 +53,4 @@ apps/ios/App/build/
 # Web-app env config (public localhost/Worker URLs, no secrets) — committed
 !apps/web-app/.env.production
 !apps/web-app/.env.development
+.chain/

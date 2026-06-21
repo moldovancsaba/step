@@ -291,6 +291,33 @@ RPC — which is why genuine global operation still depends on the production ch
 
 ---
 
+## ADR-024: Sovereign chain — CometBFT + EVM (cosmos/evm), not anvil / a public L2
+
+**Status:** ACCEPTED (genesis node live; multi-validator rollout in progress)
+**Context:** #50 — the dev `anvil` is a single non-decentralized node and its
+well-known keys can never be exposed publicly, so it cannot be the real ledger.
+The north-star needs a self-hosted, decentralized, EVM-compatible chain. Options:
+a public L2 (Base/OP — decentralized but depends on someone else's sequencer/RPC,
+against the sovereignty goal); geth/clique (deprecated, ADR-019 context); or a
+sovereign **CometBFT + EVM** appchain.
+**Decision:** Run **cosmos/evm `evmd`** — CometBFT BFT consensus + a full EVM, so
+the existing STEP Solidity contracts deploy unchanged on a chain we run ourselves.
+Built from source (`scripts/chain/build-evmd.sh`; fetches Go locally — no package
+manager), started via `scripts/chain/start.sh` (EVM JSON-RPC on **8645** so it
+coexists with the legacy anvil on 8545 during migration). Cosmos chain-id `9001`,
+**EVM chain-id 262144 (0x40000)**, gas denom `atest`. Other machines join by
+node-id (no DNS) via `scripts/chain/join.sh` with the shared `chain/genesis.json`.
+Verified: STEP's 13 contracts deployed (`MiningClaimVerifier 0x27f924A0…`,
+`TrinityToken 0x…` symbol `TRIN`) and produce/finalise blocks under BFT consensus.
+**Consequences:** A genuinely sovereign, decentralizable ledger — add validators
+on more machines for fault tolerance (≥4 for 1-fault BFT). Migration is staged:
+the app stack (gateway/validators/agent/gossip) re-points from anvil → 8645 once
+enough validators are live. New chain ⇒ STEP gets fresh addresses + an `atest` gas
+token (a faucet/grant flow replaces anvil's pre-funded keys). The dev anvil stays
+as the transitional bootstrap until cutover.
+
+---
+
 ## OPEN decisions (no safe default — owner/legal input required)
 
 | # | Decision | Blocks | Owner type |
