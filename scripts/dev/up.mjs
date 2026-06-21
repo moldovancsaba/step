@@ -27,6 +27,7 @@ import { randomBytes } from "node:crypto";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import net from "node:net";
+import { assertSafeHosts } from "../lib/net-guard.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 const RUNTIME = join(ROOT, ".runtime");
@@ -178,6 +179,9 @@ async function main() {
     .split(",")
     .map((h) => h.trim())
     .filter(Boolean);
+  // #62: the dev chain is funded by the public Hardhat key — never bind it to a
+  // public interface (or 0.0.0.0) without an explicit, loudly-warned override.
+  assertSafeHosts(anvilHosts, { allowPublic: process.env.STEP_ALLOW_PUBLIC_ANVIL === "1", warn: log });
   const anvilArgs = [
     "--port", String(PORTS.anvil),
     "--chain-id", "31337",
