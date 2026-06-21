@@ -4,7 +4,7 @@
 # prints the one tx to become a BFT validator. This is the "run on other machines
 # to build the foundation" artifact (ADR-024).
 #
-#   STEP_GENESIS=./chain/genesis.json \
+#   STEP_GENESIS=<shared production genesis> \   # NOT the devnet sample
 #   STEP_SEED=f7029b25bb3c6464206f4bf58defeb6d606a9f88@<tribecca-ip>:26656 \
 #   sh scripts/chain/join.sh <moniker>
 #
