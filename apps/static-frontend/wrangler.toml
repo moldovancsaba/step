@@ -11,3 +11,9 @@ not_found_handling = "single-page-application"
 [vars]
 STEP_WEB_EXPLORER_URL = "/explorer"
 STEP_WEB_MINER_URL = "/miner"
+# Backend reached over the self-hosted `step-backend` Cloudflare tunnel from the
+# always-on Mac (scripts/ops/backend-tunnel.mjs). Live once the owner adds the two
+# proxied CNAMEs (gw/idx.step.regiominer.com → <tunnel-id>.cfargotunnel.com) and
+# the worker is redeployed (`pnpm run deploy:cloudflare-worker`).
+STEP_BACKEND_GATEWAY_URL = "https://gw.step.regiominer.com"
+STEP_BACKEND_INDEXER_URL = "https://idx.step.regiominer.com"

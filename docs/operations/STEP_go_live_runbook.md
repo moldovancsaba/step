@@ -92,6 +92,38 @@ Brings up chain, one-shot contract deploy + validator registration, 3 validators
 - **Transparency:** the explorer `/treasury`, `/validators`, and triangle/claim pages are the public record; every foundation action is on-chain.
 - **Privacy:** no raw GPS leaves the proof path; evidence deletion = key destruction; PIA must be signed before storing pilot evidence at scale.
 
+## 5b. Public backend over a self-hosted tunnel (web + iOS)
+
+The deployed web worker (`step`, step.regiominer.com) and the iOS app reach the
+backend on the always-on Mac through a **named, self-hosted Cloudflare tunnel** —
+no inbound ports, no public IP, no third-party SaaS beyond Cloudflare itself.
+
+```bash
+# 1. bring the stack up (gateway :8080, indexer :8090) — §1.
+# 2. run the boot-persistent backend tunnel (token in gitignored .env):
+node scripts/ops/backend-tunnel.mjs --install        # LaunchAgent app.step.backend-tunnel
+#    tunnel `step-backend` id 329b02b6-46bb-4273-8751-a4909f9b900f
+#    gw.step.regiominer.com  → 127.0.0.1:8080
+#    idx.step.regiominer.com → 127.0.0.1:8090
+```
+
+**Owner action (one-time — the CF API token cannot edit DNS):** in the Cloudflare
+dashboard, regiominer.com zone, add two **proxied** CNAMEs, both pointing at
+`329b02b6-46bb-4273-8751-a4909f9b900f.cfargotunnel.com`:
+`gw.step.regiominer.com` and `idx.step.regiominer.com`.
+
+**Cutover (makes the public site mine):** the worker already carries
+`STEP_BACKEND_GATEWAY_URL` / `STEP_BACKEND_INDEXER_URL` (apps/static-frontend/
+wrangler.toml). Once the CNAMEs resolve, redeploy the worker:
+```bash
+set -a; . ./.env.cloudflare; set +a
+pnpm run deploy:cloudflare-worker
+# verify: https://step.regiominer.com/miner mines end-to-end (frontier → claim → reward)
+```
+The **iOS** app is then pointed at `https://step.regiominer.com` (replacing the
+`*.step.example` placeholders) and re-uploaded to TestFlight (build 0.1.0(2)) with
+the App Store Connect API key (see `apps/ios/App/store/PUBLISHING.md`).
+
 ## 6. Exit to MVP
 
 The pilot ends with the alpha report (KPIs in `STEP_alpha_scope.md` §5). MVP go/no-go requires: hard criteria met, no open critical security findings, tokenomics constitution drafted→ratified, and the next-phase legal gates engaged with counsel.
