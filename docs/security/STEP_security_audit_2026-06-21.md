@@ -1,5 +1,16 @@
 # STEP infrastructure security audit — 2026-06-21
 
+> **Remediation status (M10):** all 15 findings (C1–C2, H1–H3, M1–M6, L1–L4) are
+> **delivered and CI-green** on `feat/v2-mining-nfts` — decomposed into issues
+> #58–#69 (milestone M10), each with code + tests + docs. Code controls (rate
+> limits, hash-verify, secret-handling, relay bounds, fail-closed guards, the
+> governed-handover invariant test, the genesis safety net) are in place. The two
+> CRITICALs are *operational* gates the code now enforces/tests but that an
+> operator must execute on the real chain (run the secret-key genesis ceremony,
+> run the governed redeploy) before external validators join — the tooling and the
+> proving tests now exist.
+
+
 > Scope: the infrastructure delivered in M8/M9 + the sovereign-chain bring-up —
 > trust-center agent, keyless install, P2P gossip (libp2p), signed heartbeats, DAO
 > governance, the cloudflared backend tunnel, and the cosmos/evm sovereign chain.
