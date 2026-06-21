@@ -34,6 +34,11 @@ const args = (() => {
   return a;
 })();
 if (!args.name) die("--name required");
+// L2 (audit): this bundle EMBEDS the node's private key (provision-secrets.sh), so
+// it must travel only over a trusted channel (LAN/scp/USB). For anything off a
+// trusted LAN, prefer the keyless installer — the node generates its own key and
+// nothing secret transits:  scripts/node/install.sh (see ADR-023).
+log("note: keyed bundle (trusted-LAN delivery only). Off-LAN? use scripts/node/install.sh (keyless).");
 
 function loadRuntimeEnv() {
   const out = {};

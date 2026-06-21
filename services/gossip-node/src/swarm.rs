@@ -184,7 +184,10 @@ where
                 .map_err(|e| format!("bad GOSSIP_LISTEN: {e}"))?,
         )
         .map_err(|e| format!("listen tcp: {e}"))?;
-    // Also listen on QUIC (UDP) — better through NATs than TCP.
+    // Also listen on QUIC (UDP) — better through NATs than TCP. L3 (audit): the
+    // 0.0.0.0 bind here is INTENTIONAL — a P2P node must be reachable on all
+    // interfaces; unlike the dev anvil this exposes no privileged/public-key RPC,
+    // only the authenticated gossip protocol.
     if let Ok(quic) = "/ip4/0.0.0.0/udp/0/quic-v1".parse::<Multiaddr>() {
         let _ = swarm.listen_on(quic);
     }

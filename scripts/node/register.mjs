@@ -30,7 +30,13 @@ if (!registry && depFile && existsSync(depFile)) {
   registry = JSON.parse(readFileSync(depFile, "utf8")).ValidatorRegistry;
 }
 registry || die("set VALIDATOR_REGISTRY or STEP_DEPLOYMENTS_FILE");
-const adminKey = process.env.STEP_ADMIN_KEY || DEV_ADMIN_KEY;
+// L1 (audit): fail closed — never silently use the PUBLIC dev admin key on a real
+// chain. STEP_LOCAL_DEV=1 explicitly opts into the public key for a local sandbox.
+const adminKey =
+  process.env.STEP_ADMIN_KEY ||
+  (process.env.STEP_LOCAL_DEV === "1"
+    ? DEV_ADMIN_KEY
+    : die("STEP_ADMIN_KEY required (or set STEP_LOCAL_DEV=1 to use the public dev key on a local chain)"));
 
 const cast = `${process.env.HOME}/.foundry/bin/cast`;
 const bin = existsSync(cast) ? cast : "cast";
