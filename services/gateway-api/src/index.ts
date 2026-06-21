@@ -208,6 +208,17 @@ const deps: GatewayDeps = {
     });
     return Number(status);
   },
+  // Abuse controls (#61/#65). Limits are config; default to permissive (trusted
+  // LAN). Tighten these whenever the gateway is publicly exposed via the tunnel.
+  rateLimit: {
+    nowMs: () => Date.now(),
+    ipPerMin: Number(process.env.GATEWAY_IP_PER_MIN ?? 120),
+    walletPerMin: Number(process.env.GATEWAY_WALLET_PER_MIN ?? 30),
+    frontierPerMin: Number(process.env.GATEWAY_FRONTIER_PER_MIN ?? 120),
+    frontierCacheTtlMs: Number(process.env.GATEWAY_FRONTIER_CACHE_TTL_MS ?? 5_000),
+    relayerMinBalanceWei: BigInt(process.env.RELAYER_MIN_BALANCE_WEI ?? "0"),
+    relayerBalanceWei: () => publicClient.getBalance({ address: relayer.address }),
+  },
 };
 
 const { app } = createApp(deps);

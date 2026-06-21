@@ -23,6 +23,7 @@ import {
   type ValidateResponse,
 } from "@step/shared-types";
 import { aggregateQuorum, votesAreConsistent, type WeightedVote } from "./quorum.js";
+import { RateLimiter } from "./ratelimit.js";
 
 export interface ClaimRecord {
   claim_hash: Hex;
@@ -115,6 +116,27 @@ export interface GatewayDeps {
    *  raw enum index (0 Locked, 1 Open, 2 Cooldown, 3 Exhausted). Used to resolve
    *  the mineable frontier. Optional: when absent, the frontier endpoint is off. */
   triangleStatus?(triangleId: string): Promise<number>;
+  /** Abuse controls for public exposure (#61/#65). Absent ⇒ limits off (trusted LAN). */
+  rateLimit?: {
+    nowMs(): number;
+    ipPerMin?: number;
+    walletPerMin?: number;
+    frontierPerMin?: number;
+    frontierCacheTtlMs?: number;
+    /** relayer balance read + floor: below it, submission is paused (fail-closed). */
+    relayerBalanceWei?(): Promise<bigint>;
+    relayerMinBalanceWei?: bigint;
+  };
+}
+
+/** Best-effort client IP behind the Cloudflare tunnel; never trust a client-set value
+ *  for anything but rate-limit keying. */
+function clientIp(c: { req: { header(name: string): string | undefined } }): string {
+  return (
+    c.req.header("cf-connecting-ip") ||
+    (c.req.header("x-forwarded-for") || "").split(",")[0]?.trim() ||
+    "unknown"
+  );
 }
 
 /** TriangleStatus enum index → name (TriangleMiningState.sol). */
@@ -124,6 +146,14 @@ export function createApp(deps: GatewayDeps) {
   const app = new Hono();
   const records = new Map<string, ClaimRecord>();
   const meshUrl = deps.meshUrl ?? deps.validatorUrls[0];
+
+  // Abuse controls (#61/#65). Per-minute → tokens with refill = perMin/60.
+  const rl = deps.rateLimit;
+  const ipClaim = rl?.ipPerMin ? new RateLimiter(rl.ipPerMin, rl.ipPerMin / 60) : null;
+  const walletClaim = rl?.walletPerMin ? new RateLimiter(rl.walletPerMin, rl.walletPerMin / 60) : null;
+  const ipFrontier = rl?.frontierPerMin ? new RateLimiter(rl.frontierPerMin, rl.frontierPerMin / 60) : null;
+  const frontierCache = new Map<string, { status: number; expiresAt: number }>();
+  const now = () => rl?.nowMs() ?? Date.now();
 
   if (deps.corsOrigins?.length) {
     app.use(
@@ -164,11 +194,18 @@ export function createApp(deps: GatewayDeps) {
   app.get("/v1/mesh/mineable", async (c) => {
     if (!meshUrl) return c.json({ error: "mesh API unavailable" }, 503);
     if (!deps.triangleStatus) return c.json({ error: "frontier resolver unavailable" }, 503);
-    const url = new URL(`${meshUrl}/v1/mesh/resolve`);
-    for (const key of ["lat", "lon"]) {
-      const value = c.req.query(key);
-      if (value !== undefined) url.searchParams.set(key, value);
+    // #65: rate-limit (1 request fans into up to 21 chain reads) + numeric coord guard.
+    if (ipFrontier) {
+      const g = ipFrontier.take(clientIp(c), now());
+      if (!g.allowed) return c.json({ error: "rate limited", retry_after_s: g.retryAfterS }, 429);
     }
+    const lat = Number(c.req.query("lat")), lon = Number(c.req.query("lon"));
+    if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
+      return c.json({ error: "lat/lon must be valid coordinates" }, 400);
+    }
+    const url = new URL(`${meshUrl}/v1/mesh/resolve`);
+    url.searchParams.set("lat", String(lat));
+    url.searchParams.set("lon", String(lon));
     url.searchParams.set("level", "21");
     const resp = await fetch(url);
     if (!resp.ok) return c.json({ error: "mesh resolve failed" }, 502);
@@ -176,10 +213,23 @@ export function createApp(deps: GatewayDeps) {
     const full = resolved.triangle_id;
     if (!full) return c.json({ error: "no triangle for location" }, 404);
 
+    // #65: cache status reads (status changes slowly; the contract re-checks on submit).
+    const ttl = rl?.frontierCacheTtlMs ?? 0;
+    const statusOf = async (id: string): Promise<number> => {
+      if (ttl > 0) {
+        const hit = frontierCache.get(id);
+        if (hit && hit.expiresAt > now()) return hit.status;
+        const s = await deps.triangleStatus!(id);
+        frontierCache.set(id, { status: s, expiresAt: now() + ttl });
+        return s;
+      }
+      return deps.triangleStatus!(id);
+    };
+
     const segs = full.split(".");
     for (let level = 1; level <= segs.length; level++) {
       const triangleId = segs.slice(0, level).join(".");
-      const status = await deps.triangleStatus(triangleId);
+      const status = await statusOf(triangleId);
       if (status !== 3 /* Exhausted */) {
         return c.json({
           triangle_id: triangleId,
@@ -213,10 +263,20 @@ export function createApp(deps: GatewayDeps) {
   });
 
   app.post("/v1/claims", async (c) => {
+    // #61: per-IP rate limit before any work (cheap to flood otherwise).
+    if (ipClaim) {
+      const g = ipClaim.take(clientIp(c), now());
+      if (!g.allowed) return c.json({ error: "rate limited", retry_after_s: g.retryAfterS }, 429);
+    }
     const body = await c.req.json().catch(() => null);
     const claim = body?.claim as Claim | undefined;
     if (!claim || claim.schema_version !== "step.proof.location.v1") {
       return c.json({ error: "claim with schema step.proof.location.v1 required" }, 400);
+    }
+    // #61: per-wallet rate limit (the stronger control behind a shared tunnel IP).
+    if (walletClaim && claim.wallet_address) {
+      const g = walletClaim.take(claim.wallet_address.toLowerCase(), now());
+      if (!g.allowed) return c.json({ error: "rate limited", retry_after_s: g.retryAfterS }, 429);
     }
 
     const message = canonicalClaimMessage(claim);
@@ -282,6 +342,23 @@ export function createApp(deps: GatewayDeps) {
     }
 
     record.status = "accepted";
+
+    // #61: relayer gas-drain guard — pause on-chain submission (fail-closed) when
+    // the relayer balance is at/below the floor, rather than burning the last gas
+    // or letting a balance-read error submit blindly. The accepted claim is held;
+    // a resubmit succeeds once the relayer is refunded.
+    if (rl?.relayerBalanceWei && rl.relayerMinBalanceWei !== undefined) {
+      let balance: bigint;
+      try {
+        balance = await rl.relayerBalanceWei();
+      } catch {
+        balance = 0n; // read failed ⇒ treat as empty (fail-closed)
+      }
+      if (balance <= rl.relayerMinBalanceWei) {
+        record.status = "validating"; // not finalised; retryable
+        return c.json({ ...record, error: "submission paused (relayer balance low)" }, 503);
+      }
+    }
 
     // Evidence bundle: encrypted off-chain, hash on-chain (POP-008/009).
     const proofCidHash = await deps.storeEvidence({

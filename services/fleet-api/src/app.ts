@@ -6,6 +6,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import type { DirectoryNode, FleetView, NodeProbe } from "./fleet.js";
 import { buildFleetView } from "./fleet.js";
+import { RateLimiter } from "./ratelimit.js";
 import type { Heartbeat } from "./heartbeat.js";
 import { classifyState, HeartbeatStore, verifyHeartbeat } from "./heartbeat.js";
 import { deriveAlerts, type NodeStatus } from "./alerts.js";
@@ -26,6 +27,12 @@ export interface FleetDeps {
     now(): number;
     /** a heartbeat older than this (ms) marks the node `dark`. Default 90s. */
     staleThresholdMs?: number;
+    /** Abuse controls for public exposure (#66). Absent ⇒ off (trusted LAN). */
+    ipPerMin?: number;
+    nodePerMin?: number;
+    maxBodyBytes?: number;
+    /** ms to cache the registered-set snapshot (avoids rebuilding it per request). */
+    registeredCacheTtlMs?: number;
   };
 }
 
@@ -57,14 +64,42 @@ export function createApp(deps: FleetDeps) {
   // spoofing) and stamps its own receive time (the staleness clock).
   if (deps.heartbeats) {
     const hb = deps.heartbeats;
+    // #66: cheap abuse controls BEFORE the expensive ECDSA recovery.
+    const ipHb = hb.ipPerMin ? new RateLimiter(hb.ipPerMin, hb.ipPerMin / 60) : null;
+    const nodeHb = hb.nodePerMin ? new RateLimiter(hb.nodePerMin, hb.nodePerMin / 60) : null;
+    const maxBody = hb.maxBodyBytes ?? 4096; // a heartbeat is tiny
+    const regTtl = hb.registeredCacheTtlMs ?? 5_000;
+    let regCache: { set: Set<string>; expiresAt: number } | null = null;
+    const registeredCached = (): Set<string> => {
+      const t = hb.now();
+      if (!regCache || regCache.expiresAt <= t) regCache = { set: hb.registered(), expiresAt: t + regTtl };
+      return regCache.set;
+    };
+    const ipOf = (c: { req: { header(n: string): string | undefined } }) =>
+      c.req.header("cf-connecting-ip") || (c.req.header("x-forwarded-for") || "").split(",")[0]?.trim() || "unknown";
+
     app.post("/v1/fleet/heartbeat", async (c) => {
+      const len = Number(c.req.header("content-length") ?? "0");
+      if (len > maxBody) return c.json({ error: "body too large" }, 413);
+      if (ipHb) {
+        const g = ipHb.take(ipOf(c), hb.now());
+        if (!g.allowed) return c.json({ error: "rate limited", retry_after_s: g.retryAfterS }, 429);
+      }
+      const raw = await c.req.text();
+      if (raw.length > maxBody) return c.json({ error: "body too large" }, 413); // guard if no content-length
       let body: Heartbeat;
       try {
-        body = (await c.req.json()) as Heartbeat;
+        body = JSON.parse(raw) as Heartbeat;
       } catch {
         return c.json({ error: "bad json" }, 400);
       }
-      const node = await verifyHeartbeat(body, hb.registered());
+      // Per-claimed-node bucket (cheap; the claimed `node` is only a limiter key —
+      // storage still requires signature verification below).
+      if (nodeHb && typeof body?.node === "string") {
+        const g = nodeHb.take(body.node.toLowerCase(), hb.now());
+        if (!g.allowed) return c.json({ error: "rate limited", retry_after_s: g.retryAfterS }, 429);
+      }
+      const node = await verifyHeartbeat(body, registeredCached());
       if (!node) return c.json({ error: "unverified heartbeat" }, 401);
       hb.store.upsert(node, body, hb.now());
       return c.json({ ok: true, node });

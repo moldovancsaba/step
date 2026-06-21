@@ -95,6 +95,10 @@ const heartbeats = {
   store: heartbeatStore,
   registered: () => new Set(listNodes().map((n) => n.address.toLowerCase())),
   now: () => Date.now(),
+  // #66 abuse controls (config; default permissive for a trusted LAN).
+  ipPerMin: Number(process.env.HEARTBEAT_IP_PER_MIN ?? 120),
+  nodePerMin: Number(process.env.HEARTBEAT_NODE_PER_MIN ?? 6),
+  maxBodyBytes: Number(process.env.HEARTBEAT_MAX_BODY_BYTES ?? 4096),
 };
 
 const { app } = createApp({ listNodes, probe, quorumThreshold, corsOrigins, heartbeats });
