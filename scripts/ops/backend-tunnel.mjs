@@ -6,23 +6,21 @@
  * inbound ports, public IP, or third-party SaaS beyond Cloudflare itself.
  *
  * The tunnel `step-backend` is remotely-managed (ingress configured via the CF
- * API); its run token lives in gitignored `.env` as STEP_TUNNEL_TOKEN. Hostnames:
+ * API). #68 (audit M6): its run token lives in the OS **keychain**, NOT in the
+ * plist or argv — the LaunchAgent runs a wrapper that reads the token from the
+ * keychain into `TUNNEL_TOKEN` (the env var cloudflared honours), so the token
+ * never appears in a plist literal or in `ps`. Hostnames:
  *   gw.step.regiominer.com  -> http://127.0.0.1:8080  (gateway-api)
  *   idx.step.regiominer.com -> http://127.0.0.1:8090  (indexer)
  *
  * Usage:
- *   node scripts/ops/backend-tunnel.mjs           # run in the foreground
- *   node scripts/ops/backend-tunnel.mjs --install  # install a boot-persistent LaunchAgent
+ *   node scripts/ops/backend-tunnel.mjs            # run in the foreground
+ *   node scripts/ops/backend-tunnel.mjs --install  # provision token + LaunchAgent
+ *   node scripts/ops/backend-tunnel.mjs --rotate   # replace the token (from STEP_TUNNEL_TOKEN)
  *   node scripts/ops/backend-tunnel.mjs --uninstall
- *
- * One-time owner step (the CF token cannot edit DNS): in the Cloudflare dashboard
- * add two PROXIED CNAMEs in the regiominer.com zone, both pointing at
- *   <TUNNEL_ID>.cfargotunnel.com
- * for `gw.step.regiominer.com` and `idx.step.regiominer.com`. The script prints
- * the exact target.
  */
-import { execFileSync, spawn } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -31,16 +29,30 @@ const HOME = process.env.HOME;
 const CLOUDFLARED = process.env.CLOUDFLARED_BIN ?? `${HOME}/.local/bin/cloudflared`;
 const LABEL = "app.step.backend-tunnel";
 const PLIST = `${HOME}/Library/LaunchAgents/${LABEL}.plist`;
+const WRAPPER = `${HOME}/.step/backend-tunnel-run.sh`;
+const KC_SERVICE = "app.step.tunnel";
+const KC_ACCOUNT = "token";
 const TUNNEL_ID = "329b02b6-46bb-4273-8751-a4909f9b900f";
 
+/** Store the token in the keychain via stdin (never argv; #64/#68). */
+function keychainStore(token) {
+  const r = spawnSync("security", ["add-generic-password", "-U", "-s", KC_SERVICE, "-a", KC_ACCOUNT, "-w"], { input: token });
+  if ((r.status ?? 1) !== 0) throw new Error("keychain store failed");
+}
+
+/** Read the token: keychain first, then env, then gitignored .env (migration). */
 function loadToken() {
-  // STEP_TUNNEL_TOKEN from the environment, else from gitignored .env.
+  try {
+    const out = execFileSync("security", ["find-generic-password", "-s", KC_SERVICE, "-a", KC_ACCOUNT, "-w"], {
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    const t = out.toString().trim();
+    if (t) return t;
+  } catch { /* not in keychain yet */ }
   if (process.env.STEP_TUNNEL_TOKEN) return process.env.STEP_TUNNEL_TOKEN;
   const envPath = join(ROOT, ".env");
   if (existsSync(envPath)) {
-    const line = readFileSync(envPath, "utf8")
-      .split("\n")
-      .find((l) => l.startsWith("STEP_TUNNEL_TOKEN="));
+    const line = readFileSync(envPath, "utf8").split("\n").find((l) => l.startsWith("STEP_TUNNEL_TOKEN="));
     if (line) return line.slice("STEP_TUNNEL_TOKEN=".length).trim();
   }
   return null;
@@ -61,13 +73,22 @@ if (arg === "--uninstall") {
   try {
     execFileSync("launchctl", ["bootout", `gui/${process.getuid()}/${LABEL}`], { stdio: "ignore" });
   } catch { /* not loaded */ }
-  console.log("backend tunnel LaunchAgent removed.");
+  console.log("backend tunnel LaunchAgent removed (keychain token left in place; delete with `security delete-generic-password -s app.step.tunnel`).");
+  process.exit(0);
+}
+
+if (arg === "--rotate") {
+  const next = process.env.STEP_TUNNEL_TOKEN;
+  if (!next) { console.error("set STEP_TUNNEL_TOKEN=<new token> to rotate"); process.exit(1); }
+  keychainStore(next);
+  try { execFileSync("launchctl", ["kickstart", "-k", `gui/${process.getuid()}/${LABEL}`], { stdio: "ignore" }); } catch { /* not installed */ }
+  console.log("tunnel token rotated in the keychain; agent restarted.");
   process.exit(0);
 }
 
 const token = loadToken();
 if (!token) {
-  console.error("STEP_TUNNEL_TOKEN missing (env or .env). Re-provision the tunnel token.");
+  console.error("no tunnel token (keychain/env/.env). Provide STEP_TUNNEL_TOKEN once, then --install.");
   process.exit(1);
 }
 if (!existsSync(CLOUDFLARED)) {
@@ -76,35 +97,42 @@ if (!existsSync(CLOUDFLARED)) {
 }
 
 if (arg === "--install") {
+  // 1. Move the token into the keychain (out of .env/plist/argv).
+  keychainStore(token);
+  // 2. Wrapper reads the token from the keychain into TUNNEL_TOKEN (no argv/plist literal).
+  mkdirSync(join(HOME, ".step"), { recursive: true });
+  const wrapper = `#!/bin/sh
+TUNNEL_TOKEN=$(security find-generic-password -s ${KC_SERVICE} -a ${KC_ACCOUNT} -w) || { echo "tunnel token not in keychain" >&2; exit 1; }
+export TUNNEL_TOKEN
+exec "${CLOUDFLARED}" tunnel --no-autoupdate run
+`;
+  writeFileSync(WRAPPER, wrapper, { mode: 0o700 });
   const logDir = join(ROOT, ".runtime/logs");
   const plist = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
   <key>Label</key><string>${LABEL}</string>
-  <key>ProgramArguments</key><array>
-    <string>${CLOUDFLARED}</string>
-    <string>tunnel</string><string>--no-autoupdate</string>
-    <string>run</string><string>--token</string><string>${token}</string>
-  </array>
+  <key>ProgramArguments</key><array><string>${WRAPPER}</string></array>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
   <key>StandardOutPath</key><string>${logDir}/backend-tunnel.out.log</string>
   <key>StandardErrorPath</key><string>${logDir}/backend-tunnel.err.log</string>
 </dict></plist>`;
-  writeFileSync(PLIST, plist, { mode: 0o600 }); // token inside ⇒ user-only perms
+  writeFileSync(PLIST, plist, { mode: 0o600 }); // no token inside
   try {
     execFileSync("launchctl", ["bootout", `gui/${process.getuid()}/${LABEL}`], { stdio: "ignore" });
   } catch { /* fresh install */ }
   execFileSync("launchctl", ["bootstrap", `gui/${process.getuid()}`, PLIST], { stdio: "inherit" });
-  console.log(`installed boot-persistent backend tunnel (${LABEL}).`);
+  console.log(`installed boot-persistent backend tunnel (${LABEL}); token in keychain, not the plist.`);
   dnsReminder();
   process.exit(0);
 }
 
-// Foreground run.
+// Foreground run — token via env (TUNNEL_TOKEN), not argv.
 dnsReminder();
 console.log("running step-backend tunnel (Ctrl-C to stop)…");
-const child = spawn(CLOUDFLARED, ["tunnel", "--no-autoupdate", "run", "--token", token], {
+const child = spawn(CLOUDFLARED, ["tunnel", "--no-autoupdate", "run"], {
   stdio: "inherit",
+  env: { ...process.env, TUNNEL_TOKEN: token },
 });
 child.on("exit", (code) => process.exit(code ?? 0));
