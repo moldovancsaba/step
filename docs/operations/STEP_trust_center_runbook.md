@@ -185,8 +185,20 @@ tar -xzf agent-chappie.tgz && cd agent-bundle-chappie \
 `provision-secrets.sh` stores the key + nonce secret in the OS keychain (run once);
 `install-service.sh` makes the node **boot-persistent** (LaunchAgent/systemd: starts
 at login, restarts on crash, #49). After this first install the agent **self-updates
-from chain** (M8) — you never re-package or re-deliver. For the hub itself:
-`sudo node scripts/ops/install-hub.mjs`.
+from chain** (M8) — you never re-package or re-deliver.
+
+**Every machine is always-on + self-recovering:**
+- **Hub** (runs the chain + gateway + validators): install the supervisor daemon,
+  baking the LAN address so trust centers can reach the chain after a reboot:
+  ```bash
+  sudo env STEP_ANVIL_HOSTS="127.0.0.1,<hub-LAN-IP>" node scripts/ops/install-hub.mjs
+  ```
+  LaunchDaemon `app.step.hub` (RunAtLoad + KeepAlive) brings the stack up at boot
+  and re-asserts health every 60s, restarting it if anything dies.
+- **Backend tunnel** (public web + iOS reach the backend): LaunchAgent
+  `app.step.backend-tunnel` (`node scripts/ops/backend-tunnel.mjs --install`).
+- **Each trust center**: the agent LaunchAgent above + the agent's own failsafe
+  rollback/restart of the validator.
 
 > Optional P2P layer: a center that should also gossip claims/votes peer-to-peer
 > runs `step-gossip-node` alongside the validator (#54) — see the architecture doc

@@ -51,7 +51,7 @@ const plist = `<?xml version="1.0" encoding="UTF-8"?>
     <dict>
       <key>HOME</key><string>${home}</string>
       <key>PATH</key><string>${home}/.cargo/bin:${home}/.foundry/bin:/usr/local/bin:/usr/bin:/bin</string>
-    </dict>
+${process.env.STEP_ANVIL_HOSTS ? `      <key>STEP_ANVIL_HOSTS</key><string>${process.env.STEP_ANVIL_HOSTS}</string>\n` : ""}    </dict>
 ${user ? `    <key>UserName</key><string>${user}</string>\n` : ""}    <key>WorkingDirectory</key><string>${ROOT}</string>
     <key>RunAtLoad</key><true/>
     <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
