@@ -70,6 +70,32 @@ These replace the devnet shortcuts; sequence them once ≥4 nodes run reliably.
 
 ---
 
+### Onboard chappie (node #2) — filled-in, copy-paste
+
+Run **on chappie** (tribecca = hub at `192.168.100.64`, chain node-id below). Same
+LAN, so no WireGuard needed; cross-location swaps the IP for the WG tunnel IP.
+```bash
+# 1. build the chain binary (fetches Go itself)
+cd /path/to/step && sh scripts/chain/build-evmd.sh
+
+# 2. join + sync from tribecca (uses the shared genesis + tribecca as the seed peer)
+STEP_GENESIS=/path/to/chain/genesis.devnet.sample.json \
+STEP_SEED=f7029b25bb3c6464206f4bf58defeb6d606a9f88@192.168.100.64:26656 \
+  sh scripts/chain/join.sh chappie
+node scripts/chain/install-chain.mjs        # boot-persistent + start syncing
+
+# 3. once `evmd q ... status` shows catching_up=false, become a validator
+sh scripts/chain/become-validator.sh chappie    # prints chappie's address
+```
+```bash
+# 4. ON TRIBECCA (funded): give chappie's validator gas/stake, then verify
+node scripts/chain/faucet.mjs --to <chappie-address-from-step-3>
+evmd q staking validators --home ~/.evmd | grep moniker   # chappie should appear
+```
+> The same 4 steps onboard node #3…#N — only the moniker changes. Local
+> multi-validator BFT was proven with `scripts/chain/join-local.sh` (a 2nd node on
+> tribecca synced the full chain over P2P and joined the active set).
+
 ### Quick reference — onboard machine N
 ```bash
 # on machine N
