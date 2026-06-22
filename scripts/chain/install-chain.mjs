@@ -33,6 +33,9 @@ const env = {
   STEP_MIN_GAS_PRICE: process.env.STEP_MIN_GAS_PRICE ?? "",
   STEP_CHAIN_HOME: process.env.STEP_CHAIN_HOME ?? `${HOME}/.evmd`,
   STEP_EVM_RPC_PORT: process.env.STEP_EVM_RPC_PORT ?? "8645",
+  // Set STEP_EVM_RPC_HOST=<LAN-IP> (or 0.0.0.0) before --install to let trust
+  // centers read the chain over the LAN/WireGuard (Phase 2). Default loopback.
+  STEP_EVM_RPC_HOST: process.env.STEP_EVM_RPC_HOST ?? "",
   EVMD: process.env.EVMD ?? `${HOME}/.local/bin/evmd`,
   PATH: `${HOME}/.local/bin:/usr/local/bin:/usr/bin:/bin`,
 };

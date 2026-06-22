@@ -96,6 +96,32 @@ evmd q staking validators --home ~/.evmd | grep moniker   # chappie should appea
 > multi-validator BFT was proven with `scripts/chain/join-local.sh` (a 2nd node on
 > tribecca synced the full chain over P2P and joined the active set).
 
+#### Make the chain reachable on the LAN first (Phase 2, one-time on tribecca)
+The chain's EVM RPC defaults to loopback. Expose it on the LAN so joiners can read it:
+```bash
+STEP_EVM_RPC_HOST=192.168.100.64 node scripts/chain/install-chain.mjs   # reinstall + restart
+# P2P (:26656) is already on 0.0.0.0 — that's how node2 synced.
+```
+
+#### chappie's app layer (validator-node + agent), keyless — after it's a chain validator
+Prereqs on **tribecca** (one-time): a published agent release + the artifact server:
+```bash
+node scripts/release/publish.mjs --version 1.0.0 --platform darwin-arm64       # authorizes the binary hash on-chain
+node scripts/release/serve-artifacts.mjs --stage --version 1.0.0 --platform darwin-arm64
+STEP_ARTIFACT_HOST=192.168.100.64 node scripts/release/serve-artifacts.mjs &   # serves on :8078
+```
+Then **on chappie**, the keyless install (node generates its own key — nothing secret travels):
+```bash
+curl -fsSL http://192.168.100.64:8078/install.sh | sh -s -- \
+  --rpc http://192.168.100.64:8645 \
+  --registry 0x6e7B8A754A8a9111F211bC8C8f619E462f8DdF5F \
+  --platform-id 0x3bdd03393e221a1bbdac482d1ae2470a13d84a69452fd2a9d88a645036f90658 \
+  --artifact http://192.168.100.64:8078/step-node-agent \
+  --sha256 <hash printed by publish.mjs> \
+  --nonce-secret <shared GATEWAY_NONCE_SECRET from tribecca .runtime/.env.runtime>
+# it prints chappie's app address → on tribecca: node scripts/node/register.mjs <addr>
+```
+
 ### Quick reference — onboard machine N
 ```bash
 # on machine N
