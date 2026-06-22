@@ -6,7 +6,8 @@
  *
  *   node scripts/chain/faucet.mjs --to cosmos1<addr> [--amount 1000000000000000000000] [--from dev0]
  *
- * On the devnet `--from dev0` (a pre-funded genesis account) works. For a real
+ * On the devnet `--from mykey` (the genesis whale, 1e8 TEST) is the default; `dev0`
+ * is lightly funded and gets depleted by deploy/registration gas. For a real
  * federation, point `--from` at the designated funding key (NOT a public dev key).
  */
 import { execFileSync } from "node:child_process";
@@ -21,8 +22,8 @@ const a = process.argv.slice(2);
 const flag = (n, d) => { const i = a.indexOf(`--${n}`); return i >= 0 ? a[i + 1] : d; };
 const to = flag("to") || die("usage: --to cosmos1<addr> [--amount <atest>] [--from <key>]");
 if (!/^cosmos1[0-9a-z]{38,}$/.test(to)) die("--to must be a cosmos1… bech32 address");
-const amount = flag("amount", "1000000000000000000000"); // 1000 atest default
-const from = flag("from", "dev0");
+const amount = flag("amount", "5000000000000000000000"); // 5000 TEST (covers stake + gas)
+const from = flag("from", "mykey"); // devnet genesis whale; override for production
 
 console.log(`[faucet] sending ${amount}atest: ${from} -> ${to}`);
 execFileSync(
