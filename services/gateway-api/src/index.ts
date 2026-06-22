@@ -88,7 +88,25 @@ async function submitFinalise(
     args: args as never,
     account: relayer,
   });
-  const txHash = await walletClient.writeContract(request);
+  // Gas buffer: cosmos-EVM (evmd) undershoots eth_estimateGas for OZ
+  // reentrancy-guarded calls (the EVM reserves 1/64 for the sentry → ReentrancySentryOOG
+  // when the limit equals the estimate). Estimate + a configurable buffer (default
+  // 1.5×) so the inner staticcall always has headroom. Harmless on anvil.
+  const estimate = await publicClient.estimateContractGas({
+    address: verifierAddress,
+    abi: FINALISE_ABI,
+    functionName,
+    args: args as never,
+    account: relayer,
+  });
+  const num = BigInt(Math.round(Number(process.env.GATEWAY_GAS_MULTIPLIER ?? "1.5") * 100));
+  // evmd's eth_estimateGas badly undershoots multi-step state-mutating calls, so we
+  // also enforce a generous floor (finalise mints Trinity + the twin + updates mesh
+  // state). Gas is cheap (atest); the relayer is funded.
+  const floor = BigInt(process.env.GATEWAY_GAS_FLOOR ?? "3000000");
+  const buffered = (estimate * num) / 100n;
+  const gas = buffered > floor ? buffered : floor;
+  const txHash = await walletClient.writeContract({ ...request, gas });
   const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
   if (receipt.status !== "success") throw new Error(`tx ${txHash} reverted`);
   return txHash;

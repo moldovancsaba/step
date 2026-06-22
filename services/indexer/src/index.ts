@@ -34,20 +34,22 @@ const chain = defineChain({
 const client = createPublicClient({ chain, transport: http() });
 const store = new MemoryStore();
 
+// Chunk getLogs into bounded windows: cosmos-EVM (evmd) caps a single eth_getLogs
+// at a 10000-block [from,to] distance, so a fresh indexer scanning from genesis
+// must page. Stay under the cap with a safe default.
+const MAX_LOG_RANGE = BigInt(process.env.STEP_INDEX_MAX_RANGE ?? "5000");
+
 async function poll() {
   try {
     const head = await client.getBlockNumber();
-    if (head > store.lastBlock) {
-      const logs = await client.getLogs({
-        address: watched,
-        fromBlock: store.lastBlock + 1n,
-        toBlock: head,
-      });
+    let from = store.lastBlock + 1n;
+    while (from <= head) {
+      const to = from + MAX_LOG_RANGE - 1n < head ? from + MAX_LOG_RANGE - 1n : head;
+      const logs = await client.getLogs({ address: watched, fromBlock: from, toBlock: to });
       for (const event of decodeLogs(logs)) applyEvent(store, event);
-      if (logs.length > 0) {
-        console.log(`indexed ${logs.length} logs up to block ${head}`);
-      }
-      store.lastBlock = head;
+      if (logs.length > 0) console.log(`indexed ${logs.length} logs ${from}..${to}`);
+      store.lastBlock = to;
+      from = to + 1n;
     }
   } catch (err) {
     console.error("poll error:", err instanceof Error ? err.message : err);

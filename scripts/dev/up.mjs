@@ -169,74 +169,81 @@ async function main() {
   const secrets = loadOrCreateSecrets();
   const VALIDATOR_KEYS = secrets.VALIDATOR_KEYS;
 
-  // 2. Anvil with PERSISTENT state: load prior state if present, dump on exit.
-  //    The chain (balances, NFTs, validator registrations) survives a restart.
-  log(existsSync(STATE_FILE) ? "starting anvil (loading saved state)…" : "starting anvil…");
-  // Expose the chain RPC on loopback AND (if present) this machine's Tailscale
-  // IP — so trust-center nodes on the tailnet can read/register, WITHOUT exposing
-  // it to the wider LAN. Override with STEP_ANVIL_HOSTS (comma list).
-  const anvilHosts = (process.env.STEP_ANVIL_HOSTS ?? ["127.0.0.1", tailnetIp()].filter(Boolean).join(","))
-    .split(",")
-    .map((h) => h.trim())
-    .filter(Boolean);
-  // #62: the dev chain is funded by the public Hardhat key — never bind it to a
-  // public interface (or 0.0.0.0) without an explicit, loudly-warned override.
-  assertSafeHosts(anvilHosts, { allowPublic: process.env.STEP_ALLOW_PUBLIC_ANVIL === "1", warn: log });
-  const anvilArgs = [
-    "--port", String(PORTS.anvil),
-    "--chain-id", "31337",
-    "--silent",
-    ...anvilHosts.flatMap((h) => ["--host", h]),
-    "--state", STATE_FILE, // load if exists + dump on graceful exit
-    "--state-interval", "2", // also dump every 2s so state survives a hard kill
-  ];
-  start("anvil", "anvil", anvilArgs, {});
-  if (anvilHosts.length > 1) log(`chain RPC exposed on: ${anvilHosts.join(", ")} :${PORTS.anvil}`);
-  await portOpen(PORTS.anvil);
-
-  // 3. Deploy contracts only if not already on the (persisted) chain. On a
-  //    restored chain the contracts already exist — redeploying would orphan the
-  //    state, so we skip straight to reusing them.
-  const deployFile = join(ROOT, "contracts/deployments/31337.json");
-  const codeAt = (addr) =>
-    sh(`cast code ${addr} --rpc-url http://127.0.0.1:${PORTS.anvil}`).replace(/\s/g, "");
+  // 2. Chain target: the dev anvil (default) OR the sovereign evmd chain
+  //    (STEP_USE_EVMD=1 — Phase 1 cutover, ADR-024). evmd is already running and
+  //    has STEP deployed, so for it we SKIP anvil/deploy and instead prep it
+  //    idempotently: register the validators on its ValidatorRegistry and fund the
+  //    relayer with atest gas (an EVM transfer from the deployer dev0).
+  const EVMD = process.env.STEP_USE_EVMD === "1";
+  const CHAIN_ID = EVMD ? "262144" : "31337";
+  const CHAIN_RPC = EVMD ? "http://127.0.0.1:8645" : `http://127.0.0.1:${PORTS.anvil}`;
+  const deployFile = join(ROOT, `contracts/deployments/${CHAIN_ID}.json`);
+  const codeAt = (addr) => sh(`cast code ${addr} --rpc-url ${CHAIN_RPC}`).replace(/\s/g, "");
   let deployments;
-  const alreadyDeployed =
-    existsSync(deployFile) &&
-    (() => {
+  let adminKey = ANVIL_KEYS.admin; // dev: holds the privileged roles (evmd: dev0)
+
+  if (!EVMD) {
+    log(existsSync(STATE_FILE) ? "starting anvil (loading saved state)…" : "starting anvil…");
+    const anvilHosts = (process.env.STEP_ANVIL_HOSTS ?? ["127.0.0.1", tailnetIp()].filter(Boolean).join(","))
+      .split(",").map((h) => h.trim()).filter(Boolean);
+    // #62: the dev chain is funded by the public Hardhat key — never bind it to a
+    // public interface (or 0.0.0.0) without an explicit, loudly-warned override.
+    assertSafeHosts(anvilHosts, { allowPublic: process.env.STEP_ALLOW_PUBLIC_ANVIL === "1", warn: log });
+    const anvilArgs = [
+      "--port", String(PORTS.anvil), "--chain-id", "31337", "--silent",
+      ...anvilHosts.flatMap((h) => ["--host", h]),
+      "--state", STATE_FILE, "--state-interval", "2",
+    ];
+    start("anvil", "anvil", anvilArgs, {});
+    if (anvilHosts.length > 1) log(`chain RPC exposed on: ${anvilHosts.join(", ")} :${PORTS.anvil}`);
+    await portOpen(PORTS.anvil);
+
+    const alreadyDeployed = existsSync(deployFile) && (() => {
       try {
         const d = JSON.parse(readFileSync(deployFile, "utf8"));
         return d.MiningClaimVerifier && codeAt(d.MiningClaimVerifier) !== "0x";
-      } catch {
-        return false;
-      }
+      } catch { return false; }
     })();
-
-  if (alreadyDeployed) {
-    deployments = JSON.parse(readFileSync(deployFile, "utf8"));
-    log(`reusing deployed contracts; verifier ${deployments.MiningClaimVerifier}`);
-  } else {
-    log("deploying contracts…");
-    sh(
-      `forge script script/Deploy.s.sol --rpc-url http://127.0.0.1:${PORTS.anvil} --broadcast`,
-      {
+    if (alreadyDeployed) {
+      deployments = JSON.parse(readFileSync(deployFile, "utf8"));
+      log(`reusing deployed contracts; verifier ${deployments.MiningClaimVerifier}`);
+    } else {
+      log("deploying contracts…");
+      sh(`forge script script/Deploy.s.sol --rpc-url ${CHAIN_RPC} --broadcast`, {
         cwd: join(ROOT, "contracts"),
         env: { ...process.env, PATH: PATH_EXT, DEPLOYER_PRIVATE_KEY: ANVIL_KEYS.admin, STEP_PARAM_DELAY: "0" },
-      },
-    );
+      });
+      deployments = JSON.parse(readFileSync(deployFile, "utf8"));
+      log(`deployed; verifier ${deployments.MiningClaimVerifier}`);
+      log("registering validators on-chain…");
+      for (const pk of VALIDATOR_KEYS) {
+        const addr = sh(`cast wallet address ${pk}`);
+        sh(`cast send ${deployments.ValidatorRegistry} "registerValidator(address,uint8,uint32)" ${addr} 5 50 ` +
+          `--rpc-url ${CHAIN_RPC} --private-key ${ANVIL_KEYS.admin}`);
+      }
+    }
+  } else {
+    // --- sovereign evmd chain (Phase 1 cutover) ---
+    if (!existsSync(deployFile)) throw new Error(`evmd deployments ${deployFile} missing — deploy STEP to evmd first`);
     deployments = JSON.parse(readFileSync(deployFile, "utf8"));
-    log(`deployed; verifier ${deployments.MiningClaimVerifier}`);
-
-    // Register the protocol validators on-chain (weight 50, quorum 100) — once,
-    // on first deploy. (Idempotent guard: registering an active validator again
-    // would revert, so this only runs on the fresh-deploy path.)
-    log("registering validators on-chain…");
+    log(`evmd target: STEP on chain ${CHAIN_ID}; verifier ${deployments.MiningClaimVerifier}`);
+    const home = process.env.HOME;
+    adminKey = "0x" + sh(`${home}/.local/bin/evmd keys unsafe-export-eth-key dev0 --keyring-backend test --home ${home}/.evmd`).trim().replace(/^0x/, "");
+    // Fund the relayer with atest gas (an EVM value transfer) if it's low.
+    const relayerAddr = sh(`cast wallet address ${ANVIL_KEYS.relayer}`);
+    const bal = BigInt((sh(`cast balance ${relayerAddr} --rpc-url ${CHAIN_RPC}`).trim() || "0"));
+    if (bal < 10n ** 18n) {
+      log("funding relayer with atest on evmd…");
+      sh(`cast send ${relayerAddr} --value 100000000000000000000 --private-key ${adminKey} --rpc-url ${CHAIN_RPC} --legacy`);
+    }
+    log("registering validators on evmd (idempotent)…");
     for (const pk of VALIDATOR_KEYS) {
       const addr = sh(`cast wallet address ${pk}`);
-      sh(
-        `cast send ${deployments.ValidatorRegistry} "registerValidator(address,uint8,uint32)" ${addr} 5 50 ` +
-          `--rpc-url http://127.0.0.1:${PORTS.anvil} --private-key ${ANVIL_KEYS.admin}`,
-      );
+      const w = (sh(`cast call ${deployments.ValidatorRegistry} "activeWeight(address)(uint256)" ${addr} --rpc-url ${CHAIN_RPC}`).trim().split(/\s/)[0]) || "0";
+      if (w !== "0") { log(`  ${addr} already registered (weight ${w})`); continue; }
+      sh(`cast send ${deployments.ValidatorRegistry} "registerValidator(address,uint8,uint32)" ${addr} 5 50 ` +
+        `--rpc-url ${CHAIN_RPC} --private-key ${adminKey} --legacy`);
+      log(`  registered ${addr}`);
     }
   }
 
@@ -248,13 +255,13 @@ async function main() {
   if (!hasReleaseRegistry) {
     log("upgrading: deploying ReleaseRegistry + IntegrityAttestation (M8)…");
     const out = sh(
-      `forge script script/UpgradeM8.s.sol --rpc-url http://127.0.0.1:${PORTS.anvil} --broadcast`,
+      `forge script script/UpgradeM8.s.sol --rpc-url ${CHAIN_RPC} --broadcast`,
       {
         cwd: join(ROOT, "contracts"),
         env: {
           ...process.env,
           PATH: PATH_EXT,
-          DEPLOYER_PRIVATE_KEY: ANVIL_KEYS.admin,
+          DEPLOYER_PRIVATE_KEY: adminKey,
           STEP_ACCESS: deployments.StepAccess,
           VALIDATOR_REGISTRY: deployments.ValidatorRegistry,
         },
@@ -271,16 +278,16 @@ async function main() {
 
   // 5. Write the runtime env file (operator + smoke test read this).
   const envLines = {
-    STEP_CHAIN_ID: "31337",
-    STEP_RPC_URL: `http://127.0.0.1:${PORTS.anvil}`,
+    STEP_CHAIN_ID: CHAIN_ID,
+    STEP_RPC_URL: CHAIN_RPC,
     STEP_DEPLOYMENTS_FILE: deployFile,
     STEP_PROTOCOL_PARAMS: join(ROOT, "config/protocol-params.alpha.json"),
     RELAYER_PRIVATE_KEY: ANVIL_KEYS.relayer,
     WORKER_PRIVATE_KEY: ANVIL_KEYS.worker,
     RELEASE_REGISTRY: deployments.ReleaseRegistry,
     INTEGRITY_ATTESTATION: deployments.IntegrityAttestation,
-    RELEASE_SIGNER_KEY: ANVIL_KEYS.admin, // dev: admin holds RELEASE_ROLE (prod: timelock)
-    STEP_ADMIN_KEY: ANVIL_KEYS.admin,
+    RELEASE_SIGNER_KEY: adminKey, // dev: admin holds RELEASE_ROLE (prod: timelock)
+    STEP_ADMIN_KEY: adminKey,
     VALIDATOR_URLS: PORTS.validators.map((p) => `http://127.0.0.1:${p}`).join(","),
     GATEWAY_URL: `http://127.0.0.1:${PORTS.gateway}`,
     MESH_API_URL: `http://127.0.0.1:${PORTS.validators[0]}`,
@@ -309,7 +316,7 @@ async function main() {
   PORTS.validators.forEach((port, i) => {
     start(`validator-${i}`, validatorBin, [], {
       VALIDATOR_PORT: String(port),
-      STEP_CHAIN_ID: "31337",
+      STEP_CHAIN_ID: CHAIN_ID,
       VERIFIER_CONTRACT_ADDRESS: deployments.MiningClaimVerifier,
       VALIDATOR_PRIVATE_KEY: VALIDATOR_KEYS[i],
       GATEWAY_NONCE_SECRET: secrets.GATEWAY_NONCE_SECRET,
