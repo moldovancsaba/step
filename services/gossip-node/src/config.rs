@@ -20,6 +20,12 @@ pub struct GossipConfig {
     /// Explicit bootstrap peers (cross-location). mDNS covers the LAN; these are
     /// self-hosted addresses — no third-party signaling server.
     pub bootstrap: Vec<String>,
+    /// Relays this node RESERVES a circuit on (multiaddrs ending in /p2p/<PeerId>).
+    /// Reserving makes a NAT'd node dialable from anywhere as
+    /// `<relay>/p2p-circuit/p2p/<self>` — then dcutr upgrades to a direct link.
+    /// Without this, relay_client + dcutr are inert and home nodes stay
+    /// unreachable. Designated public relays (GOSSIP_RELAY_SERVER=1) serve these.
+    pub relays: Vec<String>,
     /// Bounded seen-set capacity for replay protection.
     pub seen_capacity: usize,
     /// #67: run the circuit-relay SERVER (relay for NAT'd peers). Default OFF —
@@ -56,6 +62,12 @@ impl GossipConfig {
                 .unwrap_or_else(|_| "http://127.0.0.1:9100".into()),
             listen: std::env::var("GOSSIP_LISTEN").unwrap_or_else(|_| "/ip4/0.0.0.0/tcp/0".into()),
             bootstrap: std::env::var("GOSSIP_BOOTSTRAP")
+                .unwrap_or_default()
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect(),
+            relays: std::env::var("GOSSIP_RELAYS")
                 .unwrap_or_default()
                 .split(',')
                 .map(|s| s.trim().to_string())

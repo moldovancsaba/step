@@ -21,13 +21,19 @@ evmd (8645) so the app actually *uses* the sovereign chain.
   Trinity + twin), since gas/precompiles differ from anvil.
 - **Exit:** `scripts/dev/smoke.mjs` (pointed at evmd) finalises a mine and mints Trinity.
 
-## Phase 2 — Reachability for joiners (no DNS)
-A second machine must reach the hub's chain P2P (26656) + RPC.
-- 🤖 Chain P2P already binds `0.0.0.0:26656`; expose it on the LAN/WireGuard (same
-  net-guard rules as elsewhere — never a public bind of a dev-key chain).
-- 🤖 Capture the hub's seed: `evmd comet show-node-id` → `<id>@<hub-ip>:26656`.
-- 👤 (cross-location only) self-hosted WireGuard between machines (scripts/net/wg-gen.mjs).
-- **Exit:** the joining machine can `nc -z <hub-ip> 26656`.
+## Phase 2 — Reachability for joiners (peer-native, no DNS, no LAN requirement)
+Joiners reach the network by **PeerId over the libp2p relay + DHT** — from any
+network, behind any NAT. See `docs/operations/STEP_peer_network.md` for the full
+model. LAN/WireGuard are an optional same-network fast-path, **not** the boundary.
+- 🤖 **Consensus mesh (the network-independent path):** run ≥1 public relay
+  (`GOSSIP_RELAY_SERVER=1`); it prints its dialable `…/p2p/<RelayPeerId>`. Joiners
+  reserve a circuit on it and join the gossip mesh + DHT from anywhere.
+- 🤖 **Chain replication (CometBFT):** peers are addressed by node-id too
+  (`evmd comet show-node-id` → `<id>@<host>:26656`); a relay/bootstrap host or a
+  port-forwarded peer carries it. Same PeerId/node-id principle — no DNS.
+- 🤖 LAN/mDNS auto-connects co-located peers instantly (fast-path only).
+- **Exit:** a joiner on a *different network* (e.g. cellular) reserves a relay
+  circuit and appears in the mesh — no LAN, no DNS, no public bind of a dev-key chain.
 
 ## Phase 3 — Join node #2 (chappie) as a synced node
 On chappie (one-time per machine):

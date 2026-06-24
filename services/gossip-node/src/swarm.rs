@@ -211,6 +211,35 @@ where
             Err(e) => tracing::warn!("bad bootstrap addr {b}: {e}"),
         }
     }
+    // Relay reservations: the line that makes a NAT'd node reachable from anywhere.
+    // For each relay multiaddr we `listen_on(<relay>/p2p-circuit)`, which asks the
+    // relay for a reservation; the node then advertises `<relay>/p2p-circuit/p2p/<self>`
+    // (via identify → DHT) so any peer can reach it without a public IP or
+    // port-forward, and dcutr hole-punches that into a direct connection. This is
+    // what makes the peer system network-independent rather than LAN-bound.
+    for r in &cfg.relays {
+        match r.parse::<Multiaddr>() {
+            Ok(addr) => {
+                if let Some(peer) = peer_id_of(&addr) {
+                    swarm
+                        .behaviour_mut()
+                        .kademlia
+                        .add_address(&peer, addr.clone());
+                }
+                if let Err(e) = swarm.dial(addr.clone()) {
+                    tracing::warn!("dial relay {r} failed: {e}");
+                    continue;
+                }
+                let circuit = addr.with(Protocol::P2pCircuit);
+                if let Err(e) = swarm.listen_on(circuit.clone()) {
+                    tracing::warn!("relay reservation on {r} failed: {e}");
+                } else {
+                    tracing::info!(%circuit, "requested relay reservation (reachable behind NAT)");
+                }
+            }
+            Err(e) => tracing::warn!("bad relay addr {r}: {e}"),
+        }
+    }
     // Kick off a DHT bootstrap (ok to fail when there are no seeds yet — mDNS still
     // finds LAN peers, and later joiners will seed us).
     let _ = swarm.behaviour_mut().kademlia.bootstrap();
@@ -306,7 +335,11 @@ where
                 }
             }
             SwarmEvent::NewListenAddr { address, .. } => {
-                tracing::info!(%address, "listening");
+                // Print the address WITH /p2p/<self> appended so it's directly
+                // usable as another node's GOSSIP_BOOTSTRAP / GOSSIP_RELAYS entry —
+                // no DNS, no IP bookkeeping, just copy the dialable peer address.
+                let dialable = address.clone().with(Protocol::P2p(*swarm.local_peer_id()));
+                tracing::info!(%dialable, "listening (use this as a peer's bootstrap/relay address)");
             }
             _ => {}
         }
@@ -327,5 +360,36 @@ async fn cache_weight<W, WFut>(
             let w = weight_of(a).await;
             slot.insert(w);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn relay_circuit_address_is_built_for_reservation() {
+        // A relay multiaddr ending in /p2p/<PeerId> → reserve a circuit on it by
+        // appending /p2p-circuit. This is the address the node listens on to
+        // become reachable behind NAT (the network-independence fix). Use a real
+        // generated PeerId so the multiaddr round-trips.
+        let relay_peer = identity::Keypair::generate_ed25519().public().to_peer_id();
+        let relay: Multiaddr = format!("/ip4/203.0.113.7/udp/4001/quic-v1/p2p/{relay_peer}")
+            .parse()
+            .unwrap();
+        assert_eq!(peer_id_of(&relay), Some(relay_peer));
+        let circuit = relay.clone().with(Protocol::P2pCircuit);
+        // The reservation address keeps the relay + adds the circuit hop.
+        assert!(circuit.to_string().ends_with("/p2p-circuit"));
+        assert_eq!(peer_id_of(&circuit), Some(relay_peer));
+        // A peer reaches us at <circuit>/p2p/<our PeerId> — no IP of ours, no DNS.
+        let me: Multiaddr = format!("{circuit}/p2p/{relay_peer}").parse().unwrap();
+        assert!(me.to_string().contains("/p2p-circuit/"));
+    }
+
+    #[test]
+    fn bootstrap_addr_without_peer_id_is_rejected() {
+        let no_id: Multiaddr = "/ip4/10.0.0.1/tcp/4001".parse().unwrap();
+        assert_eq!(peer_id_of(&no_id), None);
     }
 }
