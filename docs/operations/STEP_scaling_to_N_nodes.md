@@ -60,9 +60,13 @@ validators** (tolerates one failure). The bottleneck becomes coordination, not c
 
 ## Phase 6 — Production hardening (before real value)
 These replace the devnet shortcuts; sequence them once ≥4 nodes run reliably.
-- 👤+🤖 **Secret-key genesis ceremony** (audit C1, issue #58): regenerate genesis
-  with secret per-operator keys; `scripts/chain/genesis-check.mjs` must report clean.
-  Distribute the new genesis + SHA-256; everyone re-joins it.
+- 🤖 **Secret-key genesis ceremony** (audit C1, issue #58): `node
+  scripts/chain/ceremony.mjs --moniker <name> --keyring-backend os` builds a
+  genesis from a SECRET operator key (no public dev keys) and proves it clean via
+  `genesis-check` before emitting the genesis + SHA-256. Multi-operator: each
+  trust center runs `evmd genesis gentx` on its OWN machine and contributes only
+  the signed gentx (no single machine holds every key). Distribute the genesis +
+  hash; everyone re-joins it. 👤 The final cutover RETIRES the dev-key chain.
 - 👤+🤖 **Governed redeploy** (audit C2, issue #59): redeploy STEP from a secret key,
   hand all roles to the Timelock+Governor, renounce the EOA (invariant proven in
   `test/GovernedHandover.t.sol`).
