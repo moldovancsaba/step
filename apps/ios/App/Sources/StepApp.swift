@@ -71,11 +71,11 @@ struct AppConfig {
             ? MarketplaceAddresses(marketplace: market!, nft: nft!, trinity: trinity!) : nil
 
         return AppConfig(
-            gateway: url("GatewayURL", default: "https://gateway.step.example"),
-            mesh: url("MeshURL", default: "https://gateway.step.example"),
-            indexer: url("IndexerURL", default: "https://indexer.step.example"),
-            account: url("AccountURL", default: "https://account.step.example"),
-            nftIndexer: url("NftIndexerURL", default: "https://nft.step.example"),
+            gateway: url("GatewayURL", default: "https://gw.step.regiominer.com"),
+            mesh: url("MeshURL", default: "https://gw.step.regiominer.com"),
+            indexer: url("IndexerURL", default: "https://idx.step.regiominer.com"),
+            account: url("AccountURL", default: "https://acc.step.regiominer.com"),
+            nftIndexer: url("NftIndexerURL", default: "https://nft.step.regiominer.com"),
             rpc: rpc,
             marketAddresses: addresses
         )

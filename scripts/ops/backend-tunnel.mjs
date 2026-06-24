@@ -9,9 +9,11 @@
  * API). #68 (audit M6): its run token lives in the OS **keychain**, NOT in the
  * plist or argv — the LaunchAgent runs a wrapper that reads the token from the
  * keychain into `TUNNEL_TOKEN` (the env var cloudflared honours), so the token
- * never appears in a plist literal or in `ps`. Hostnames:
+ * never appears in a plist literal or in `ps`. Hostnames (ingress, set in CF):
  *   gw.step.regiominer.com  -> http://127.0.0.1:8080  (gateway-api)
  *   idx.step.regiominer.com -> http://127.0.0.1:8090  (indexer)
+ *   acc.step.regiominer.com -> http://127.0.0.1:8091  (account-api)
+ *   nft.step.regiominer.com -> http://127.0.0.1:8092  (nft-indexer)
  *
  * Usage:
  *   node scripts/ops/backend-tunnel.mjs            # run in the foreground
@@ -60,10 +62,12 @@ function loadToken() {
 
 function dnsReminder() {
   console.log("");
-  console.log("Owner action (one-time, CF token cannot edit DNS): add two PROXIED CNAMEs");
-  console.log(`in the regiominer.com zone, both -> ${TUNNEL_ID}.cfargotunnel.com :`);
-  console.log("  gw.step.regiominer.com   CNAME  " + `${TUNNEL_ID}.cfargotunnel.com  (proxied)`);
-  console.log("  idx.step.regiominer.com  CNAME  " + `${TUNNEL_ID}.cfargotunnel.com  (proxied)`);
+  console.log("Owner action (one-time, CF token cannot edit DNS): add four PROXIED CNAMEs");
+  console.log(`in the regiominer.com zone, all -> ${TUNNEL_ID}.cfargotunnel.com :`);
+  for (const h of ["gw", "idx", "acc", "nft"]) {
+    console.log(`  ${h}.step.regiominer.com`.padEnd(27) + `CNAME  ${TUNNEL_ID}.cfargotunnel.com  (proxied)`);
+  }
+  console.log("Also add the acc/nft ingress rules in the CF tunnel dashboard (→ :8091, :8092).");
   console.log("");
 }
 

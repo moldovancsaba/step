@@ -19,17 +19,19 @@ packages:
 settings:
   base:
     MARKETING_VERSION: "0.1.0"
-    CURRENT_PROJECT_VERSION: "1"
+    CURRENT_PROJECT_VERSION: "2"   # 0.1.0(1) is live on TestFlight; this is build (2)
     SWIFT_VERSION: "6.0"
     ALWAYS_SEARCH_USER_PATHS: NO   # silence the legacy-headermap build warning
     DEVELOPMENT_TEAM: "" # set locally / in CI signing; empty for unsigned simulator builds
     # Endpoint configuration consumed by Info.plist → AppConfig. Override per
-    # configuration with an .xcconfig; these defaults target the pilot.
-    STEP_GATEWAY_URL: "https://gateway.step.example"
-    STEP_MESH_URL: "https://gateway.step.example"
-    STEP_INDEXER_URL: "https://indexer.step.example"
-    STEP_ACCOUNT_URL: "https://account.step.example"
-    STEP_NFT_INDEXER_URL: "https://nft.step.example"
+    # configuration with an .xcconfig. Defaults target the live pilot backend
+    # (Cloudflare tunnel `step-backend` → tribecca); gw/idx/acc/nft
+    # .step.regiominer.com are proxied CNAMEs to the tunnel (backend-tunnel.mjs).
+    STEP_GATEWAY_URL: "https://gw.step.regiominer.com"
+    STEP_MESH_URL: "https://gw.step.regiominer.com"
+    STEP_INDEXER_URL: "https://idx.step.regiominer.com"
+    STEP_ACCOUNT_URL: "https://acc.step.regiominer.com"
+    STEP_NFT_INDEXER_URL: "https://nft.step.regiominer.com"
     STEP_RPC_URL: ""
     STEP_MARKETPLACE_ADDRESS: ""
     STEP_NFT_ADDRESS: ""

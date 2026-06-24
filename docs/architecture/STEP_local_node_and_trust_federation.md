@@ -288,3 +288,75 @@ whatever chain endpoint a node is configured with.
 - Each node **re-derives** verdicts from deterministic rules; it never rubber-
   stamps a peer. Quorum is **weighted**, so a single location can't dominate.
 - No raw GPS in logs; nodes log claim hashes + verdicts only (privacy invariant).
+
+## 9. Can a mobile app be a trust center?
+
+Short answer: **a phone is a first-class trust center as a light-client quorum
+signer, but not as a BFT consensus validator.** Two different jobs are being
+conflated under "trust center", and the hardware reality splits them cleanly.
+
+### 9.1 Why a phone cannot be a consensus validator (today)
+
+A CometBFT validator must, to stay in the active set without being slashed:
+
+- **Sign every block, ~continuously.** Miss too many and you're jailed/slashed.
+  iOS gives an app **no general always-on background execution** — the OS
+  suspends it seconds after backgrounding; there is no "run a consensus daemon
+  forever" entitlement. VoIP/location/BGTask modes are purpose-scoped and
+  policed; abusing them to host a validator is an App-Store-rejection path.
+- **Hold an always-available signing key with low latency.** Phones sleep, lose
+  the network, switch cells, and throttle the CPU/radio for battery. A validator
+  that vanishes for a subway ride degrades liveness for the **whole** BFT set
+  (consensus halts if >1/3 of weight is unavailable).
+- **Store consensus state.** evmd's state grows unbounded without pruning; that's
+  a server workload, not a 128 GB phone shared with the user's photos.
+
+So shipping "phone = validator" as the default would make consensus **less**
+safe, not more decentralized. It's the one place where forcing decentralization
+onto the wrong hardware reduces sovereignty. Always-on machines (chappie, a
+mini, a VPS-by-PeerID) are the right home for consensus.
+
+### 9.2 The narrow path where a phone *could* validate
+
+If a specific phone is effectively a server — **on charger, on stable Wi-Fi,
+foreground or with a sanctioned background mode, never roaming** (a dedicated
+handset wired in a rack, say) — it can run a validator exactly like any node:
+it's just `evmd` on arm64. The blockers above are **operational, not
+cryptographic**. The path:
+
+1. Run evmd natively (not in the App Store app — a sideloaded/dev build or a
+   Linux-on-device shell), same `join.sh` → `become-validator.sh` flow as chappie.
+2. Park it on power + LAN; treat any backgrounding as downtime it will be
+   slashed for. This is a **tethered appliance**, not a consumer install.
+3. There is no App-Store-distributable version of this — Apple will not approve a
+   background consensus daemon. So it never ships to "friendly testers"; it's an
+   operator choice for a phone they dedicate as hardware.
+
+We **document** this path (above) but do **not** make it the product default,
+because for ~every real phone the operational constraints make it a liability.
+
+### 9.3 The path we recommend — light-client quorum signer
+
+This is how a normal phone becomes a real trust center, web3-natively, with no
+always-on requirement:
+
+- The app already holds a **sovereign secp256k1 key** (account vault, #12) and
+  already does **App Attest** device attestation (#31) and trusted-anchor capture
+  (#32). That key is the node identity — same primitive a validator uses.
+- A phone **verifies** rather than **produces**: it checks block headers / state
+  proofs from the chain it reads (the RPC failover + cross-endpoint agreement in
+  §4 is exactly a light-client trust-minimisation), so it doesn't have to trust a
+  single gateway.
+- A phone **co-signs** the artifact it has first-hand knowledge of — its own
+  presence claim, and (opt-in) attestations over claims it can witness — and
+  those signatures carry **weight in the app-layer quorum** (`ValidatorRegistry`
+  weight, §3), gated by attestation so one device ≠ unbounded weight. Signing is
+  an **occasional, foreground, event-driven** action — precisely what a phone is
+  good at — not a continuous liveness obligation.
+- Net effect: more independent verifiers and signers raise the bar to forge
+  presence, **without** putting consensus liveness at the mercy of a battery.
+
+Implementation is **not built yet** — it reuses shipped pieces (vault key, App
+Attest, the quorum-weight registry, §4 read agreement); the remaining work is a
+sign-and-submit path from the app into the quorum bundle. Tracked as a follow-up,
+not shipped in the TestFlight pilot (which is a pure mining client).
