@@ -77,6 +77,17 @@ if (!pkgBuilder.includes("step-trustcenter provision")) {
 if (!pkgBuilder.includes("SECRET_BACKEND=keychain")) {
   fail("macOS package provisioning is not keychain-backed");
 }
+if (!pkgBuilder.includes("trust-center.manifest.json") || !pkgBuilder.includes("write_manifest")) {
+  fail("macOS package provisioning does not write a Trust Center manifest");
+}
+
+const installScript = read("scripts/node/install.sh");
+if (!installScript.includes("trust-center.manifest.json")) {
+  fail("shell Trust Center installer does not write a Trust Center manifest");
+}
+if (!installScript.includes('"schema_version": "step.trust-center.manifest.v1"')) {
+  fail("shell Trust Center installer manifest is missing schema_version");
+}
 
 const handover = read("handover.md");
 if (!handover.includes("2/3 + 1 quorum")) {

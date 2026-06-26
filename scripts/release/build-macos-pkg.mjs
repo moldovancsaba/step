@@ -67,6 +67,7 @@ LABEL="app.step.node-agent"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 LOG_DIR="$ROOT/logs"
 NODE_ENV="$ROOT/node.env"
+MANIFEST="$ROOT/trust-center.manifest.json"
 RPC="${rpc}"
 REGISTRY="${registry}"
 PLATFORM="${platform}"
@@ -123,6 +124,71 @@ AGENT_POLL_INTERVAL=30
 AGENT_INTEGRITY_INTERVAL=120
 AGENT_WATCH_ATTEMPTS=20
 ENV
+}
+
+write_manifest() {
+  addr="$1"
+  cat > "$MANIFEST" <<JSON
+{
+  "schema_version": "step.trust-center.manifest.v1",
+  "node": {
+    "name": "$(hostname -s | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9-' | cut -c1-63)",
+    "address": "$addr",
+    "platform": "$PLATFORM",
+    "location": "local",
+    "identity_backend": "keychain"
+  },
+  "roles": ["agent", "validator"],
+  "services": {
+    "agent": {
+      "enabled": true,
+      "bind": "127.0.0.1:$AGENT_PORT",
+      "healthz": "http://127.0.0.1:$AGENT_PORT/healthz"
+    },
+    "validator": {
+      "enabled": true,
+      "bind": "127.0.0.1:$VALIDATOR_PORT",
+      "healthz": "http://127.0.0.1:$VALIDATOR_PORT/healthz"
+    }
+  },
+  "peer": {
+    "bootstrap_peers": [],
+    "relay_peers": [],
+    "advertise": []
+  },
+  "chain": {
+    "chain_id": "$CHAIN_ID",
+    "rpc_urls": ["$RPC"],
+    "release_registry": "$REGISTRY",
+    "validator_registry": "${verifier || "0x0000000000000000000000000000000000000000"}"
+  },
+  "update": {
+    "platform_id": "$PLATFORM_ID",
+    "artifact_base_urls": ["$ARTIFACTS"],
+    "poll_interval_s": 30,
+    "integrity_interval_s": 120
+  },
+  "recovery": {
+    "supervisor": "launchd",
+    "restart": {
+      "enabled": true,
+      "max_attempts": 20
+    },
+    "rollback": {
+      "enabled": true,
+      "last_good_required": true
+    }
+  },
+  "observability": {
+    "healthz": "http://127.0.0.1:$AGENT_PORT/healthz",
+    "logs": [
+      "$LOG_DIR/node-agent.out.log",
+      "$LOG_DIR/node-agent.err.log"
+    ],
+    "fleet_heartbeat": true
+  }
+}
+JSON
 }
 
 write_plist() {
@@ -190,6 +256,7 @@ cmd_provision() {
   fi
   store_nonce "$addr" "$nonce"
   write_env "$addr"
+  write_manifest "$addr"
   write_plist
   launchctl bootout "gui/$(id -u)" "$PLIST" >/dev/null 2>&1 || true
   launchctl bootstrap "gui/$(id -u)" "$PLIST"
@@ -197,10 +264,11 @@ cmd_provision() {
   challenge="$(openssl rand -hex 32 2>/dev/null || python3 -c 'import secrets; print(secrets.token_hex(32))')"
   payload="$(pairing_payload "$addr" "$challenge")"
   if [ "$json" = "1" ]; then
-    printf '{"nodeAddress":%s,"pairingPayload":%s,"agentStatusUrl":"http://127.0.0.1:%s/v1/agent/status"}\n' "$(json_escape "$addr")" "$payload" "$AGENT_PORT"
+    printf '{"nodeAddress":%s,"manifest":%s,"pairingPayload":%s,"agentStatusUrl":"http://127.0.0.1:%s/v1/agent/status"}\n' "$(json_escape "$addr")" "$(json_escape "$MANIFEST")" "$payload" "$AGENT_PORT"
   else
     echo "STEP Trust Center provisioned."
     echo "Node address: $addr"
+    echo "Manifest: $MANIFEST"
     echo "Pair this Trust Center with your STEP wallet using this payload:"
     echo "$payload"
     if [ -z "$nonce" ]; then
@@ -237,6 +305,7 @@ cmd_doctor() {
   add macos.version pass "$(sw_vers -productVersion 2>/dev/null || echo unknown)"
   case "$(uname -m)" in arm64|x86_64) add arch.supported pass "$(uname -m)";; *) add arch.supported fail "$(uname -m)";; esac
   addr="$(node_address)"; [ -n "$addr" ] && add identity.node pass "$addr" || add identity.node fail "not provisioned"
+  [ -f "$MANIFEST" ] && add manifest.present pass "$MANIFEST" || add manifest.present fail "missing Trust Center manifest"
   launchctl print "$(launch_domain)" >/dev/null 2>&1 && add launchd.loaded pass "$LABEL" || add launchd.loaded fail "not loaded"
   curl -fsS -m 2 "http://127.0.0.1:$AGENT_PORT/healthz" >/dev/null 2>&1 && add agent.health pass ":$AGENT_PORT" || add agent.health fail ":$AGENT_PORT down"
   curl -fsS -m 2 "http://127.0.0.1:$VALIDATOR_PORT/healthz" >/dev/null 2>&1 && add validator.health pass ":$VALIDATOR_PORT" || add validator.health fail ":$VALIDATOR_PORT down"

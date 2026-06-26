@@ -12,6 +12,7 @@
 - The local `.runtime/nodes/chappie.json` record was migrated so it no longer contains `privateKey`; the Chappie validator identity exists in macOS Keychain service `app.step.node`.
 - Trust Center role manifest contract exists at `packages/schemas/step.trust-center.manifest.v1.json`, with symmetric Tribecca and Chappie examples under `config/` and validation through `pnpm trust-center:manifest:validate`.
 - The P2P independence release verifier now checks key custody, keyless packaging, quorum terminology, Chappie keychain migration, and Trust Center manifest validity.
+- `step-trustcenter provision` and the shell Trust Center installer now generate `trust-center.manifest.json` beside the node runtime, so each installed Trust Center has a local role/service/update/recovery contract.
 
 ## Shared terminology
 
@@ -314,13 +315,12 @@ The current App Store Connect API key can read app/build status, but returned `4
 ## Immediate next execution order
 
 1. Finish `#90` by adding CI/release assertions that production runtime node files cannot contain plaintext `privateKey` and by updating any remaining docs that describe keyed remote bundles as normal operation.
-2. Finish `#91` by wiring the symmetric Trust Center role manifest into runtime provisioning outputs.
-3. Execute `#92` to make Chappie a real supervised Trust Center.
-4. Execute `#93` and `#94` to remove local file/hub authority from peer discovery.
-5. Execute `#95` and `#96` to make chain participation and quorum rules real.
-6. Execute `#97`, `#98`, and `#100` to package, update, recover, and block unsafe production releases.
-7. Execute `#99` for GDS-only operator visibility.
-8. Execute `#101` as the final two-node independence release proof.
+2. Execute `#92` to make Chappie a real supervised Trust Center.
+3. Execute `#93` and `#94` to remove local file/hub authority from peer discovery.
+4. Execute `#95` and `#96` to make chain participation and quorum rules real.
+5. Execute `#97`, `#98`, and `#100` to package, update, recover, and block unsafe production releases.
+6. Execute `#99` for GDS-only operator visibility.
+7. Execute `#101` as the final two-node independence release proof.
 
 ## Operational acceptance target
 

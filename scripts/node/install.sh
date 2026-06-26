@@ -33,6 +33,7 @@ done
 [ -n "$SHA256" ] || { echo "[step-install] refusing: --sha256 <expected hex> is required (the hub prints it; it is the on-chain ReleaseRegistry binary hash)" >&2; exit 2; }
 
 ROOT="$HOME/.step-node"
+MANIFEST="$ROOT/trust-center.manifest.json"
 mkdir -p "$ROOT"
 echo "[step-install] downloading agent for $PLATFORM …"
 curl -fsSL "$ARTIFACT" -o "$ROOT/step-node-agent.unverified"
@@ -76,6 +77,71 @@ SECRET_BACKEND=${SECRET_BACKEND:-keychain}
 ${FLEET:+FLEET_URL=$FLEET}
 EOF
 
+NODE_NAME=$(hostname -s 2>/dev/null | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9-' | cut -c1-63)
+[ -n "$NODE_NAME" ] || NODE_NAME="step-node"
+ARTIFACT_BASE=$(dirname "$ARTIFACT")
+cat > "$MANIFEST" <<EOF
+{
+  "schema_version": "step.trust-center.manifest.v1",
+  "node": {
+    "name": "$NODE_NAME",
+    "address": "$NODE_ADDRESS",
+    "platform": "$PLATFORM",
+    "location": "local",
+    "identity_backend": "${SECRET_BACKEND:-keychain}"
+  },
+  "roles": ["agent", "validator"],
+  "services": {
+    "agent": {
+      "enabled": true,
+      "bind": "127.0.0.1:9200",
+      "healthz": "http://127.0.0.1:9200/healthz"
+    },
+    "validator": {
+      "enabled": true,
+      "bind": "127.0.0.1:9101",
+      "healthz": "http://127.0.0.1:9101/healthz"
+    }
+  },
+  "peer": {
+    "bootstrap_peers": [],
+    "relay_peers": [],
+    "advertise": []
+  },
+  "chain": {
+    "chain_id": "${STEP_CHAIN_ID:-262144}",
+    "rpc_urls": ["$RPC"],
+    "release_registry": "$REGISTRY",
+    "validator_registry": "${VERIFIER_CONTRACT_ADDRESS:-0x0000000000000000000000000000000000000000}"
+  },
+  "update": {
+    "platform_id": "$PLATFORM_ID",
+    "artifact_base_urls": ["$ARTIFACT_BASE"],
+    "poll_interval_s": 30,
+    "integrity_interval_s": 120
+  },
+  "recovery": {
+    "supervisor": "$( [ "$(uname -s)" = "Darwin" ] && echo launchd || echo systemd )",
+    "restart": {
+      "enabled": true,
+      "max_attempts": 20
+    },
+    "rollback": {
+      "enabled": true,
+      "last_good_required": true
+    }
+  },
+  "observability": {
+    "healthz": "http://127.0.0.1:9200/healthz",
+    "logs": [
+      "$ROOT/agent.out.log",
+      "$ROOT/agent.err.log"
+    ],
+    "fleet_heartbeat": true
+  }
+}
+EOF
+
 cat > "$ROOT/run-agent.sh" <<EOF
 #!/bin/sh
 set -a; . "$ROOT/node.env"; set +a
@@ -117,5 +183,6 @@ fi
 echo ""
 echo "[step-install] ✓ node installed + running, boot-persistent."
 echo "[step-install]   NODE ADDRESS: $NODE_ADDRESS"
+echo "[step-install]   MANIFEST: $MANIFEST"
 echo "[step-install]   Ask the hub operator to register it (grants quorum weight):"
 echo "[step-install]     node scripts/node/register.mjs $NODE_ADDRESS --weight 50"
