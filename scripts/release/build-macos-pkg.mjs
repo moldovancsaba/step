@@ -30,7 +30,7 @@ const rpc = flag("rpc", process.env.STEP_TRUSTCENTER_RPC ?? "http://192.168.100.
 const registry = flag("registry", process.env.RELEASE_REGISTRY ?? "0x6e7B8A754A8a9111F211bC8C8f619E462f8DdF5F");
 const artifacts = flag("artifacts", process.env.STEP_TRUSTCENTER_ARTIFACTS ?? "http://192.168.100.64:8078");
 const fleet = flag("fleet", process.env.STEP_TRUSTCENTER_FLEET ?? "http://192.168.100.64:8099");
-const verifier = flag("verifier", process.env.VERIFIER_CONTRACT_ADDRESS ?? "");
+let verifier = flag("verifier", process.env.VERIFIER_CONTRACT_ADDRESS ?? "");
 const chainId = flag("chain-id", process.env.STEP_CHAIN_ID ?? "262144");
 const bootstrapPeers = flag("bootstrap-peers", process.env.STEP_TRUSTCENTER_BOOTSTRAP_PEERS ?? "");
 const relayPeers = flag("relay-peers", process.env.STEP_TRUSTCENTER_RELAY_PEERS ?? "");
@@ -52,6 +52,10 @@ if (survivalTier === "full") {
   for (const name of ["node", "gateway-api.mjs", "fleet-api.mjs", "chain-rpc.mjs", "validator-node", "gossip-node"]) {
     if (!existsSync(join(fullstackDir, name))) die(`fullstack payload missing ${name}`);
   }
+  if (!verifier && existsSync(join(fullstackDir, "deployments.json"))) {
+    const deployments = JSON.parse(readFileSync(join(fullstackDir, "deployments.json"), "utf8"));
+    verifier = deployments.MiningClaimVerifier ?? "";
+  }
 }
 const peerList = (raw, name) => raw.split(",").map((s) => s.trim()).filter(Boolean).map((peer) => {
   if (!peer.startsWith("/")) die(`--${name} entries must be libp2p multiaddrs`);
@@ -60,6 +64,7 @@ const peerList = (raw, name) => raw.split(",").map((s) => s.trim()).filter(Boole
 const bootstrapPeerList = peerList(bootstrapPeers, "bootstrap-peers");
 const relayPeerList = peerList(relayPeers, "relay-peers");
 const advertisePeerList = peerList(advertisePeers, "advertise-peers");
+const runtimeRpcUrls = survivalTier === "full" ? `http://127.0.0.1:8645,${rpc}` : rpc;
 
 const cast = existsSync(join(process.env.HOME ?? "", ".foundry/bin/cast")) ? join(process.env.HOME, ".foundry/bin/cast") : "cast";
 const platformId = flag("platform-id", execFileSync(cast, ["keccak", platform], { encoding: "utf8" }).trim());
@@ -69,6 +74,7 @@ const build = join(ROOT, ".runtime/pkgbuild");
 const payloadBin = join(build, "payload/usr/local/bin");
 const payloadFullstack = join(build, "payload/usr/local/lib/step-trustcenter/fullstack");
 const scripts = join(build, "scripts");
+const resources = join(build, "resources");
 const dist = join(ROOT, ".runtime/dist");
 rmSync(build, { recursive: true, force: true });
 mkdirSync(payloadBin, { recursive: true });
@@ -77,6 +83,7 @@ if (survivalTier === "full") {
   cpSync(fullstackDir, payloadFullstack, { recursive: true });
 }
 mkdirSync(scripts, { recursive: true });
+mkdirSync(resources, { recursive: true });
 mkdirSync(dist, { recursive: true });
 
 copyFileSync(agentBin, join(payloadBin, "step-node-agent"));
@@ -94,6 +101,7 @@ NODE_ENV="$ROOT/node.env"
 MANIFEST="$ROOT/trust-center.manifest.json"
 FULLSTACK_DIR="/usr/local/lib/step-trustcenter/fullstack"
 RPC="${rpc}"
+RUNTIME_RPC_URLS="${runtimeRpcUrls}"
 REGISTRY="${registry}"
 PLATFORM="${platform}"
 PLATFORM_ID="${platformId}"
@@ -141,23 +149,44 @@ node_address() { [ -f "$ROOT/node-address.txt" ] && cat "$ROOT/node-address.txt"
 launch_domain() { printf 'gui/%s/%s' "$(id -u)" "$LABEL"; }
 redact() { sed -E 's/(privateKey|validatorKey|nonceSecret|GATEWAY_NONCE_SECRET|STEP_TRUSTCENTER_NONCE_SECRET)[^[:space:]]*/\\1=<redacted>/g'; }
 
+append_validator_identity_env() {
+  key="\${STEP_TRUSTCENTER_RELAYER_PRIVATE_KEY:-}"
+  if [ -z "$key" ] && [ "\${SECRET_BACKEND:-keychain}" = "file" ]; then
+    secret_file="\${SECRET_FILE:-$ROOT/secrets.json}"
+    if [ -f "$secret_file" ]; then
+      key="$(python3 - "$secret_file" <<'PY' 2>/dev/null || true
+import json, sys
+data = json.load(open(sys.argv[1]))
+for name, value in data.items():
+    if name.endswith(".validatorKey") or name == "validatorKey":
+        print(value)
+        break
+PY
+)"
+    fi
+  fi
+  if [ -n "$key" ]; then
+    printf 'RELAYER_%s=%s\n' "PRIVATE_KEY" "$key" >> "$NODE_ENV"
+    printf 'VALIDATOR_%s=%s\n' "PRIVATE_KEY" "$key" >> "$NODE_ENV"
+  fi
+}
+
 write_env() {
   addr="$1"
   mkdir -p "$ROOT" "$LOG_DIR"
   cat > "$NODE_ENV" <<ENV
 AGENT_ROOT=$ROOT
-STEP_RPC_URLS=$RPC
+STEP_RPC_URLS=$RUNTIME_RPC_URLS
 RELEASE_REGISTRY=$REGISTRY
 NODE_ADDRESS=$addr
 PLATFORM=$PLATFORM
 PLATFORM_ID=$PLATFORM_ID
-ARTIFACT_BASE_URLS=$ARTIFACTS
+ARTIFACT_BASE_URLS=http://127.0.0.1:$AGENT_PORT,$ARTIFACTS
 FLEET_URL=$FLEET
 STEP_CHAIN_ID=$CHAIN_ID
-VERIFIER_CONTRACT_ADDRESS=$VERIFIER
 VALIDATOR_PORT=$VALIDATOR_PORT
 AGENT_PORT=$AGENT_PORT
-SECRET_BACKEND=keychain
+SECRET_BACKEND=\${SECRET_BACKEND:-keychain}
 SECRET_SERVICE=$SERVICE
 AGENT_POLL_INTERVAL=30
 AGENT_INTEGRITY_INTERVAL=120
@@ -166,6 +195,8 @@ GOSSIP_BOOTSTRAP=$BOOTSTRAP_PEERS
 GOSSIP_RELAYS=$RELAY_PEERS
 GOSSIP_ADVERTISE=$ADVERTISE_PEERS
 ENV
+  [ -n "$VERIFIER" ] && printf 'VERIFIER_CONTRACT_ADDRESS=%s\n' "$VERIFIER" >> "$NODE_ENV"
+  append_validator_identity_env
 }
 
 manifest_roles() { if [ "$SURVIVAL_TIER" = "full" ]; then printf '%s' "$FULL_ROLES"; else printf '%s' "$EDGE_ROLES"; fi; }
@@ -189,7 +220,7 @@ write_manifest() {
     "transport": "$TRANSPORT",
     "platform": "$PLATFORM",
     "location": "local",
-    "identity_backend": "keychain"
+    "identity_backend": "\${SECRET_BACKEND:-keychain}"
   },
   "roles": $roles,
   "services": {
@@ -230,13 +261,13 @@ write_manifest() {
   },
   "chain": {
     "chain_id": "$CHAIN_ID",
-    "rpc_urls": ["$RPC"],
+    "rpc_urls": ["$RUNTIME_RPC_URLS"],
     "release_registry": "$REGISTRY",
     "validator_registry": "${verifier || "0x0000000000000000000000000000000000000000"}"
   },
   "update": {
     "platform_id": "$PLATFORM_ID",
-    "artifact_base_urls": ["$ARTIFACTS"],
+    "artifact_base_urls": ["http://127.0.0.1:$AGENT_PORT", "$ARTIFACTS"],
     "poll_interval_s": 30,
     "integrity_interval_s": 120
   },
@@ -271,6 +302,28 @@ write_manifest() {
 JSON
 }
 
+write_node_directory() {
+  addr="$1"
+  name="$(hostname -s 2>/dev/null | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9-' | cut -c1-63)"
+  [ -n "$name" ] || name="step-node"
+  cat > "$ROOT/nodes.json" <<JSON
+{
+  "nodes": [
+    {
+      "name": "$name",
+      "address": "$addr",
+      "url": "http://127.0.0.1:$VALIDATOR_PORT",
+      "services": ["validator", "agent", "gateway", "fleet", "gossip", "chain-rpc", "artifacts"],
+      "weight": 101,
+      "type": "TrustCenter",
+      "location": "local",
+      "status": "active"
+    }
+  ]
+}
+JSON
+}
+
 write_full_service_plist() {
   label="$1"; script="$2"; out="$3"; err="$4"
   plist="$HOME/Library/LaunchAgents/$label.plist"
@@ -294,6 +347,13 @@ PLIST
 install_full_services() {
   [ "$SURVIVAL_TIER" != "full" ] && return 0
   fullstack_required
+  [ -f "$FULLSTACK_DIR/deployments.json" ] && cp "$FULLSTACK_DIR/deployments.json" "$ROOT/deployments.json"
+  [ -f "$FULLSTACK_DIR/protocol-params.json" ] && {
+    mkdir -p "$ROOT/current"
+    cp "$FULLSTACK_DIR/protocol-params.json" "$ROOT/current/protocol-params.json"
+    cp "$FULLSTACK_DIR/protocol-params.json" "$ROOT/shared-params.json"
+  }
+  [ -f "$ROOT/nodes.json" ] || { [ -f "$FULLSTACK_DIR/nodes.json" ] && cp "$FULLSTACK_DIR/nodes.json" "$ROOT/nodes.json"; }
   cat > "$ROOT/run-chain-rpc.sh" <<RUN
 #!/bin/sh
 set -a; . "$NODE_ENV"; set +a
@@ -302,21 +362,45 @@ RUN
   cat > "$ROOT/run-gateway.sh" <<RUN
 #!/bin/sh
 set -a; . "$NODE_ENV"; set +a
+export STEP_RPC_URL="\${STEP_RPC_URL:-http://127.0.0.1:8645}"
+export STEP_CHAIN_ID="\${STEP_CHAIN_ID:-$CHAIN_ID}"
+export STEP_DEPLOYMENTS_FILE="\${STEP_DEPLOYMENTS_FILE:-$ROOT/deployments.json}"
+export STEP_PROTOCOL_PARAMS="\${STEP_PROTOCOL_PARAMS:-$ROOT/current/protocol-params.json}"
+export NODE_DIRECTORY_FILE="\${NODE_DIRECTORY_FILE:-$ROOT/nodes.json}"
+export MESH_API_URL="\${MESH_API_URL:-http://127.0.0.1:$VALIDATOR_PORT}"
+export VALIDATOR_URLS="\${VALIDATOR_URLS:-http://127.0.0.1:$VALIDATOR_PORT}"
+export GATEWAY_PORT="\${GATEWAY_PORT:-8080}"
 exec "$FULLSTACK_DIR/node" "$FULLSTACK_DIR/gateway-api.mjs"
 RUN
   cat > "$ROOT/run-fleet.sh" <<RUN
 #!/bin/sh
 set -a; . "$NODE_ENV"; set +a
+export STEP_RPC_URL="\${STEP_RPC_URL:-http://127.0.0.1:8645}"
+export STEP_CHAIN_ID="\${STEP_CHAIN_ID:-$CHAIN_ID}"
+export STEP_DEPLOYMENTS_FILE="\${STEP_DEPLOYMENTS_FILE:-$ROOT/deployments.json}"
+export NODE_DIRECTORY_FILE="\${NODE_DIRECTORY_FILE:-$ROOT/nodes.json}"
+export STEP_QUORUM_THRESHOLD="\${STEP_QUORUM_THRESHOLD:-101}"
+export FLEET_PORT="\${FLEET_PORT:-8099}"
 exec "$FULLSTACK_DIR/node" "$FULLSTACK_DIR/fleet-api.mjs"
 RUN
   cat > "$ROOT/run-gossip.sh" <<RUN
 #!/bin/sh
 set -a; . "$NODE_ENV"; set +a
+export STEP_RPC_URLS="\${STEP_RPC_URLS:-http://127.0.0.1:8645,$RPC}"
+export STEP_DEPLOYMENTS_FILE="\${STEP_DEPLOYMENTS_FILE:-$ROOT/deployments.json}"
+export STEP_SUBMIT_URL="\${STEP_SUBMIT_URL:-http://127.0.0.1:8080/v1/gossip/finalise}"
+export STEP_QUORUM_THRESHOLD="\${STEP_QUORUM_THRESHOLD:-101}"
+export GOSSIP_LISTEN="\${GOSSIP_LISTEN:-/ip4/0.0.0.0/tcp/4001}"
 exec "$FULLSTACK_DIR/gossip-node"
 RUN
   cat > "$ROOT/run-validator.sh" <<RUN
 #!/bin/sh
 set -a; . "$NODE_ENV"; set +a
+export VALIDATOR_PORT="\${VALIDATOR_PORT:-$VALIDATOR_PORT}"
+export STEP_RPC_URL="\${STEP_RPC_URL:-http://127.0.0.1:8645}"
+export STEP_CHAIN_ID="\${STEP_CHAIN_ID:-$CHAIN_ID}"
+export STEP_DEPLOYMENTS_FILE="\${STEP_DEPLOYMENTS_FILE:-$ROOT/deployments.json}"
+export STEP_PROTOCOL_PARAMS="\${STEP_PROTOCOL_PARAMS:-$ROOT/current/protocol-params.json}"
 exec "$FULLSTACK_DIR/validator-node"
 RUN
   chmod +x "$ROOT"/run-chain-rpc.sh "$ROOT"/run-gateway.sh "$ROOT"/run-fleet.sh "$ROOT"/run-gossip.sh "$ROOT"/run-validator.sh
@@ -356,6 +440,7 @@ RUN
 store_nonce() {
   addr="$1"
   nonce="$2"
+  [ "\${SECRET_BACKEND:-keychain}" = "keychain" ] || return 0
   if [ -n "$nonce" ]; then
     security add-generic-password -U -s "$SERVICE" -a "step.node.$addr.nonceSecret" -w "$nonce" >/dev/null
   fi
@@ -385,14 +470,18 @@ cmd_provision() {
   if [ -n "$existing" ]; then
     addr="$existing"
   else
-    out="$(SECRET_BACKEND=keychain SECRET_SERVICE="$SERVICE" GATEWAY_NONCE_SECRET="$nonce" "$BIN" --init)"
+    out="$(SECRET_BACKEND="\${SECRET_BACKEND:-keychain}" SECRET_SERVICE="$SERVICE" GATEWAY_NONCE_SECRET="$nonce" "$BIN" --init)"
     addr="$(printf '%s' "$out" | sed -n 's/^NODE_ADDRESS=//p')"
     [ -n "$addr" ] || { echo "provision failed: node-agent did not return NODE_ADDRESS" >&2; exit 1; }
     echo "$addr" > "$ROOT/node-address.txt"
   fi
   store_nonce "$addr" "$nonce"
   write_env "$addr"
+  if [ -n "$nonce" ]; then
+    printf 'GATEWAY_NONCE_SECRET=%s\n' "$nonce" >> "$NODE_ENV"
+  fi
   write_manifest "$addr"
+  write_node_directory "$addr"
   write_plist
   install_full_services
   launchctl bootout "gui/$(id -u)" "$PLIST" >/dev/null 2>&1 || true
@@ -514,10 +603,81 @@ exit 0
 `, { mode: 0o755 });
 chmodSync(join(scripts, "postinstall"), 0o755);
 
+writeFileSync(join(resources, "Welcome.html"), `<!doctype html>
+<html>
+<head><meta charset="utf-8"><style>body{font:13px -apple-system,BlinkMacSystemFont,sans-serif;line-height:1.45;color:#1f2328}h1{font-size:22px;margin:0 0 12px}p{margin:0 0 10px}</style></head>
+<body>
+<h1>STEP Trust Center</h1>
+<p>This installer adds the STEP Trust Center runtime to this Mac.</p>
+<p>A Trust Center is a peer node that can run STEP services locally: node agent, validator, gossip, gateway, fleet view, and local chain RPC when installed as a full node package.</p>
+<p>The installer does not grant validator authority by itself. Quorum participation is granted later by the network admission process.</p>
+</body>
+</html>
+`);
+
+writeFileSync(join(resources, "ReadMe.html"), `<!doctype html>
+<html>
+<head><meta charset="utf-8"><style>body{font:13px -apple-system,BlinkMacSystemFont,sans-serif;line-height:1.45;color:#1f2328}h1{font-size:22px;margin:0 0 12px}h2{font-size:16px;margin:18px 0 8px}ol,ul{padding-left:22px}code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#f6f8fa;padding:1px 4px;border-radius:4px}</style></head>
+<body>
+<h1>Installation guide</h1>
+<h2>What happens during install</h2>
+<ul>
+<li>The STEP command line tools are installed under <code>/usr/local/bin</code>.</li>
+<li>The Trust Center runtime payload is installed under <code>/usr/local/lib/step-trustcenter</code>.</li>
+<li>No wallet, node identity, or validator authority is created during the installer step.</li>
+</ul>
+<h2>After install</h2>
+<ol>
+<li>Open Terminal.</li>
+<li>Run <code>step-trustcenter provision</code>.</li>
+<li>Follow the pairing payload shown by the command.</li>
+<li>Create or import a STEP wallet in the app when available, then pair that wallet as the Trust Center owner/reward identity.</li>
+<li>Keep the Mac online. The node can be offline sometimes, but more uptime means better service quality and future reward eligibility.</li>
+</ol>
+<h2>Updates</h2>
+<p>After provisioning, the Trust Center agent polls the on-chain release registry for approved releases. It can download artifacts from configured sources or from other Trust Centers that already have the release cached. Every downloaded artifact is verified against the on-chain hash before activation.</p>
+<h2>Trust and quorum</h2>
+<p>Installing the app does not automatically make this Mac a voting validator. The node must be admitted on-chain by the network governance/admin process before it counts in validator quorum or receives validator rewards.</p>
+<h2>Restart and recovery</h2>
+<p>After provisioning, macOS launchd starts the Trust Center services automatically after crash or reboot. Use <code>step-trustcenter status</code>, <code>step-trustcenter doctor</code>, and <code>step-trustcenter logs</code> to inspect the node.</p>
+</body>
+</html>
+`);
+
+writeFileSync(join(resources, "Conclusion.html"), `<!doctype html>
+<html>
+<head><meta charset="utf-8"><style>body{font:13px -apple-system,BlinkMacSystemFont,sans-serif;line-height:1.45;color:#1f2328}h1{font-size:22px;margin:0 0 12px}code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#f6f8fa;padding:1px 4px;border-radius:4px}</style></head>
+<body>
+<h1>Installation complete</h1>
+<p>Next step: open Terminal and run <code>step-trustcenter provision</code>.</p>
+<p>Provisioning creates the local node identity, installs the user launch services, and prints the wallet pairing payload.</p>
+<p>After provisioning, the node can automatically discover approved releases and seed cached artifacts to other nodes.</p>
+</body>
+</html>
+`);
+
 const component = join(dist, `step-trustcenter-component-${version}-${platform}.pkg`);
 const out = join(dist, `STEP-TrustCenter-${version}-${platform}.pkg`);
 execFileSync("pkgbuild", ["--root", join(build, "payload"), "--scripts", scripts, "--identifier", identifier, "--version", version, "--install-location", "/", component], { stdio: "inherit" });
-execFileSync("productbuild", ["--package", component, out], { stdio: "inherit" });
+const distribution = join(build, "Distribution.xml");
+writeFileSync(distribution, `<?xml version="1.0" encoding="utf-8"?>
+<installer-gui-script minSpecVersion="1">
+  <title>STEP Trust Center</title>
+  <welcome file="Welcome.html"/>
+  <readme file="ReadMe.html"/>
+  <conclusion file="Conclusion.html"/>
+  <options customize="never" require-scripts="true" hostArchitectures="arm64,x86_64"/>
+  <domains enable_anywhere="false" enable_currentUserHome="false" enable_localSystem="true"/>
+  <choices-outline>
+    <line choice="default"/>
+  </choices-outline>
+  <choice id="default" title="STEP Trust Center">
+    <pkg-ref id="${identifier}"/>
+  </choice>
+  <pkg-ref id="${identifier}" version="${version}" onConclusion="none">step-trustcenter-component-${version}-${platform}.pkg</pkg-ref>
+</installer-gui-script>
+`);
+execFileSync("productbuild", ["--distribution", distribution, "--package-path", dist, "--resources", resources, out], { stdio: "inherit" });
 rmSync(component, { force: true });
 const sha = execFileSync("shasum", ["-a", "256", out], { encoding: "utf8" }).trim().split(/\s+/)[0];
 writeFileSync(`${out}.sha256`, `${sha}  ${out.split("/").pop()}\n`);

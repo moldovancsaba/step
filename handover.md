@@ -411,3 +411,80 @@ Canonical role names:
 - Build `3` is attached to TestFlight group `Friendly Pilot` (`7f2f4147-1cd1-404b-8d3c-5af2bab17e80`).
 - Tester `moldovancsaba@gmail.com` remains attached to `Friendly Pilot`.
 - External TestFlight review submission for build `3` is blocked by Apple with `ENTITY_UNPROCESSABLE.ANOTHER_BUILD_IN_REVIEW` because another build in the same train is already in Beta App Review. Submit build `3` again after the existing review completes.
+
+## M13 — P2P Auto-Update & Swarm Distribution delivery update
+
+Repository artifacts were created for M13 on GitHub:
+
+- Project board: `https://github.com/users/moldovancsaba/projects/55`
+- Milestone: `M13 — P2P Auto-Update & Swarm Distribution`
+- Issues: `#102` through `#113`
+
+Implementation state in this handover update:
+
+- `ReleaseRegistry` now authorizes full package-level metadata: binary hash, params hash, config hash, package hash, manifest hash, chunk root, package size, and minimum agent version.
+- The release publisher now creates a canonical `step.release-manifest.v1` manifest, deterministic chunk index, package hash, manifest hash, and chunk root before publishing release metadata on-chain.
+- The node-agent artifact API now exposes `/artifacts/status`, `/artifacts/{platform}/{version}/package`, `/artifacts/{platform}/{version}/manifest.json`, and `/artifacts/{platform}/{version}/chunks-{index}` while keeping the original `/artifacts/{platform}/{version}` package endpoint.
+- The hub artifact server exposes the same package/manifest/chunk-compatible endpoint shape as peer node agents.
+- `scripts/ops/verify-p2p-update-swarm.mjs` was added as the release-gate verifier for peer update readiness across Tribecca, Chappie, and future Trust Centers.
+- `docs/p2p-auto-update.md` documents the operational model, release contract, artifact API, publisher command, installer behavior, and definition of done.
+
+New verification command:
+
+```bash
+pnpm release:p2p-update-swarm:verify -- --peers http://tribecca.local:9200,http://chappie.local:9200
+```
+
+Release principle:
+
+Any byte source is allowed. Only on-chain release metadata plus manifest/hash verification is trusted.
+
+## M13 local deployment evidence — 2026-06-26
+
+Built installer:
+
+```text
+.runtime/dist/STEP-TrustCenter-1.0.15-darwin-arm64.pkg
+sha256 5f9ce39e9bf4490c23c518066a68812b4ec10882e2a37ac2bd8ad86bd87d5af9
+```
+
+Validation completed in this delivery pass:
+
+```text
+forge test -vvv: 95 passed, 0 failed
+cargo test -p step-node-agent: 33 passed, 0 failed
+cargo build -p step-node-agent --release: passed
+node --check scripts/release/publish.mjs: passed
+node --check scripts/release/serve-artifacts.mjs: passed
+node --check scripts/ops/verify-p2p-update-swarm.mjs: passed
+```
+
+Installer deployment completed:
+
+- Tribecca installed `STEP-TrustCenter-1.0.15-darwin-arm64.pkg` successfully.
+- Tribecca provisioned with `step-trustcenter provision`.
+- Tribecca `step-trustcenter status --json` reports launch agent loaded, agent health up, validator health up.
+- Chappie received the same package over SSH and upgraded successfully.
+- Chappie provisioned with `/usr/local/bin/step-trustcenter provision`.
+- Chappie `step-trustcenter status --json` reports launch agent loaded and agent health up.
+
+P2P update swarm evidence:
+
+```bash
+pnpm release:p2p-update-swarm:verify -- --platform darwin-arm64 --version 1.0.15 --peers http://tribecca.local:9200,http://chappie.local:9200
+```
+
+Result:
+
+```text
+ok true
+healthyPeers 2
+totalPeers 2
+tribecca.local: package true, manifest true, chunks 3
+chappie.local: package true, manifest true, chunks 3
+packageHashHeader 0xde94e566eee0f588531b8b16dca21a8f5dd8c41c291c5a47cd38cd75f99cf100
+```
+
+Operational note:
+
+Chappie is upgraded and peer-update ready. Its agent-supervised validator child is not activated through ReleaseRegistry because there is currently no active on-chain release target for the new `ReleaseRegistry` ABI on that node path. The full Trust Center package and artifact swarm are installed and functioning; validator authority remains governed/admitted separately.

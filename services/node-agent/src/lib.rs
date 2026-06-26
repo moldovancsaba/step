@@ -29,6 +29,10 @@ pub struct ReleaseRef {
     pub binary: Hash,
     pub params: Hash,
     pub config: Hash,
+    pub package: Hash,
+    pub manifest: Hash,
+    pub chunk_root: Hash,
+    pub package_size: u64,
 }
 
 /// Hashes measured from the files a node is actually running.
@@ -122,6 +126,10 @@ mod semver_tests {
             binary: [1; 32],
             params: [2; 32],
             config: [3; 32],
+            package: [4; 32],
+            manifest: [5; 32],
+            chunk_root: [6; 32],
+            package_size: 7,
         };
         let ok = Measurement {
             binary: [1; 32],

@@ -5,8 +5,15 @@
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use axum::{extract::State, routing::get, Json, Router};
+use axum::{
+    extract::{Path as AxumPath, State},
+    http::{header, StatusCode},
+    response::{IntoResponse, Response},
+    routing::get,
+    Json, Router,
+};
 use serde::Serialize;
+use sha2::{Digest, Sha256};
 use step_node_agent::chain::ChainReader;
 use step_node_agent::config::AgentConfig;
 use step_node_agent::hashes::measure_dir;
@@ -14,7 +21,7 @@ use step_node_agent::integrity::{evaluate, Verdict};
 use step_node_agent::layout::Layout;
 use step_node_agent::supervisor::{HealthCanary, HttpFetcher, ProcessSupervisor};
 use step_node_agent::update::{perform_update, Outcome, Supervisor};
-use step_node_agent::{backoff_ms, format_semver};
+use step_node_agent::{backoff_ms, format_semver, parse_semver};
 
 #[derive(Clone, Serialize, Default)]
 struct StatusReport {
@@ -32,6 +39,18 @@ struct StatusReport {
 }
 
 type Shared = Arc<Mutex<StatusReport>>;
+
+#[derive(Clone)]
+struct AppState {
+    status: Shared,
+    artifacts: ArtifactState,
+}
+
+#[derive(Clone)]
+struct ArtifactState {
+    platform: String,
+    releases_dir: std::path::PathBuf,
+}
 
 fn now_iso() -> String {
     let secs = SystemTime::now()
@@ -78,10 +97,21 @@ async fn main() {
     let loop_cfg = cfg.clone();
     std::thread::spawn(move || control_loop(loop_cfg, loop_status));
 
+    let app_state = AppState {
+        status,
+        artifacts: ArtifactState {
+            platform: cfg.platform.clone(),
+            releases_dir: cfg.root.join("releases"),
+        },
+    };
+
     let app = Router::new()
         .route("/healthz", get(|| async { "ok" }))
         .route("/v1/agent/status", get(status_handler))
-        .with_state(status);
+        .route("/artifacts/status", get(artifact_status_handler))
+        .route("/artifacts/{platform}/{version}", get(artifact_handler))
+        .route("/artifacts/{platform}/{version}/{part}", get(artifact_part_handler))
+        .with_state(app_state);
     let addr = format!("0.0.0.0:{}", cfg.agent_port);
     let listener = tokio::net::TcpListener::bind(&addr)
         .await
@@ -114,8 +144,150 @@ fn init_identity() {
     println!("NODE_ADDRESS={address}");
 }
 
-async fn status_handler(State(s): State<Shared>) -> Json<StatusReport> {
-    Json(s.lock().expect("status lock").clone())
+async fn status_handler(State(s): State<AppState>) -> Json<StatusReport> {
+    Json(s.status.lock().expect("status lock").clone())
+}
+
+#[derive(Serialize)]
+struct ArtifactStatus {
+    platform: String,
+    releases: Vec<ArtifactReleaseStatus>,
+}
+
+#[derive(Serialize)]
+struct ArtifactReleaseStatus {
+    version: String,
+    package: bool,
+    manifest: bool,
+    chunks: usize,
+}
+
+async fn artifact_status_handler(State(s): State<AppState>) -> Json<ArtifactStatus> {
+    let mut releases = Vec::new();
+    if let Ok(mut dir) = tokio::fs::read_dir(&s.artifacts.releases_dir).await {
+        while let Ok(Some(entry)) = dir.next_entry().await {
+            let name = entry.file_name().to_string_lossy().to_string();
+            let Ok(packed) = name.parse::<u64>() else {
+                continue;
+            };
+            let path = entry.path();
+            let package = tokio::fs::metadata(path.join("step-validator-node"))
+                .await
+                .map(|m| m.is_file())
+                .unwrap_or(false);
+            let manifest = tokio::fs::metadata(path.join("manifest.json"))
+                .await
+                .map(|m| m.is_file())
+                .unwrap_or(false);
+            let chunks = count_chunks(path.join("chunks")).await;
+            releases.push(ArtifactReleaseStatus {
+                version: format_semver(packed),
+                package,
+                manifest,
+                chunks,
+            });
+        }
+    }
+    Json(ArtifactStatus {
+        platform: s.artifacts.platform,
+        releases,
+    })
+}
+
+async fn count_chunks(path: std::path::PathBuf) -> usize {
+    let mut count = 0;
+    if let Ok(mut dir) = tokio::fs::read_dir(path).await {
+        while let Ok(Some(entry)) = dir.next_entry().await {
+            if entry.metadata().await.map(|m| m.is_file()).unwrap_or(false) {
+                count += 1;
+            }
+        }
+    }
+    count
+}
+
+/// Peer artifact seeding endpoint.
+///
+/// This deliberately serves only already-staged release binaries from the local
+/// release cache. Consumers must still verify bytes against ReleaseRegistry
+/// hashes before activation, so this endpoint is a transport/cache, not trust.
+async fn artifact_handler(
+    State(s): State<AppState>,
+    AxumPath((platform, version)): AxumPath<(String, String)>,
+) -> Response {
+    serve_artifact(&s.artifacts, &platform, &version, "package").await
+}
+
+async fn artifact_part_handler(
+    State(s): State<AppState>,
+    AxumPath((platform, version, part)): AxumPath<(String, String, String)>,
+) -> Response {
+    serve_artifact(&s.artifacts, &platform, &version, &part).await
+}
+
+async fn serve_artifact(
+    artifacts: &ArtifactState,
+    platform: &str,
+    version: &str,
+    part: &str,
+) -> Response {
+    if platform != artifacts.platform {
+        return (StatusCode::NOT_FOUND, "platform_not_available").into_response();
+    }
+    let Some(packed) = parse_semver(version) else {
+        return (StatusCode::BAD_REQUEST, "bad_version").into_response();
+    };
+    let release_dir = artifacts.releases_dir.join(packed.to_string());
+    let (path, content_type) = match part {
+        "package" => (release_dir.join("step-validator-node"), "application/octet-stream"),
+        "manifest.json" | "manifest" => (release_dir.join("manifest.json"), "application/json"),
+        p if p.starts_with("chunks-") => {
+            let idx = p.trim_start_matches("chunks-");
+            if idx.is_empty() || idx.contains('/') || idx.contains("..") {
+                return (StatusCode::BAD_REQUEST, "bad_chunk").into_response();
+            }
+            (release_dir.join("chunks").join(idx), "application/octet-stream")
+        }
+        _ => return (StatusCode::NOT_FOUND, "unknown_artifact_part").into_response(),
+    };
+    let meta = match tokio::fs::metadata(&path).await {
+        Ok(meta) if meta.is_file() => meta,
+        _ => return (StatusCode::NOT_FOUND, "artifact_not_staged").into_response(),
+    };
+    if meta.len() > 256 * 1024 * 1024 {
+        return (StatusCode::PAYLOAD_TOO_LARGE, "artifact_too_large").into_response();
+    }
+    match tokio::fs::read(&path).await {
+        Ok(bytes) if part == "manifest" || part == "manifest.json" => (
+            StatusCode::OK,
+            [
+                (header::CONTENT_TYPE, content_type),
+                (header::CACHE_CONTROL, "public, max-age=60"),
+            ],
+            bytes,
+        )
+            .into_response(),
+        Ok(bytes) => {
+            let digest = format!("0x{}", hex::encode(Sha256::digest(&bytes)));
+            let mut response = (
+                StatusCode::OK,
+                [
+                    (header::CONTENT_TYPE, content_type),
+                    (header::CACHE_CONTROL, "public, max-age=31536000, immutable"),
+                ],
+                bytes,
+            )
+                .into_response();
+            if let Ok(value) = digest.parse() {
+                response.headers_mut().insert(
+                    header::HeaderName::from_static("x-step-content-sha256"),
+                    value,
+                );
+            }
+            response
+        }
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "artifact_read_failed").into_response(),
+    }
 }
 
 fn set<F: FnOnce(&mut StatusReport)>(s: &Shared, f: F) {

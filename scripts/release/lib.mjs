@@ -4,7 +4,7 @@
  * unit-tested so the hash an operator publishes is exactly what a node checks.
  */
 import { createHash } from "node:crypto";
-import { createReadStream } from "node:fs";
+import { createReadStream, readFileSync } from "node:fs";
 
 /** Streamed sha256 of a file → `0x`-prefixed lowercase hex (bounded memory). */
 export function sha256File(path) {
@@ -20,6 +20,38 @@ export function sha256File(path) {
 /** sha256 of a buffer/string → `0x`-hex. */
 export function sha256Bytes(buf) {
   return `0x${createHash("sha256").update(buf).digest("hex")}`;
+}
+
+export function canonicalJson(value) {
+  const sort = (v) => {
+    if (Array.isArray(v)) return v.map(sort);
+    if (v && typeof v === "object") {
+      return Object.fromEntries(Object.keys(v).sort().map((k) => [k, sort(v[k])]));
+    }
+    return v;
+  };
+  return JSON.stringify(sort(value));
+}
+
+export function chunkFile(path, chunkSize = 1024 * 1024) {
+  const bytes = readFileSync(path);
+  const chunks = [];
+  for (let offset = 0, index = 0; offset < bytes.length; offset += chunkSize, index += 1) {
+    const chunk = bytes.subarray(offset, Math.min(offset + chunkSize, bytes.length));
+    chunks.push({
+      index,
+      offset,
+      size: chunk.length,
+      sha256: sha256Bytes(chunk),
+    });
+  }
+  const rootInput = chunks.map((c) => c.sha256.slice(2)).join("");
+  return {
+    chunkSize,
+    totalSize: bytes.length,
+    chunks,
+    chunkRoot: sha256Bytes(Buffer.from(rootInput, "hex")),
+  };
 }
 
 /** Pack `major.minor.patch` into a uint64 `(major<<32)|(minor<<16)|patch` (BigInt). */

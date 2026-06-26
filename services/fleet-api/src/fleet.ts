@@ -111,7 +111,7 @@ export function buildPeerRecords(
       nodeAddress: node.address.toLowerCase(),
       publicUrl,
       p2pAddress: node.p2pAddress,
-      services: node.services?.length ? node.services : ["gateway", "mesh", "indexer", "fleet"],
+      services: node.services?.length ? node.services : ["gateway", "mesh", "indexer", "fleet", "artifacts"],
       status: "active" as const,
       version: probe.version,
       sequence: nowMs,

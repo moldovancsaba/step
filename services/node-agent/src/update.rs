@@ -184,6 +184,10 @@ mod tests {
             binary: [v as u8; 32],
             params: [2; 32],
             config: [3; 32],
+            package: [4; 32],
+            manifest: [5; 32],
+            chunk_root: [6; 32],
+            package_size: 7,
         }
     }
 

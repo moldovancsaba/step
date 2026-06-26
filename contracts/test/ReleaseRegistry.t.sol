@@ -18,6 +18,9 @@ contract ReleaseRegistryTest is Test {
     bytes32 internal constant B1 = keccak256("bin-1");
     bytes32 internal constant P1 = keccak256("params-1");
     bytes32 internal constant C1 = keccak256("config-1");
+    bytes32 internal constant PKG1 = keccak256("package-1");
+    bytes32 internal constant MAN1 = keccak256("manifest-1");
+    bytes32 internal constant CHUNK1 = keccak256("chunks-1");
     bytes32 internal constant B2 = keccak256("bin-2");
 
     function semver(uint64 ma, uint64 mi, uint64 pa) internal pure returns (uint64) {
@@ -34,7 +37,7 @@ contract ReleaseRegistryTest is Test {
 
     function _publish(uint64 v, bytes32 b, bytes32 p, bytes32 c) internal {
         vm.prank(publisher);
-        reg.publishRelease(PLAT, v, b, p, c, 0);
+        reg.publishRelease(PLAT, v, b, p, c, PKG1, MAN1, CHUNK1, 1234, 0);
     }
 
     function test_PublishStoresAndPromotes() public {
@@ -46,6 +49,10 @@ contract ReleaseRegistryTest is Test {
         ReleaseRegistry.Release memory r = reg.latestActive(PLAT);
         assertEq(r.version, v);
         assertEq(r.binaryHash, B1);
+        assertEq(r.packageHash, PKG1);
+        assertEq(r.manifestHash, MAN1);
+        assertEq(r.chunkRoot, CHUNK1);
+        assertEq(r.packageSize, 1234);
         assertTrue(reg.isAuthorized(PLAT, B1, P1, C1));
         assertFalse(reg.isAuthorized(PLAT, B2, P1, C1));
     }
@@ -53,7 +60,7 @@ contract ReleaseRegistryTest is Test {
     function test_OnlyReleaseRoleCanPublish() public {
         vm.expectRevert();
         vm.prank(stranger);
-        reg.publishRelease(PLAT, semver(1, 0, 0), B1, P1, C1, 0);
+        reg.publishRelease(PLAT, semver(1, 0, 0), B1, P1, C1, PKG1, MAN1, CHUNK1, 1234, 0);
     }
 
     function test_VersionMustBeMonotonic() public {
@@ -69,6 +76,16 @@ contract ReleaseRegistryTest is Test {
     function test_ZeroHashRejected() public {
         vm.expectRevert(ReleaseRegistry.ZeroHash.selector);
         _publish(semver(1, 0, 0), bytes32(0), P1, C1);
+    }
+
+    function test_ZeroPackageMetadataRejected() public {
+        vm.expectRevert(ReleaseRegistry.ZeroHash.selector);
+        vm.prank(publisher);
+        reg.publishRelease(PLAT, semver(1, 0, 0), B1, P1, C1, bytes32(0), MAN1, CHUNK1, 1234, 0);
+
+        vm.expectRevert(ReleaseRegistry.ZeroSize.selector);
+        vm.prank(publisher);
+        reg.publishRelease(PLAT, semver(1, 0, 0), B1, P1, C1, PKG1, MAN1, CHUNK1, 0, 0);
     }
 
     function test_PromoteSwitchesDefault() public {

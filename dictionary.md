@@ -147,3 +147,21 @@
 `Main branch` - The canonical branch representing the latest delivered code.
 
 `PR branch` - A working branch containing changes before or alongside merging to main.
+
+`ReleaseRegistry` - The on-chain authority that defines which Trust Center release artifacts are allowed to run.
+
+`Release manifest` - The canonical off-chain JSON document describing a release package, hashes, chunk index, platform, and version.
+
+`Package hash` - The SHA-256 hash of the installable Trust Center package or release bundle.
+
+`Manifest hash` - The SHA-256 hash of the canonical release manifest committed by the release authority.
+
+`Chunk root` - The hash commitment for the deterministic release package chunk index.
+
+`Artifact seed` - A Trust Center or artifact server that can serve release package bytes to other peers.
+
+`Swarm update` - The process where Trust Centers fetch release bytes from peers while verifying all bytes against on-chain release authority.
+
+`Last known-good release` - The most recent installed release that passed activation and health checks and can be used for rollback.
+
+`Release gate` - The final pass/fail proof that package install, peer update, rollback, docs, and disaster drill are complete before production promotion.

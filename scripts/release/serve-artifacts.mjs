@@ -15,11 +15,13 @@
  *          GET /artifacts/:platform/:version   -> binary (octet-stream)
  */
 import { createServer } from "node:http";
+import { createHash } from "node:crypto";
 import { execSync } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
   copyFileSync,
+  writeFileSync,
   readFileSync,
   readdirSync,
   statSync,
@@ -72,6 +74,13 @@ if (args.stage === "true") {
   const dest = join(STORE, platform, version);
   mkdirSync(dest, { recursive: true });
   copyFileSync(binary, join(dest, "step-validator-node"));
+  const chunkDir = join(dest, "chunks");
+  mkdirSync(chunkDir, { recursive: true });
+  const bytes = readFileSync(binary);
+  const chunkSize = Number(args["chunk-size"] ?? 1024 * 1024);
+  for (let offset = 0, index = 0; offset < bytes.length; offset += chunkSize, index += 1) {
+    writeFileSync(join(chunkDir, String(index)), bytes.subarray(offset, Math.min(offset + chunkSize, bytes.length)));
+  }
   const manifestSrc = join(ROOT, ".runtime/releases", `release-${version}.json`);
   if (existsSync(manifestSrc)) copyFileSync(manifestSrc, join(dest, "manifest.json"));
   const configSrc = join(ROOT, ".runtime/releases", `config-${version}.json`);
@@ -103,6 +112,9 @@ function index() {
         version,
         sizeBytes: statSync(bin).size,
         binarySha256: manifest?.binary_sha256 ?? null,
+        packageSha256: manifest?.package_sha256 ?? manifest?.binary_sha256 ?? null,
+        manifestSha256: manifest?.manifest_sha256 ?? null,
+        chunkRoot: manifest?.chunk_root ?? null,
       });
     }
   }
@@ -120,18 +132,38 @@ const server = createServer((req, res) => {
     res.end(JSON.stringify({ artifacts: index() }));
     return;
   }
-  const m = /^\/artifacts\/([^/]+)\/([^/]+)$/.exec(url.pathname);
+  const m = /^\/artifacts\/([^/]+)\/([^/]+)(?:\/([^/]+))?$/.exec(url.pathname);
   if (m) {
-    const bin = join(STORE, m[1], m[2], "step-validator-node");
-    if (!existsSync(bin)) {
+    const releaseDir = join(STORE, m[1], m[2]);
+    let file = join(releaseDir, "step-validator-node");
+    let contentType = "application/octet-stream";
+    if (m[3] === "manifest" || m[3] === "manifest.json") {
+      file = join(releaseDir, "manifest.json");
+      contentType = "application/json";
+    } else if (m[3] === "package" || !m[3]) {
+      file = join(releaseDir, "step-validator-node");
+    } else if (m[3]?.startsWith("chunks-")) {
+      const chunk = m[3].slice("chunks-".length);
+      if (!chunk || chunk.includes(".") || chunk.includes("/")) {
+        res.writeHead(400).end("bad chunk");
+        return;
+      }
+      file = join(releaseDir, "chunks", chunk);
+    } else {
+      res.writeHead(404).end("unknown artifact part");
+      return;
+    }
+    if (!existsSync(file)) {
       res.writeHead(404).end("unknown artifact");
       return;
     }
+    const bytes = readFileSync(file);
     res.writeHead(200, {
-      "content-type": "application/octet-stream",
-      "content-length": statSync(bin).size,
+      "content-type": contentType,
+      "content-length": statSync(file).size,
+      "x-step-content-sha256": `0x${createHash("sha256").update(bytes).digest("hex")}`,
     });
-    createReadStream(bin).pipe(res);
+    createReadStream(file).pipe(res);
     return;
   }
   res.writeHead(404).end("not found");

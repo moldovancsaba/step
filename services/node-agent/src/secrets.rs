@@ -93,11 +93,11 @@ impl Secrets {
     /// `file` backend, which is written 0600). Returns Err on backend failure.
     pub fn store(&self, key: &str, value: &str) -> Result<(), String> {
         match &self.backend {
-            // #64: feed the secret via stdin, NOT argv (`-w` with no value reads
-            // the password from stdin) — so it never appears in `ps`/proc args.
+            // macOS `security add-generic-password -w` is not consistently
+            // stdin-driven across versions; pass the value as the option
+            // argument so provisioning cannot block on an interactive prompt.
             Backend::Keychain { service } => {
-                use std::io::Write;
-                let mut child = Command::new("security")
+                let out = Command::new("security")
                     .args([
                         "add-generic-password",
                         "-U",
@@ -106,21 +106,14 @@ impl Secrets {
                         "-a",
                         &self.account(key),
                         "-w",
+                        value,
                     ])
-                    .stdin(std::process::Stdio::piped())
-                    .spawn()
+                    .output()
                     .map_err(|e| e.to_string())?;
-                child
-                    .stdin
-                    .take()
-                    .ok_or("no stdin")?
-                    .write_all(value.as_bytes())
-                    .map_err(|e| e.to_string())?;
-                child.wait().map_err(|e| e.to_string()).and_then(|s| {
-                    s.success()
-                        .then_some(())
-                        .ok_or("security add failed".into())
-                })
+                out.status
+                    .success()
+                    .then_some(())
+                    .ok_or("security add failed".into())
             }
             Backend::SecretService { collection } => Command::new("secret-tool")
                 .args([

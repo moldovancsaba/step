@@ -148,18 +148,46 @@ fi
 # Service config (no secrets here — the key lives in the OS keychain).
 cat > "$ROOT/node.env" <<EOF
 AGENT_ROOT=$ROOT
-STEP_RPC_URLS=$RPC
+STEP_RPC_URLS=http://127.0.0.1:8645,$RPC
 RELEASE_REGISTRY=$REGISTRY
 NODE_ADDRESS=$NODE_ADDRESS
 PLATFORM_ID=$PLATFORM_ID
 PLATFORM=$PLATFORM
-ARTIFACT_BASE_URLS=$(dirname "$ARTIFACT")
+ARTIFACT_BASE_URLS=http://127.0.0.1:9200,$(dirname "$ARTIFACT")
 SECRET_BACKEND=${SECRET_BACKEND:-keychain}
 GOSSIP_BOOTSTRAP=$BOOTSTRAP_PEERS
 GOSSIP_RELAYS=$RELAY_PEERS
 GOSSIP_ADVERTISE=$ADVERTISE_PEERS
 ${FLEET:+FLEET_URL=$FLEET}
+GATEWAY_NONCE_SECRET=$NONCE_SECRET
 EOF
+VALIDATOR_IDENTITY_KEY="${STEP_TRUSTCENTER_RELAYER_PRIVATE_KEY:-}"
+if [ -z "$VALIDATOR_IDENTITY_KEY" ] && [ "${SECRET_BACKEND:-keychain}" = "file" ]; then
+  SECRET_JSON="${SECRET_FILE:-$ROOT/secrets.json}"
+  if [ -f "$SECRET_JSON" ]; then
+    VALIDATOR_IDENTITY_KEY=$(python3 - "$SECRET_JSON" <<'PY' 2>/dev/null || true
+import json, sys
+data = json.load(open(sys.argv[1]))
+for name, value in data.items():
+    if name.endswith(".validatorKey") or name == "validatorKey":
+        print(value)
+        break
+PY
+)
+  fi
+fi
+if [ -n "$VALIDATOR_IDENTITY_KEY" ]; then
+  printf 'RELAYER_%s=%s\n' "PRIVATE_KEY" "$VALIDATOR_IDENTITY_KEY" >> "$ROOT/node.env"
+  printf 'VALIDATOR_%s=%s\n' "PRIVATE_KEY" "$VALIDATOR_IDENTITY_KEY" >> "$ROOT/node.env"
+fi
+if [ -z "${VERIFIER_CONTRACT_ADDRESS:-}" ] && [ -f "$ROOT/deployments.json" ]; then
+  VERIFIER_CONTRACT_ADDRESS=$(python3 - "$ROOT/deployments.json" <<'PY' 2>/dev/null || true
+import json, sys
+print(json.load(open(sys.argv[1])).get("MiningClaimVerifier", ""))
+PY
+)
+fi
+[ -n "${VERIFIER_CONTRACT_ADDRESS:-}" ] && printf 'VERIFIER_CONTRACT_ADDRESS=%s\n' "$VERIFIER_CONTRACT_ADDRESS" >> "$ROOT/node.env"
 
 NODE_NAME=$(hostname -s 2>/dev/null | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9-' | cut -c1-63)
 [ -n "$NODE_NAME" ] || NODE_NAME="step-node"
@@ -167,6 +195,24 @@ ARTIFACT_BASE=$(dirname "$ARTIFACT")
 BOOTSTRAP_JSON=$(json_peer_array "$BOOTSTRAP_PEERS")
 RELAY_JSON=$(json_peer_array "$RELAY_PEERS")
 ADVERTISE_JSON=$(json_peer_array "$ADVERTISE_PEERS")
+
+cat > "$ROOT/nodes.json" <<EOF
+{
+  "nodes": [
+    {
+      "name": "$NODE_NAME",
+      "address": "$NODE_ADDRESS",
+      "url": "http://127.0.0.1:9101",
+      "services": ["validator", "agent", "gateway", "fleet", "gossip", "chain-rpc", "artifacts"],
+      "weight": 101,
+      "type": "TrustCenter",
+      "location": "local",
+      "status": "active"
+    }
+  ]
+}
+EOF
+
 cat > "$MANIFEST" <<EOF
 {
   "schema_version": "step.trust-center.manifest.v1",
@@ -217,13 +263,13 @@ cat > "$MANIFEST" <<EOF
   },
   "chain": {
     "chain_id": "${STEP_CHAIN_ID:-262144}",
-    "rpc_urls": ["$RPC"],
+    "rpc_urls": ["http://127.0.0.1:8645,$RPC"],
     "release_registry": "$REGISTRY",
     "validator_registry": "${VERIFIER_CONTRACT_ADDRESS:-0x0000000000000000000000000000000000000000}"
   },
   "update": {
     "platform_id": "$PLATFORM_ID",
-    "artifact_base_urls": ["$ARTIFACT_BASE"],
+    "artifact_base_urls": ["http://127.0.0.1:9200", "$ARTIFACT_BASE"],
     "poll_interval_s": 30,
     "integrity_interval_s": 120
   },
@@ -294,6 +340,13 @@ PLIST
 }
 
 if [ "$SURVIVAL_TIER" = "full" ]; then
+  [ -f "$ROOT/fullstack/deployments.json" ] && cp "$ROOT/fullstack/deployments.json" "$ROOT/deployments.json"
+  [ -f "$ROOT/fullstack/protocol-params.json" ] && {
+    mkdir -p "$ROOT/current"
+    cp "$ROOT/fullstack/protocol-params.json" "$ROOT/current/protocol-params.json"
+    cp "$ROOT/fullstack/protocol-params.json" "$ROOT/shared-params.json"
+  }
+  [ -f "$ROOT/nodes.json" ] || { [ -f "$ROOT/fullstack/nodes.json" ] && cp "$ROOT/fullstack/nodes.json" "$ROOT/nodes.json"; }
   cat > "$ROOT/run-chain-rpc.sh" <<EOF
 #!/bin/sh
 set -a; . "$ROOT/node.env"; set +a
@@ -302,21 +355,45 @@ EOF
   cat > "$ROOT/run-gateway.sh" <<EOF
 #!/bin/sh
 set -a; . "$ROOT/node.env"; set +a
+export STEP_RPC_URL="\${STEP_RPC_URL:-http://127.0.0.1:8645}"
+export STEP_CHAIN_ID="\${STEP_CHAIN_ID:-262144}"
+export STEP_DEPLOYMENTS_FILE="\${STEP_DEPLOYMENTS_FILE:-$ROOT/deployments.json}"
+export STEP_PROTOCOL_PARAMS="\${STEP_PROTOCOL_PARAMS:-$ROOT/current/protocol-params.json}"
+export NODE_DIRECTORY_FILE="\${NODE_DIRECTORY_FILE:-$ROOT/nodes.json}"
+export MESH_API_URL="\${MESH_API_URL:-http://127.0.0.1:9101}"
+export VALIDATOR_URLS="\${VALIDATOR_URLS:-http://127.0.0.1:9101}"
+export GATEWAY_PORT="\${GATEWAY_PORT:-8080}"
 exec "$ROOT/fullstack/node" "$ROOT/fullstack/gateway-api.mjs"
 EOF
   cat > "$ROOT/run-fleet.sh" <<EOF
 #!/bin/sh
 set -a; . "$ROOT/node.env"; set +a
+export STEP_RPC_URL="\${STEP_RPC_URL:-http://127.0.0.1:8645}"
+export STEP_CHAIN_ID="\${STEP_CHAIN_ID:-262144}"
+export STEP_DEPLOYMENTS_FILE="\${STEP_DEPLOYMENTS_FILE:-$ROOT/deployments.json}"
+export NODE_DIRECTORY_FILE="\${NODE_DIRECTORY_FILE:-$ROOT/nodes.json}"
+export STEP_QUORUM_THRESHOLD="\${STEP_QUORUM_THRESHOLD:-101}"
+export FLEET_PORT="\${FLEET_PORT:-8099}"
 exec "$ROOT/fullstack/node" "$ROOT/fullstack/fleet-api.mjs"
 EOF
   cat > "$ROOT/run-gossip.sh" <<EOF
 #!/bin/sh
 set -a; . "$ROOT/node.env"; set +a
+export STEP_RPC_URLS="\${STEP_RPC_URLS:-http://127.0.0.1:8645,$RPC}"
+export STEP_DEPLOYMENTS_FILE="\${STEP_DEPLOYMENTS_FILE:-$ROOT/deployments.json}"
+export STEP_SUBMIT_URL="\${STEP_SUBMIT_URL:-http://127.0.0.1:8080/v1/gossip/finalise}"
+export STEP_QUORUM_THRESHOLD="\${STEP_QUORUM_THRESHOLD:-101}"
+export GOSSIP_LISTEN="\${GOSSIP_LISTEN:-/ip4/0.0.0.0/tcp/4001}"
 exec "$ROOT/fullstack/gossip-node"
 EOF
   cat > "$ROOT/run-validator.sh" <<EOF
 #!/bin/sh
 set -a; . "$ROOT/node.env"; set +a
+export VALIDATOR_PORT="\${VALIDATOR_PORT:-9101}"
+export STEP_RPC_URL="\${STEP_RPC_URL:-http://127.0.0.1:8645}"
+export STEP_CHAIN_ID="\${STEP_CHAIN_ID:-262144}"
+export STEP_DEPLOYMENTS_FILE="\${STEP_DEPLOYMENTS_FILE:-$ROOT/deployments.json}"
+export STEP_PROTOCOL_PARAMS="\${STEP_PROTOCOL_PARAMS:-$ROOT/current/protocol-params.json}"
 exec "$ROOT/fullstack/validator-node"
 EOF
   chmod +x "$ROOT"/run-chain-rpc.sh "$ROOT"/run-gateway.sh "$ROOT"/run-fleet.sh "$ROOT"/run-gossip.sh "$ROOT"/run-validator.sh

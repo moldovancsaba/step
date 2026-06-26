@@ -27,7 +27,8 @@
     "release:p2p-independence:verify": "node scripts/ops/verify-p2p-independence.mjs",
     "release:live-federation:verify": "node scripts/ops/verify-live-federation.mjs",
     "release:disaster-survival:verify": "node scripts/ops/verify-disaster-survival.mjs",
-    "release:system-identity:verify": "node scripts/ops/verify-system-identity.mjs"
+    "release:system-identity:verify": "node scripts/ops/verify-system-identity.mjs",
+    "release:p2p-update-swarm:verify": "node scripts/ops/verify-p2p-update-swarm.mjs"
   },
   "packageManager": "pnpm@11.5.1"
 }

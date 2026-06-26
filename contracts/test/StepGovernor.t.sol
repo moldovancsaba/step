@@ -28,6 +28,9 @@ contract StepGovernorTest is Test {
     bytes32 internal constant B1 = keccak256("bin-1");
     bytes32 internal constant P1 = keccak256("params-1");
     bytes32 internal constant C1 = keccak256("config-1");
+    bytes32 internal constant PKG1 = keccak256("package-1");
+    bytes32 internal constant MAN1 = keccak256("manifest-1");
+    bytes32 internal constant CHUNK1 = keccak256("chunks-1");
 
     uint48 internal constant VOTING_DELAY = 1; // blocks
     uint32 internal constant VOTING_PERIOD = 50; // blocks
@@ -74,7 +77,17 @@ contract StepGovernorTest is Test {
 
     function _publishCalldata() internal pure returns (bytes memory) {
         return abi.encodeWithSelector(
-            ReleaseRegistry.publishRelease.selector, PLAT, uint64(1 << 32), B1, P1, C1, uint64(0)
+            ReleaseRegistry.publishRelease.selector,
+            PLAT,
+            uint64(1 << 32),
+            B1,
+            P1,
+            C1,
+            PKG1,
+            MAN1,
+            CHUNK1,
+            uint64(1234),
+            uint64(0)
         );
     }
 
@@ -94,7 +107,7 @@ contract StepGovernorTest is Test {
     function test_DirectPublishReverts() public {
         vm.expectRevert();
         vm.prank(alice);
-        reg.publishRelease(PLAT, 1 << 32, B1, P1, C1, 0);
+        reg.publishRelease(PLAT, 1 << 32, B1, P1, C1, PKG1, MAN1, CHUNK1, 1234, 0);
     }
 
     function test_FullDaoFlowPublishesRelease() public {

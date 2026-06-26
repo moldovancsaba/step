@@ -26,6 +26,10 @@ contract ReleaseRegistry is StepManaged {
         bytes32 binaryHash; // sha256 of the agent/validator binary
         bytes32 paramsHash; // sha256 of protocol-params.json
         bytes32 configHash; // sha256 of the canonical runtime config
+        bytes32 packageHash; // sha256 of the installable package/bundle
+        bytes32 manifestHash; // sha256 of the canonical off-chain release manifest
+        bytes32 chunkRoot; // merkle root or sha256 commitment for chunk index
+        uint64 packageSize; // package size in bytes, bounded by release tooling
         uint64 minAgentVersion; // packed semver floor an agent must already run
         address publisher;
         uint64 createdAt;
@@ -41,8 +45,14 @@ contract ReleaseRegistry is StepManaged {
     // node => pinned version (0 = follow the platform default) — canary targeting
     mapping(address => uint64) public nodeTargetVersion;
 
-    event ReleasePublished(
-        bytes32 indexed platform, uint64 indexed version, bytes32 binaryHash, address publisher
+    event ReleasePublished(bytes32 indexed platform, uint64 indexed version, bytes32 binaryHash, address publisher);
+    event ReleaseManifestPublished(
+        bytes32 indexed platform,
+        uint64 indexed version,
+        bytes32 packageHash,
+        bytes32 manifestHash,
+        bytes32 chunkRoot,
+        uint64 packageSize
     );
     event Promoted(bytes32 indexed platform, uint64 indexed version);
     event NodeTargeted(address indexed node, uint64 indexed version);
@@ -50,6 +60,7 @@ contract ReleaseRegistry is StepManaged {
 
     error NonMonotonicVersion(uint64 latest, uint64 attempted);
     error ZeroHash();
+    error ZeroSize();
     error UnknownRelease(bytes32 platform, uint64 version);
     error AlreadyRevoked(bytes32 platform, uint64 version);
 
@@ -65,18 +76,30 @@ contract ReleaseRegistry is StepManaged {
         bytes32 binaryHash,
         bytes32 paramsHash,
         bytes32 configHash,
+        bytes32 packageHash,
+        bytes32 manifestHash,
+        bytes32 chunkRoot,
+        uint64 packageSize,
         uint64 minAgentVersion
     ) external onlyStepRole(RELEASE_ROLE) {
         uint64 latest = _latestVersion(platform);
         if (version <= latest) revert NonMonotonicVersion(latest, version);
-        if (binaryHash == bytes32(0) || paramsHash == bytes32(0) || configHash == bytes32(0)) {
+        if (
+            binaryHash == bytes32(0) || paramsHash == bytes32(0) || configHash == bytes32(0)
+                || packageHash == bytes32(0) || manifestHash == bytes32(0) || chunkRoot == bytes32(0)
+        ) {
             revert ZeroHash();
         }
+        if (packageSize == 0) revert ZeroSize();
         _release[platform][version] = Release({
             version: version,
             binaryHash: binaryHash,
             paramsHash: paramsHash,
             configHash: configHash,
+            packageHash: packageHash,
+            manifestHash: manifestHash,
+            chunkRoot: chunkRoot,
+            packageSize: packageSize,
             minAgentVersion: minAgentVersion,
             publisher: msg.sender,
             createdAt: uint64(block.timestamp),
@@ -85,6 +108,7 @@ contract ReleaseRegistry is StepManaged {
         _versions[platform].push(version);
         platformTargetVersion[platform] = version;
         emit ReleasePublished(platform, version, binaryHash, msg.sender);
+        emit ReleaseManifestPublished(platform, version, packageHash, manifestHash, chunkRoot, packageSize);
         emit Promoted(platform, version);
     }
 

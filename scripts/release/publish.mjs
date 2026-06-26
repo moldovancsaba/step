@@ -15,10 +15,10 @@
  * Guards: refuses a dirty git tree and a non-monotonic version (provenance).
  */
 import { execSync } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { sha256File, sha256Bytes, packSemver } from "./lib.mjs";
+import { canonicalJson, chunkFile, sha256File, sha256Bytes, packSemver } from "./lib.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 const RUNTIME = join(ROOT, ".runtime");
@@ -82,6 +82,8 @@ log(`building validator (release, locked) for ${platform}…`);
 sh("cargo build -p step-validator-node --release --locked");
 const binary = join(ROOT, "target/release/step-validator-node");
 if (!existsSync(binary)) die("build produced no binary");
+const packagePath = args.package ?? binary;
+if (!existsSync(packagePath)) die(`--package path does not exist: ${packagePath}`);
 
 // 2. Canonical runtime config (non-secret) hashed alongside binary + params.
 const config = {
@@ -95,30 +97,47 @@ const configStr = JSON.stringify(config, Object.keys(config).sort());
 const binaryHash = await sha256File(binary);
 const paramsHash = await sha256File(paramsFile);
 const configHash = sha256Bytes(configStr);
+const packageHash = await sha256File(packagePath);
+const packageSize = statSync(packagePath).size;
+const chunkIndex = chunkFile(packagePath, Number(args["chunk-size"] ?? 1024 * 1024));
 const platformId = sh(`cast keccak "${platform}"`); // bytes32 platform id
 
 log(`version       ${args.version}  (packed ${version})`);
 log(`platform      ${platform}  (${platformId})`);
 log(`binary  sha256 ${binaryHash}`);
+log(`package sha256 ${packageHash}`);
+log(`package size   ${packageSize}`);
+log(`chunk root     ${chunkIndex.chunkRoot}`);
 log(`params  sha256 ${paramsHash}`);
 log(`config  sha256 ${configHash}`);
 
 // 4. Write the signed manifest (off-chain record; second integrity factor).
 mkdirSync(join(RUNTIME, "releases"), { recursive: true });
-const manifest = {
+const manifestDraft = {
+  schema: "step.release-manifest.v1",
   version: args.version,
+  packed_version: String(version),
   platform,
   platform_id: platformId,
   binary_sha256: binaryHash,
+  package_sha256: packageHash,
+  package_size: packageSize,
+  chunk_size: chunkIndex.chunkSize,
+  chunk_root: chunkIndex.chunkRoot,
+  chunks: chunkIndex.chunks,
   params_sha256: paramsHash,
   config_sha256: configHash,
   git_commit: sh("git rev-parse HEAD"),
+  created_at: new Date().toISOString(),
 };
+const manifestHash = sha256Bytes(canonicalJson(manifestDraft));
+const manifest = { ...manifestDraft, manifest_sha256: manifestHash };
 const manifestPath = join(RUNTIME, "releases", `release-${args.version}.json`);
 writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
 // Write EXACTLY the hashed bytes (no trailing newline) so sha256(file) == configHash.
 writeFileSync(join(RUNTIME, "releases", `config-${args.version}.json`), configStr);
 log(`manifest      ${manifestPath}`);
+log(`manifest sha256 ${manifestHash}`);
 
 if (dryRun) {
   log("--dry-run: not publishing on-chain.");
@@ -135,8 +154,8 @@ log("publishing to ReleaseRegistry…");
 try {
   sh(
     `cast send ${registry} ` +
-      `"publishRelease(bytes32,uint64,bytes32,bytes32,bytes32,uint64)" ` +
-      `${platformId} ${version} ${binaryHash} ${paramsHash} ${configHash} 0 ` +
+      `"publishRelease(bytes32,uint64,bytes32,bytes32,bytes32,bytes32,bytes32,bytes32,uint64,uint64)" ` +
+      `${platformId} ${version} ${binaryHash} ${paramsHash} ${configHash} ${packageHash} ${manifestHash} ${chunkIndex.chunkRoot} ${packageSize} 0 ` +
       `--rpc-url ${rpcUrl} --private-key ${signerKey}`,
   );
 } catch (e) {

@@ -118,10 +118,10 @@ fn parse_b32(s: &str) -> Option<[u8; 32]> {
     })
 }
 
-/// Decode the ABI-encoded `Release` struct (8 static 32-byte words). Returns
+/// Decode the ABI-encoded `Release` struct (12 static 32-byte words). Returns
 /// `None` for an empty/zero release (version 0) or a too-short blob.
 fn decode_release(out: &[u8]) -> Option<ReleaseRef> {
-    if out.len() < 32 * 8 {
+    if out.len() < 32 * 12 {
         return None;
     }
     let word = |i: usize| -> &[u8] { &out[i * 32..(i + 1) * 32] };
@@ -131,21 +131,33 @@ fn decode_release(out: &[u8]) -> Option<ReleaseRef> {
     if version == 0 {
         return None;
     }
-    let revoked = word(7).iter().any(|&b| b != 0);
+    let revoked = word(11).iter().any(|&b| b != 0);
     if revoked {
         return None;
     }
     let mut binary = [0u8; 32];
     let mut params = [0u8; 32];
     let mut config = [0u8; 32];
+    let mut package = [0u8; 32];
+    let mut manifest = [0u8; 32];
+    let mut chunk_root = [0u8; 32];
     binary.copy_from_slice(word(1));
     params.copy_from_slice(word(2));
     config.copy_from_slice(word(3));
+    package.copy_from_slice(word(4));
+    manifest.copy_from_slice(word(5));
+    chunk_root.copy_from_slice(word(6));
+    let mut size8 = [0u8; 8];
+    size8.copy_from_slice(&word(7)[24..32]);
     Some(ReleaseRef {
         version,
         binary,
         params,
         config,
+        package,
+        manifest,
+        chunk_root,
+        package_size: u64::from_be_bytes(size8),
     })
 }
 
@@ -155,31 +167,39 @@ mod tests {
 
     #[test]
     fn decodes_a_release_tuple() {
-        // Hand-build the 8-word ABI return for version 1.2.3, hashes 0x11.., 0x22.., 0x33..
+        // Hand-build the 12-word ABI return for version 1.2.3 and release hashes.
         let version: u64 = (1u64 << 32) | (2 << 16) | 3;
-        let mut out = vec![0u8; 32 * 8];
+        let mut out = vec![0u8; 32 * 12];
         out[24..32].copy_from_slice(&version.to_be_bytes());
         out[32..64].copy_from_slice(&[0x11u8; 32]);
         out[64..96].copy_from_slice(&[0x22u8; 32]);
         out[96..128].copy_from_slice(&[0x33u8; 32]);
-        // word7 revoked = 0
+        out[128..160].copy_from_slice(&[0x44u8; 32]);
+        out[160..192].copy_from_slice(&[0x55u8; 32]);
+        out[192..224].copy_from_slice(&[0x66u8; 32]);
+        out[248..256].copy_from_slice(&1234u64.to_be_bytes());
+        // word11 revoked = 0
         let r = decode_release(&out).expect("decoded");
         assert_eq!(r.version, version);
         assert_eq!(r.binary, [0x11; 32]);
         assert_eq!(r.params, [0x22; 32]);
         assert_eq!(r.config, [0x33; 32]);
+        assert_eq!(r.package, [0x44; 32]);
+        assert_eq!(r.manifest, [0x55; 32]);
+        assert_eq!(r.chunk_root, [0x66; 32]);
+        assert_eq!(r.package_size, 1234);
     }
 
     #[test]
     fn zero_version_is_none() {
-        assert!(decode_release(&[0u8; 32 * 8]).is_none());
+        assert!(decode_release(&[0u8; 32 * 12]).is_none());
     }
 
     #[test]
     fn revoked_is_none() {
-        let mut out = vec![0u8; 32 * 8];
+        let mut out = vec![0u8; 32 * 12];
         out[31] = 1; // version 1
-        out[32 * 8 - 1] = 1; // revoked = true
+        out[32 * 12 - 1] = 1; // revoked = true
         assert!(decode_release(&out).is_none());
     }
 
