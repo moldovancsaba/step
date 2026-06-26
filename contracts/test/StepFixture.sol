@@ -16,7 +16,7 @@ import {MiningClaimVerifier} from "../src/MiningClaimVerifier.sol";
 
 /// @notice Deploys the full alpha contract system with the protocol-parameter
 ///         registry's alpha defaults (config/protocol-params.alpha.json) and
-///         three protocol validators (weight 50 each, quorum 100 — two of three).
+///         three protocol validators (weight 50 each, quorum 101 — 2/3 + 1).
 abstract contract StepFixture is Test {
     // Alpha parameter defaults (UNFROZEN — mirror config/protocol-params.alpha.json).
     uint32 internal constant SLOTS = 27;
@@ -24,7 +24,7 @@ abstract contract StepFixture is Test {
     uint64 internal constant OPENING_DELAY = 0; // pilot config; non-zero tested separately
     uint64 internal constant COOLDOWN = 0; // pilot config; non-zero tested separately
     uint256 internal constant TWIN_BPS = 10_000;
-    uint256 internal constant QUORUM = 100;
+    uint256 internal constant QUORUM = 101;
     uint64 internal constant PARAM_DELAY = 1 days;
 
     address internal admin = makeAddr("admin");
@@ -142,7 +142,7 @@ abstract contract StepFixture is Test {
 
     function _finaliseNatural(bytes32 claimHash, string memory tri, address miner_) internal {
         verifier.finaliseNaturalClaim(
-            claimHash, tri, LEVEL, miner_, keccak256("cid"), _quorumSigs(claimHash, tri, miner_, 2)
+            claimHash, tri, LEVEL, miner_, keccak256("cid"), _quorumSigs(claimHash, tri, miner_, 3)
         );
     }
 }

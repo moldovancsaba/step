@@ -52,7 +52,7 @@ contract Deploy is Script {
     uint64 internal constant OPENING_DELAY = 0; // pilot config
     uint64 internal constant COOLDOWN = 3_600; // 1 h post-claim cooldown
     uint256 internal constant TWIN_BPS = 10_000; // 100% bootstrap twin
-    uint256 internal constant QUORUM_WEIGHT = 100; // two protocol validators (50+50)
+    uint256 internal constant QUORUM_WEIGHT = 101; // 2/3 + 1 of three 50-weight protocol validators
 
     function run() external {
         uint256 pk = vm.envUint("DEPLOYER_PRIVATE_KEY");

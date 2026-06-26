@@ -419,7 +419,7 @@ async function main() {
   start("fleet-api", "pnpm", ["--filter", "@step/fleet-api", "exec", "tsx", "src/index.ts"], {
     ...envLines,
     FLEET_PORT: String(PORTS.fleet),
-    STEP_QUORUM_THRESHOLD: "100",
+    STEP_QUORUM_THRESHOLD: "101",
   });
   await httpOk(`http://127.0.0.1:${PORTS.fleet}/healthz`);
 

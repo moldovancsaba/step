@@ -29,7 +29,7 @@ can mint Trinity alone. That weighted-quorum-on-a-shared-ledger is the
 ```
 anvil (chain :8545)
   └─ deploy contracts (ValidatorRegistry, MiningClaimVerifier, NFT, Marketplace…)
-  └─ register 3 validators on-chain (weight 50 each, quorum 100)
+  └─ register 3 validators on-chain (weight 50 each, quorum 101 = 2/3 + 1)
 3× validator-node (Rust)        :9101 :9102 :9103   ← trust centers
 gateway-api                     :8080               ← collects votes, submits to chain
 indexer                         :8090               ← oasis/desert projection

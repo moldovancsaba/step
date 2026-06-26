@@ -4,7 +4,7 @@
 
 ## 1. Validator identity and registry
 
-A validator is a secp256k1 keypair registered on-chain (`ValidatorRegistry`): type (MobilePeer/ApprovedPoint/Merchant/Venue/Infrastructure/Protocol), weight, status (Active/UnderReview/Suspended/Removed), stake slot. Only **Active** weight counts toward quorum; status and weight changes and slashes are events. Alpha set: foundation-registered Protocol validators (weight 50, quorum 100 ⇒ 2-of-3); registration is admin-gated (DEV §9.5 — no open market until fraud rules are field-proven).
+A validator is a secp256k1 keypair registered on-chain (`ValidatorRegistry`): type (MobilePeer/ApprovedPoint/Merchant/Venue/Infrastructure/Protocol), weight, status (Active/UnderReview/Suspended/Removed), stake slot. Only **Active** weight counts toward quorum; status and weight changes and slashes are events. Alpha set: foundation-registered Protocol validators (weight 50, quorum 101 ⇒ 2/3 + 1 of 150, so all three alpha validators); registration is admin-gated (DEV §9.5 — no open market until fraud rules are field-proven).
 
 ## 2. Node pipeline (every claim, deterministic)
 

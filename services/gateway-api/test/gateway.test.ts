@@ -94,7 +94,7 @@ function makeDeps(behaviour: {
   const deps: GatewayDeps = {
     nonceSecret: "gw-test-secret",
     nonceTtlSeconds: 120,
-    quorumThresholdWeight: 100n,
+    quorumThresholdWeight: 101n,
     validatorUrls: behaviour.validatorApproves.map((_, i) => `http://validator-${i}`),
     async validate(url, claim) {
       const i = Number(url.split("-")[1]);
@@ -194,9 +194,9 @@ describe("claim orchestration", () => {
     claim = await buildClaim();
   });
 
-  it("finalises with quorum (2 of 3 × weight 50 ≥ 100)", async () => {
+  it("finalises with quorum (3 of 3 × weight 50 ≥ 101)", async () => {
     const { deps, submitNatural, storeEvidence } = makeDeps({
-      validatorApproves: [true, true, false],
+      validatorApproves: [true, true, true],
     });
     const { app } = createApp(deps);
     const resp = await app.request("/v1/claims", {
@@ -229,7 +229,7 @@ describe("claim orchestration", () => {
     expect(submitNatural).not.toHaveBeenCalled();
   });
 
-  it("tolerates a dead validator when remaining weight suffices", async () => {
+  it("rejects when a dead validator leaves active approvals below 2/3 + 1", async () => {
     const { deps } = makeDeps({ validatorApproves: [true, true, true], failNode: 2 });
     const { app } = createApp(deps);
     const resp = await app.request("/v1/claims", {
@@ -237,7 +237,7 @@ describe("claim orchestration", () => {
       body: JSON.stringify({ claim }),
       headers: { "content-type": "application/json" },
     });
-    expect(((await resp.json()) as any).status).toBe("finalised");
+    expect(((await resp.json()) as any).status).toBe("rejected");
   });
 
   it("is idempotent on resubmission of the same claim", async () => {
@@ -317,9 +317,9 @@ describe("quorum aggregation (pure)", () => {
         { vote: mkVote(big), weight: 50n }, // duplicate collapses
         { vote: mkVote("0x00000000000000000000000000000000000000aa", false), weight: 50n },
       ],
-      100n,
+      101n,
     );
-    expect(result.reached).toBe(true);
+    expect(result.reached).toBe(false);
     expect(result.totalWeight).toBe(100n);
     expect(result.sortedApprovals.map((v) => v.validator)).toEqual([small, big]);
   });

@@ -61,7 +61,7 @@
 | TriangleMiningState | `triangle.post_claim_cooldown_s` | 3600 (deploy script) | any |
 | FoundationTreasury | `treasury.twin_bps` | 10000 | ≤ 10000 |
 | FoundationTreasury | `treasury.twin_cap_trinity` | 0 (uncapped) | any |
-| MiningClaimVerifier | `verifier.quorum_threshold_weight` | 100 | > 0 |
+| MiningClaimVerifier | `verifier.quorum_threshold_weight` | 101 | > 0 |
 
 The ≥1-Trinity curve floor is enforced three times: at parameter validation, re-validated at timelock apply, and as a `require` at consumption (defence in depth, HARD §4.3).
 

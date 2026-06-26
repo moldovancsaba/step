@@ -41,7 +41,7 @@ contract CampaignTest is StepFixture {
     function _sponsoredClaim(bytes32 id, bytes32 claimHash, address miner_) internal {
         verifier.finaliseSponsoredClaim(
             claimHash, TRI_A, id, miner_, keccak256("cid"),
-            _quorumSigs(claimHash, TRI_A_STRING, miner_, 2)
+            _quorumSigs(claimHash, TRI_A_STRING, miner_, 3)
         );
     }
 
@@ -76,7 +76,7 @@ contract CampaignTest is StepFixture {
         bytes32 id = _createApprovedFundedActive(CampaignRegistry.RefundPolicy.ReturnToMerchant);
         _sponsoredClaim(id, keccak256("wl-1"), miner);
         bytes32 ch = keccak256("wl-2");
-        MiningClaimVerifier.ValidatorSig[] memory sigs = _quorumSigs(ch, TRI_A_STRING, miner, 2);
+        MiningClaimVerifier.ValidatorSig[] memory sigs = _quorumSigs(ch, TRI_A_STRING, miner, 3);
         vm.expectRevert(
             abi.encodeWithSelector(CampaignRegistry.WalletLimitReached.selector, id, miner)
         );
@@ -86,7 +86,7 @@ contract CampaignTest is StepFixture {
     function test_claim_outside_campaign_triangle_rejected() public {
         bytes32 id = _createApprovedFundedActive(CampaignRegistry.RefundPolicy.ReturnToMerchant);
         bytes32 ch = keccak256("wrong-tri");
-        MiningClaimVerifier.ValidatorSig[] memory sigs = _quorumSigs(ch, TRI_B_STRING, miner, 2);
+        MiningClaimVerifier.ValidatorSig[] memory sigs = _quorumSigs(ch, TRI_B_STRING, miner, 3);
         vm.expectRevert(
             abi.encodeWithSelector(CampaignRegistry.TriangleNotInCampaign.selector, id, TRI_B)
         );
@@ -111,7 +111,7 @@ contract CampaignTest is StepFixture {
         campaigns.expireCampaign(id);
 
         bytes32 ch = keccak256("late");
-        MiningClaimVerifier.ValidatorSig[] memory sigs = _quorumSigs(ch, TRI_A_STRING, miner, 2);
+        MiningClaimVerifier.ValidatorSig[] memory sigs = _quorumSigs(ch, TRI_A_STRING, miner, 3);
         vm.expectRevert(); // BadStatus(Expired)
         verifier.finaliseSponsoredClaim(ch, TRI_A, id, miner, keccak256("cid"), sigs);
     }
@@ -178,7 +178,7 @@ contract CampaignTest is StepFixture {
         vm.prank(admin);
         campaigns.pauseCampaign(id, true);
         bytes32 ch = keccak256("paused-claim");
-        MiningClaimVerifier.ValidatorSig[] memory sigs = _quorumSigs(ch, TRI_A_STRING, miner, 2);
+        MiningClaimVerifier.ValidatorSig[] memory sigs = _quorumSigs(ch, TRI_A_STRING, miner, 3);
         vm.expectRevert();
         verifier.finaliseSponsoredClaim(ch, TRI_A, id, miner, keccak256("cid"), sigs);
 

@@ -114,6 +114,19 @@ if (!handover.includes("Trust Center role manifest contract exists")) {
   fail("handover.md does not record the Trust Center manifest contract delivery");
 }
 
+const protocolParams = JSON.parse(read("config/protocol-params.alpha.json"));
+if (protocolParams.validators?.quorum_threshold_weight?.value !== 101) {
+  fail("alpha quorum_threshold_weight must be 101 for 2/3 + 1 of three 50-weight validators");
+}
+const deployScript = read("contracts/script/Deploy.s.sol");
+if (!deployScript.includes("QUORUM_WEIGHT = 101")) {
+  fail("contract deployment default quorum is not 101");
+}
+const fixture = read("contracts/test/StepFixture.sol");
+if (!fixture.includes("QUORUM = 101")) {
+  fail("contract test fixture quorum is not 101");
+}
+
 read("packages/schemas/step.trust-center.manifest.v1.json");
 for (const manifestPath of [
   "config/trust-center.tribecca.example.json",

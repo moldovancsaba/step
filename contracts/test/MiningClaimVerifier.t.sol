@@ -13,7 +13,7 @@ contract MiningClaimVerifierTest is StepFixture {
     function test_natural_claim_mints_reward_and_twin() public {
         bytes32 claimHash = keccak256("claim-1");
         MiningClaimVerifier.ValidatorSig[] memory sigs =
-            _quorumSigs(claimHash, TRI_A_STRING, miner, 2);
+            _quorumSigs(claimHash, TRI_A_STRING, miner, 3);
 
         vm.expectEmit(true, true, false, true);
         emit MiningClaimVerifier.TriangleMined(TRI_A, miner, 0, BASE_REWARD, claimHash);
@@ -41,7 +41,7 @@ contract MiningClaimVerifierTest is StepFixture {
         _finaliseNatural(claimHash, TRI_A_STRING, miner);
 
         MiningClaimVerifier.ValidatorSig[] memory sigs =
-            _quorumSigs(claimHash, TRI_A_STRING, miner, 2);
+            _quorumSigs(claimHash, TRI_A_STRING, miner, 3);
         vm.expectRevert(
             abi.encodeWithSelector(MiningClaimVerifier.ClaimAlreadyFinalised.selector, claimHash)
         );
@@ -57,9 +57,9 @@ contract MiningClaimVerifierTest is StepFixture {
     function test_insufficient_quorum_rejected() public {
         bytes32 claimHash = keccak256("claim-quorum");
         MiningClaimVerifier.ValidatorSig[] memory sigs =
-            _quorumSigs(claimHash, TRI_A_STRING, miner, 1); // weight 50 < 100
+            _quorumSigs(claimHash, TRI_A_STRING, miner, 1); // weight 50 < 101
         vm.expectRevert(
-            abi.encodeWithSelector(MiningClaimVerifier.QuorumNotReached.selector, 50, 100)
+            abi.encodeWithSelector(MiningClaimVerifier.QuorumNotReached.selector, 50, 101)
         );
         verifier.finaliseNaturalClaim(claimHash, TRI_A_STRING, LEVEL, miner, CID, sigs);
     }
@@ -67,13 +67,13 @@ contract MiningClaimVerifierTest is StepFixture {
     function test_suspended_validator_contributes_no_weight() public {
         bytes32 claimHash = keccak256("claim-suspended");
         MiningClaimVerifier.ValidatorSig[] memory sigs =
-            _quorumSigs(claimHash, TRI_A_STRING, miner, 2);
+            _quorumSigs(claimHash, TRI_A_STRING, miner, 3);
 
         vm.prank(admin);
         validators.setStatus(valAddrs[1], ValidatorRegistry.ValidatorStatus.Suspended);
 
         vm.expectRevert(
-            abi.encodeWithSelector(MiningClaimVerifier.QuorumNotReached.selector, 50, 100)
+            abi.encodeWithSelector(MiningClaimVerifier.QuorumNotReached.selector, 100, 101)
         );
         verifier.finaliseNaturalClaim(claimHash, TRI_A_STRING, LEVEL, miner, CID, sigs);
     }
@@ -122,7 +122,7 @@ contract MiningClaimVerifierTest is StepFixture {
     function test_triangle_level_mismatch_rejected() public {
         bytes32 claimHash = keccak256("claim-level-mismatch");
         MiningClaimVerifier.ValidatorSig[] memory sigs =
-            _quorumSigs(claimHash, TRI_A_STRING, miner, 2);
+            _quorumSigs(claimHash, TRI_A_STRING, miner, 3);
         vm.expectRevert(
             abi.encodeWithSelector(MiningClaimVerifier.TriangleLevelMismatch.selector, LEVEL + 1, LEVEL)
         );
@@ -136,7 +136,7 @@ contract MiningClaimVerifierTest is StepFixture {
 
         bytes32 second = keccak256("claim-repeat-second");
         MiningClaimVerifier.ValidatorSig[] memory sigs =
-            _quorumSigs(second, TRI_A_STRING, miner, 2);
+            _quorumSigs(second, TRI_A_STRING, miner, 3);
         vm.expectRevert(
             abi.encodeWithSelector(TriangleMiningState.WalletAlreadyMined.selector, miner, TRI_A)
         );
@@ -147,7 +147,7 @@ contract MiningClaimVerifierTest is StepFixture {
         string memory malformed = "STEP-21-F00-1220330A03201032103";
         bytes32 claimHash = keccak256("claim-malformed");
         MiningClaimVerifier.ValidatorSig[] memory sigs =
-            _quorumSigs(claimHash, malformed, miner, 2);
+            _quorumSigs(claimHash, malformed, miner, 3);
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -164,7 +164,7 @@ contract MiningClaimVerifierTest is StepFixture {
 
         bytes32 claimHash = keccak256("claim-frozen");
         MiningClaimVerifier.ValidatorSig[] memory sigs =
-            _quorumSigs(claimHash, TRI_A_STRING, miner, 2);
+            _quorumSigs(claimHash, TRI_A_STRING, miner, 3);
         vm.expectRevert(
             abi.encodeWithSelector(MiningClaimVerifier.TriangleBlocked.selector, TRI_A)
         );
@@ -187,7 +187,7 @@ contract MiningClaimVerifierTest is StepFixture {
         assertEq(state.slotReward(SLOTS - 1), 1);
 
         bytes32 ch = keccak256("ex-final");
-        MiningClaimVerifier.ValidatorSig[] memory sigs = _quorumSigs(ch, TRI_A_STRING, miner, 2);
+        MiningClaimVerifier.ValidatorSig[] memory sigs = _quorumSigs(ch, TRI_A_STRING, miner, 3);
         vm.expectRevert(
             abi.encodeWithSelector(
                 TriangleMiningState.TriangleNotOpen.selector,
@@ -207,7 +207,7 @@ contract MiningClaimVerifierTest is StepFixture {
         access.setPaused(pauseMinting, true);
 
         bytes32 ch = keccak256("paused");
-        MiningClaimVerifier.ValidatorSig[] memory sigs = _quorumSigs(ch, TRI_A_STRING, miner, 2);
+        MiningClaimVerifier.ValidatorSig[] memory sigs = _quorumSigs(ch, TRI_A_STRING, miner, 3);
         vm.expectRevert(
             abi.encodeWithSelector(StepAccess.DomainIsPaused.selector, pauseMinting)
         );

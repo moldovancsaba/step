@@ -36,7 +36,7 @@
       "status": "UNFROZEN",
       "source": "SYS §12.4 example weights"
     },
-    "quorum_threshold_weight": { "value": 100, "status": "UNFROZEN", "requirement": "VAL-002", "comment": "alpha: 2 protocol validators or equivalent mix" }
+    "quorum_threshold_weight": { "value": 101, "status": "UNFROZEN", "requirement": "VAL-002", "comment": "alpha: 2/3 + 1 of three 50-weight protocol validators; requires 101 active approval weight" }
   },
   "campaigns": {
     "reference_price_eur_per_step": { "value": 1.0, "status": "UNFROZEN", "adr": "ADR-011", "comment": "pilot campaign accounting reference price only — not a market value or promise (HARD §8.4)" },

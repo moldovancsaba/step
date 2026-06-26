@@ -26,7 +26,7 @@ Admin console panels exist for pause, freeze/unfreeze (reason-coded), and valida
 
 ## 3. Drills (pilot gate M6.7)
 
-Before TestFlight: one full pause/unpause drill on the internal testnet (already exercised in tests and E2E), one triangle freeze/unfreeze drill, one validator-loss drill (kill 1 of 3 — quorum 100 of 150 still passes), one gateway-restart drill mid-claim (idempotent resubmission covers it). Record timings in this file's first revision.
+Before TestFlight: one full pause/unpause drill on the internal testnet (already exercised in tests and E2E), one triangle freeze/unfreeze drill, one validator-loss drill (kill 1 of 3 — quorum 101 of 150 must fail closed), one gateway-restart drill mid-claim (idempotent resubmission covers it). Record timings in this file's first revision.
 
 ## 4. Contact tree
 
