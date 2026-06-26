@@ -73,6 +73,8 @@ export interface FleetNode {
   address: string;
   location?: string;
   url: string;
+  transport?: string;
+  p2pAddress?: string;
   reachable: boolean;
   version?: string;
   targetVersion?: string;
@@ -173,7 +175,9 @@ export function buildFleetView(
       name: n.name,
       address: n.address,
       location: n.location,
-      url: n.url,
+      url: n.transport === "peer" ? n.p2pAddress ?? n.url : n.url,
+      transport: n.transport,
+      p2pAddress: n.p2pAddress,
       reachable: probe.reachable,
       version: probe.version,
       targetVersion: probe.targetVersion,

@@ -64,8 +64,11 @@ const client = createPublicClient({ chain, transport: http() });
 function listNodes(): DirectoryNode[] {
   if (!existsSync(directoryFile)) return [];
   try {
-    const dir = JSON.parse(readFileSync(directoryFile, "utf8")) as { nodes?: DirectoryNode[] };
-    return dir.nodes ?? [];
+    const dir = JSON.parse(readFileSync(directoryFile, "utf8")) as { nodes?: Array<DirectoryNode & { peer?: { gossip?: string } }> };
+    return (dir.nodes ?? []).map((node) => ({
+      ...node,
+      p2pAddress: node.p2pAddress ?? node.peer?.gossip,
+    }));
   } catch {
     return [];
   }

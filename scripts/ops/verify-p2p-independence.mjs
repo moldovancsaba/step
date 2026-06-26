@@ -102,6 +102,18 @@ if (!fleetApp.includes("stale_peer_record_sequence") || !fleetApp.includes("sequ
 if (!fleetApp.includes("public_url_must_be_https") || !fleetApp.includes("peer_record_ttl_too_long")) {
   fail("fleet peer directory does not fail closed on unsafe peer URLs or excessive TTL");
 }
+const fleetCore = read("services/fleet-api/src/fleet.ts");
+if (!fleetCore.includes('n.transport === "peer" ? n.p2pAddress ?? n.url : n.url')) {
+  fail("fleet view does not expose peer-native nodes by p2pAddress");
+}
+const fleetIndex = read("services/fleet-api/src/index.ts");
+if (!fleetIndex.includes("node.peer?.gossip") || !fleetIndex.includes('STEP_QUORUM_THRESHOLD", "101"')) {
+  fail("fleet runtime does not normalize nested peer gossip addresses or default quorum to 101");
+}
+const nodeList = read("scripts/node/list.mjs");
+if (!nodeList.includes("n.p2pAddress ?? n.peer?.gossip ?? n.url")) {
+  fail("node list does not display peer-native nodes by peer address");
+}
 
 const handover = read("handover.md");
 if (!handover.includes("2/3 + 1 quorum")) {
@@ -147,4 +159,5 @@ ok("join flow stores node identity in the OS secret backend");
 ok("legacy keyed bundles are explicit local-dev migration paths only");
 ok("keyless macOS Trust Center package path is present");
 ok("symmetric Trust Center role manifests validate");
+ok("peer-native fleet/list views use p2p addresses");
 ok("handover records quorum and Chappie identity migration");

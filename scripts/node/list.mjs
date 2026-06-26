@@ -85,7 +85,7 @@ for (const n of nodes) {
     name: n.name,
     type: n.type,
     location: n.location,
-    url: n.url,
+    url: peerNative ? n.p2pAddress ?? n.peer?.gossip ?? n.url : n.url,
     address: n.address,
     onchain: w,
     health: peerNative ? (healthy ? "peer" : "DOWN") : healthy ? "up" : "DOWN",
