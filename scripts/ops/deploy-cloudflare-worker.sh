@@ -3,10 +3,18 @@
 set -euo pipefail
 
 if [ -f .env ]; then
-  set -a
-  # shellcheck disable=SC1091
-  source .env
-  set +a
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+      ''|'#'*) continue ;;
+    esac
+    if [[ "$line" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; then
+      key="${line%%=*}"
+      value="${line#*=}"
+      if [ -z "${!key+x}" ]; then
+        export "$key=$value"
+      fi
+    fi
+  done < .env
 fi
 
 STEP_DEPLOY_ENV="${STEP_DEPLOY_ENV:-production}"
