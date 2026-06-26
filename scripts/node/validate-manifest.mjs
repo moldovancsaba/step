@@ -44,6 +44,7 @@ if (manifest.schema_version !== "step.trust-center.manifest.v1") {
 expectObject(manifest.node, "node");
 expectString(manifest.node.name, "node.name", /^[a-z0-9][a-z0-9-]{1,62}$/);
 expectString(manifest.node.address, "node.address", /^0x[0-9a-fA-F]{40}$/);
+expectString(manifest.node.transport, "node.transport", /^(http|peer)$/);
 expectString(manifest.node.platform, "node.platform");
 expectString(manifest.node.location, "node.location");
 expectString(manifest.node.identity_backend, "node.identity_backend");
@@ -134,6 +135,23 @@ for (const role of roles) {
 if (roles.has("bootstrap") && !roles.has("gossip")) fail("bootstrap role requires gossip role");
 if (roles.has("relay") && !roles.has("gossip")) fail("relay role requires gossip role");
 if (roles.has("validator") && !roles.has("agent")) fail("validator role requires agent role");
+
+if (manifest.peer !== undefined) {
+  expectObject(manifest.peer, "peer");
+  if (manifest.peer.bootstrap_peers !== undefined) expectStringArray(manifest.peer.bootstrap_peers, "peer.bootstrap_peers", true);
+  if (manifest.peer.relay_peers !== undefined) expectStringArray(manifest.peer.relay_peers, "peer.relay_peers", true);
+  if (manifest.peer.advertise !== undefined) expectStringArray(manifest.peer.advertise, "peer.advertise", true);
+}
+
+if (manifest.node.transport === "peer") {
+  const peer = manifest.peer ?? {};
+  const peerAddressCount =
+    (peer.bootstrap_peers?.length ?? 0) +
+    (peer.relay_peers?.length ?? 0) +
+    (peer.advertise?.length ?? 0);
+  if (!roles.has("gossip")) fail("peer transport requires gossip role");
+  if (peerAddressCount === 0) fail("peer transport requires bootstrap, relay, or advertise multiaddr");
+}
 
 if (manifest.node.identity_backend !== "keychain" && process.env.STEP_DEPLOY_ENV === "production") {
   fail("production manifests must use keychain identity_backend on macOS");

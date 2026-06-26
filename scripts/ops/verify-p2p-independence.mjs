@@ -83,6 +83,9 @@ if (!pkgBuilder.includes("trust-center.manifest.json") || !pkgBuilder.includes("
 for (const token of ["bootstrap-peers", "relay-peers", "advertise-peers", "GOSSIP_BOOTSTRAP", "GOSSIP_RELAYS"]) {
   if (!pkgBuilder.includes(token)) fail(`macOS package builder is missing peer seed support token ${token}`);
 }
+for (const token of ['"transport": "$TRANSPORT"', "GOSSIP_ADVERTISE=$ADVERTISE_PEERS"]) {
+  if (!pkgBuilder.includes(token)) fail(`macOS package builder is missing peer-native transport token ${token}`);
+}
 
 const installScript = read("scripts/node/install.sh");
 if (!installScript.includes("trust-center.manifest.json")) {
@@ -93,6 +96,9 @@ if (!installScript.includes('"schema_version": "step.trust-center.manifest.v1"')
 }
 for (const token of ["--bootstrap-peers", "--relay-peers", "--advertise-peers", "json_peer_array", "GOSSIP_BOOTSTRAP", "GOSSIP_RELAYS"]) {
   if (!installScript.includes(token)) fail(`shell Trust Center installer is missing peer seed support token ${token}`);
+}
+for (const token of ['"transport": "$TRANSPORT"', "--transport", "GOSSIP_ADVERTISE=$ADVERTISE_PEERS"]) {
+  if (!installScript.includes(token)) fail(`shell Trust Center installer is missing peer-native transport token ${token}`);
 }
 
 const fleetApp = read("services/fleet-api/src/app.ts");
@@ -140,6 +146,10 @@ if (!fixture.includes("QUORUM = 101")) {
 }
 
 read("packages/schemas/step.trust-center.manifest.v1.json");
+const manifestSchema = read("packages/schemas/step.trust-center.manifest.v1.json");
+if (!manifestSchema.includes('"transport"') || !manifestSchema.includes('"peer"')) {
+  fail("Trust Center manifest schema does not require explicit node transport");
+}
 for (const manifestPath of [
   "config/trust-center.tribecca.example.json",
   "config/trust-center.chappie.example.json"

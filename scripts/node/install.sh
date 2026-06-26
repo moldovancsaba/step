@@ -16,6 +16,7 @@ RPC=""; REGISTRY=""; PLATFORM_ID=""; ARTIFACT=""; NONCE_SECRET=""; FLEET=""; SHA
 BOOTSTRAP_PEERS="${STEP_TRUSTCENTER_BOOTSTRAP_PEERS:-}"
 RELAY_PEERS="${STEP_TRUSTCENTER_RELAY_PEERS:-}"
 ADVERTISE_PEERS="${STEP_TRUSTCENTER_ADVERTISE_PEERS:-}"
+TRANSPORT="${STEP_TRUSTCENTER_TRANSPORT:-}"
 PLATFORM="${STEP_PLATFORM:-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m)}"
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -29,6 +30,7 @@ while [ $# -gt 0 ]; do
     --bootstrap-peers) BOOTSTRAP_PEERS="$2"; shift 2;;
     --relay-peers) RELAY_PEERS="$2"; shift 2;;
     --advertise-peers) ADVERTISE_PEERS="$2"; shift 2;;
+    --transport) TRANSPORT="$2"; shift 2;;
     *) echo "unknown arg: $1" >&2; exit 2;;
   esac
 done
@@ -76,6 +78,16 @@ PY
 validate_peer_list "--bootstrap-peers" "$BOOTSTRAP_PEERS"
 validate_peer_list "--relay-peers" "$RELAY_PEERS"
 validate_peer_list "--advertise-peers" "$ADVERTISE_PEERS"
+if [ -z "$TRANSPORT" ]; then
+  TRANSPORT="http"
+  if [ -n "$BOOTSTRAP_PEERS$RELAY_PEERS$ADVERTISE_PEERS" ]; then
+    TRANSPORT="peer"
+  fi
+fi
+if [ "$TRANSPORT" != "http" ] && [ "$TRANSPORT" != "peer" ]; then
+  echo "[step-install] --transport must be http or peer" >&2
+  exit 2
+fi
 mv "$ROOT/step-node-agent.unverified" "$ROOT/step-node-agent"
 chmod +x "$ROOT/step-node-agent"
 echo "[step-install] ✓ binary sha256 verified"
@@ -104,6 +116,7 @@ ARTIFACT_BASE_URLS=$(dirname "$ARTIFACT")
 SECRET_BACKEND=${SECRET_BACKEND:-keychain}
 GOSSIP_BOOTSTRAP=$BOOTSTRAP_PEERS
 GOSSIP_RELAYS=$RELAY_PEERS
+GOSSIP_ADVERTISE=$ADVERTISE_PEERS
 ${FLEET:+FLEET_URL=$FLEET}
 EOF
 
@@ -119,11 +132,12 @@ cat > "$MANIFEST" <<EOF
   "node": {
     "name": "$NODE_NAME",
     "address": "$NODE_ADDRESS",
+    "transport": "$TRANSPORT",
     "platform": "$PLATFORM",
     "location": "local",
     "identity_backend": "${SECRET_BACKEND:-keychain}"
   },
-  "roles": ["agent", "validator"],
+  "roles": ["agent", "validator", "gossip"],
   "services": {
     "agent": {
       "enabled": true,
@@ -134,6 +148,10 @@ cat > "$MANIFEST" <<EOF
       "enabled": true,
       "bind": "127.0.0.1:9101",
       "healthz": "http://127.0.0.1:9101/healthz"
+    },
+    "gossip": {
+      "enabled": true,
+      "bind": "0.0.0.0:4001"
     }
   },
   "peer": {

@@ -14,7 +14,7 @@
 - The P2P independence release verifier now checks key custody, keyless packaging, quorum terminology, Chappie keychain migration, and Trust Center manifest validity.
 - `step-trustcenter provision` and the shell Trust Center installer now generate `trust-center.manifest.json` beside the node runtime, so each installed Trust Center has a local role/service/update/recovery contract.
 - Fleet peer announcements now use signed `step.peer-record.v1` records with monotonic `sequence`, HTTPS-only public URLs, bounded TTL, and stale-record rejection.
-- Trust Center pkg and shell installer now accept configurable `bootstrap-peers`, `relay-peers`, and `advertise-peers`, persist them as `GOSSIP_BOOTSTRAP` and `GOSSIP_RELAYS`, and write them into the local manifest.
+- Trust Center pkg and shell installer now accept configurable `bootstrap-peers`, `relay-peers`, `advertise-peers`, and explicit `transport`; peer-native installs persist `GOSSIP_BOOTSTRAP`, `GOSSIP_RELAYS`, `GOSSIP_ADVERTISE`, and write `node.transport = peer` into the local manifest.
 - Alpha quorum defaults now enforce `2/3 + 1 quorum`: three 50-weight protocol validators require threshold `101`, not `100`.
 
 ## Shared terminology
@@ -39,7 +39,7 @@ Correct target:
 
 - Tribecca is a Trust Center.
 - Chappie is a Trust Center.
-- Future Macs can become Trust Centers from the same package and runtime contract.
+- Future Macs can become Trust Centers from the same package and runtime contract; any third system installed with peer transport must expose libp2p multiaddrs and can be counted in quorum the same way as Chappie.
 - Roles such as bootstrap, relay, chain, gateway, indexer, validator, and artifact server are movable configuration, not hardcoded machine identity.
 
 ## GitHub artifacts created

@@ -3,6 +3,7 @@
   "node": {
     "name": "chappie",
     "address": "0xbb0b44e189c69357ac19b627b7d421968d2678bb",
+    "transport": "peer",
     "platform": "darwin-arm64",
     "location": "remote",
     "identity_backend": "keychain"

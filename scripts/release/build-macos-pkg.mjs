@@ -89,6 +89,10 @@ CHAIN_ID="${chainId}"
 BOOTSTRAP_PEERS="${bootstrapPeers}"
 RELAY_PEERS="${relayPeers}"
 ADVERTISE_PEERS="${advertisePeers}"
+TRANSPORT="http"
+if [ -n "$BOOTSTRAP_PEERS$RELAY_PEERS$ADVERTISE_PEERS" ]; then
+  TRANSPORT="peer"
+fi
 VALIDATOR_PORT="\${STEP_VALIDATOR_PORT:-9101}"
 AGENT_PORT="\${STEP_AGENT_PORT:-9200}"
 SERVICE="app.step.node"
@@ -138,6 +142,7 @@ AGENT_INTEGRITY_INTERVAL=120
 AGENT_WATCH_ATTEMPTS=20
 GOSSIP_BOOTSTRAP=$BOOTSTRAP_PEERS
 GOSSIP_RELAYS=$RELAY_PEERS
+GOSSIP_ADVERTISE=$ADVERTISE_PEERS
 ENV
 }
 
@@ -149,11 +154,12 @@ write_manifest() {
   "node": {
     "name": "$(hostname -s | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9-' | cut -c1-63)",
     "address": "$addr",
+    "transport": "$TRANSPORT",
     "platform": "$PLATFORM",
     "location": "local",
     "identity_backend": "keychain"
   },
-  "roles": ["agent", "validator"],
+  "roles": ["agent", "validator", "gossip"],
   "services": {
     "agent": {
       "enabled": true,
@@ -164,6 +170,10 @@ write_manifest() {
       "enabled": true,
       "bind": "127.0.0.1:$VALIDATOR_PORT",
       "healthz": "http://127.0.0.1:$VALIDATOR_PORT/healthz"
+    },
+    "gossip": {
+      "enabled": true,
+      "bind": "0.0.0.0:4001"
     }
   },
   "peer": {

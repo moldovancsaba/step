@@ -3,6 +3,7 @@
   "node": {
     "name": "tribecca",
     "address": "0x6f6421a07fef68c0c782bd68c83f1ea347782ce9",
+    "transport": "peer",
     "platform": "darwin-arm64",
     "location": "this-machine",
     "identity_backend": "keychain"
