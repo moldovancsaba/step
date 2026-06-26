@@ -17,6 +17,7 @@ BOOTSTRAP_PEERS="${STEP_TRUSTCENTER_BOOTSTRAP_PEERS:-}"
 RELAY_PEERS="${STEP_TRUSTCENTER_RELAY_PEERS:-}"
 ADVERTISE_PEERS="${STEP_TRUSTCENTER_ADVERTISE_PEERS:-}"
 TRANSPORT="${STEP_TRUSTCENTER_TRANSPORT:-}"
+SURVIVAL_TIER="${STEP_TRUSTCENTER_SURVIVAL_TIER:-edge}"
 PLATFORM="${STEP_PLATFORM:-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m)}"
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -31,6 +32,7 @@ while [ $# -gt 0 ]; do
     --relay-peers) RELAY_PEERS="$2"; shift 2;;
     --advertise-peers) ADVERTISE_PEERS="$2"; shift 2;;
     --transport) TRANSPORT="$2"; shift 2;;
+    --survival-tier) SURVIVAL_TIER="$2"; shift 2;;
     *) echo "unknown arg: $1" >&2; exit 2;;
   esac
 done
@@ -87,6 +89,14 @@ fi
 if [ "$TRANSPORT" != "http" ] && [ "$TRANSPORT" != "peer" ]; then
   echo "[step-install] --transport must be http or peer" >&2
   exit 2
+fi
+if [ "$SURVIVAL_TIER" != "edge" ] && [ "$SURVIVAL_TIER" != "full" ]; then
+  echo "[step-install] --survival-tier must be edge or full" >&2
+  exit 2
+fi
+SURVIVAL_FULL=false
+if [ "$SURVIVAL_TIER" = "full" ]; then
+  SURVIVAL_FULL=true
 fi
 mv "$ROOT/step-node-agent.unverified" "$ROOT/step-node-agent"
 chmod +x "$ROOT/step-node-agent"
@@ -180,6 +190,14 @@ cat > "$MANIFEST" <<EOF
     "rollback": {
       "enabled": true,
       "last_good_required": true
+    },
+    "disaster_survival": {
+      "tier": "$SURVIVAL_TIER",
+      "requires_independent_gateway": $SURVIVAL_FULL,
+      "requires_independent_fleet": $SURVIVAL_FULL,
+      "requires_independent_chain_rpc": $SURVIVAL_FULL,
+      "requires_independent_validator": true,
+      "requires_independent_gossip": true
     }
   },
   "observability": {

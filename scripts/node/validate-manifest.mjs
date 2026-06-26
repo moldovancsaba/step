@@ -100,6 +100,19 @@ expectNumber(manifest.recovery.restart.max_attempts, "recovery.restart.max_attem
 expectObject(manifest.recovery.rollback, "recovery.rollback");
 expectBoolean(manifest.recovery.rollback.enabled, "recovery.rollback.enabled");
 expectBoolean(manifest.recovery.rollback.last_good_required, "recovery.rollback.last_good_required");
+if (manifest.recovery.disaster_survival !== undefined) {
+  expectObject(manifest.recovery.disaster_survival, "recovery.disaster_survival");
+  expectString(manifest.recovery.disaster_survival.tier, "recovery.disaster_survival.tier", /^(edge|full)$/);
+  for (const key of [
+    "requires_independent_gateway",
+    "requires_independent_fleet",
+    "requires_independent_chain_rpc",
+    "requires_independent_validator",
+    "requires_independent_gossip"
+  ]) {
+    expectBoolean(manifest.recovery.disaster_survival[key], `recovery.disaster_survival.${key}`);
+  }
+}
 
 expectObject(manifest.observability, "observability");
 expectString(manifest.observability.healthz, "observability.healthz", /^https?:\/\//);
@@ -151,6 +164,21 @@ if (manifest.node.transport === "peer") {
     (peer.advertise?.length ?? 0);
   if (!roles.has("gossip")) fail("peer transport requires gossip role");
   if (peerAddressCount === 0) fail("peer transport requires bootstrap, relay, or advertise multiaddr");
+}
+
+if (manifest.recovery.disaster_survival?.tier === "full") {
+  const requiredFullServices = {
+    requires_independent_gateway: "gateway",
+    requires_independent_fleet: "fleet",
+    requires_independent_chain_rpc: "chain_rpc",
+    requires_independent_validator: "validator",
+    requires_independent_gossip: "gossip"
+  };
+  for (const [flag, service] of Object.entries(requiredFullServices)) {
+    if (manifest.recovery.disaster_survival[flag] && manifest.services?.[service]?.enabled !== true) {
+      fail(`full disaster survival requires enabled service ${service}`);
+    }
+  }
 }
 
 if (manifest.node.identity_backend !== "keychain" && process.env.STEP_DEPLOY_ENV === "production") {

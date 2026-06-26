@@ -89,6 +89,14 @@
     "rollback": {
       "enabled": true,
       "last_good_required": true
+    },
+    "disaster_survival": {
+      "tier": "full",
+      "requires_independent_gateway": true,
+      "requires_independent_fleet": true,
+      "requires_independent_chain_rpc": true,
+      "requires_independent_validator": true,
+      "requires_independent_gossip": true
     }
   },
   "observability": {

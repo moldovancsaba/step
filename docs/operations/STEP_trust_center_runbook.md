@@ -199,6 +199,17 @@ from chain** (M8) — you never re-package or re-deliver.
   `app.step.backend-tunnel` (`node scripts/ops/backend-tunnel.mjs --install`).
 - **Each trust center**: the agent LaunchAgent above + the agent's own failsafe
   rollback/restart of the validator.
+- **Disaster survival is a release gate, not a promise.** A Trust Center that
+  claims `recovery.disaster_survival.tier = full` in
+  `trust-center.manifest.json` must run independent gateway, fleet, chain RPC,
+  validator, and gossip services. Verify it with:
+  ```bash
+  pnpm release:disaster-survival:verify
+  ```
+  The drill intentionally stops Tribecca gateway/fleet/validator launchd
+  services, probes the remote Trust Center, and restores Tribecca before exit. If
+  any remote endpoint is missing, the release fails and the deployment is not
+  disaster-proof.
 
 > Optional P2P layer: a center that should also gossip claims/votes peer-to-peer
 > runs `step-gossip-node` alongside the validator (#54) — see the architecture doc

@@ -190,6 +190,29 @@
             "enabled": { "type": "boolean" },
             "last_good_required": { "type": "boolean" }
           }
+        },
+        "disaster_survival": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "tier",
+            "requires_independent_gateway",
+            "requires_independent_fleet",
+            "requires_independent_chain_rpc",
+            "requires_independent_validator",
+            "requires_independent_gossip"
+          ],
+          "properties": {
+            "tier": {
+              "type": "string",
+              "enum": ["edge", "full"]
+            },
+            "requires_independent_gateway": { "type": "boolean" },
+            "requires_independent_fleet": { "type": "boolean" },
+            "requires_independent_chain_rpc": { "type": "boolean" },
+            "requires_independent_validator": { "type": "boolean" },
+            "requires_independent_gossip": { "type": "boolean" }
+          }
         }
       }
     },

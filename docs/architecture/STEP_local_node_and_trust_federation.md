@@ -147,6 +147,14 @@ Net trust property (unchanged by transport): **a claim is real iff a weighted
 quorum of registered trust centers independently signed it.** Compromising one
 location cannot mint Trinity or forge ownership.
 
+Disaster-survival property: a Trust Center is only **full survival** when its
+manifest declares `recovery.disaster_survival.tier = full` and it independently
+serves gateway, fleet, chain RPC, validator, and gossip paths while another
+center is down. This is verified by `pnpm release:disaster-survival:verify`,
+which stops Tribecca gateway/fleet/validators, probes the remote center, and
+restores Tribecca. Peer-native representation in quorum is necessary, but not
+sufficient, for disaster proofing.
+
 ## 5. The one decision that's yours: how locations connect
 
 Everything above is software we control. The remaining choice is **physical

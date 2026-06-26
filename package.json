@@ -25,7 +25,8 @@
     "lint": "pnpm -r lint",
     "release:public-edge:verify": "node scripts/ops/verify-public-edge.mjs",
     "release:p2p-independence:verify": "node scripts/ops/verify-p2p-independence.mjs",
-    "release:live-federation:verify": "node scripts/ops/verify-live-federation.mjs"
+    "release:live-federation:verify": "node scripts/ops/verify-live-federation.mjs",
+    "release:disaster-survival:verify": "node scripts/ops/verify-disaster-survival.mjs"
   },
   "packageManager": "pnpm@11.5.1"
 }

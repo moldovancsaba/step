@@ -86,6 +86,9 @@ for (const token of ["bootstrap-peers", "relay-peers", "advertise-peers", "GOSSI
 for (const token of ['"transport": "$TRANSPORT"', "GOSSIP_ADVERTISE=$ADVERTISE_PEERS"]) {
   if (!pkgBuilder.includes(token)) fail(`macOS package builder is missing peer-native transport token ${token}`);
 }
+for (const token of ["survival-tier", '"disaster_survival"', "requires_independent_gateway"]) {
+  if (!pkgBuilder.includes(token)) fail(`macOS package builder is missing disaster survival token ${token}`);
+}
 
 const installScript = read("scripts/node/install.sh");
 if (!installScript.includes("trust-center.manifest.json")) {
@@ -99,6 +102,9 @@ for (const token of ["--bootstrap-peers", "--relay-peers", "--advertise-peers", 
 }
 for (const token of ['"transport": "$TRANSPORT"', "--transport", "GOSSIP_ADVERTISE=$ADVERTISE_PEERS"]) {
   if (!installScript.includes(token)) fail(`shell Trust Center installer is missing peer-native transport token ${token}`);
+}
+for (const token of ["--survival-tier", '"disaster_survival"', "requires_independent_gateway"]) {
+  if (!installScript.includes(token)) fail(`shell Trust Center installer is missing disaster survival token ${token}`);
 }
 
 const fleetApp = read("services/fleet-api/src/app.ts");
@@ -150,6 +156,9 @@ const manifestSchema = read("packages/schemas/step.trust-center.manifest.v1.json
 if (!manifestSchema.includes('"transport"') || !manifestSchema.includes('"peer"')) {
   fail("Trust Center manifest schema does not require explicit node transport");
 }
+if (!manifestSchema.includes('"disaster_survival"') || !manifestSchema.includes('"tier"')) {
+  fail("Trust Center manifest schema does not define disaster survival requirements");
+}
 for (const manifestPath of [
   "config/trust-center.tribecca.example.json",
   "config/trust-center.chappie.example.json"
@@ -171,3 +180,4 @@ ok("keyless macOS Trust Center package path is present");
 ok("symmetric Trust Center role manifests validate");
 ok("peer-native fleet/list views use p2p addresses");
 ok("handover records quorum and Chappie identity migration");
+ok("disaster survival contract is present in installer, manifest schema, and release gates");

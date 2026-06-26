@@ -35,6 +35,7 @@ const chainId = flag("chain-id", process.env.STEP_CHAIN_ID ?? "262144");
 const bootstrapPeers = flag("bootstrap-peers", process.env.STEP_TRUSTCENTER_BOOTSTRAP_PEERS ?? "");
 const relayPeers = flag("relay-peers", process.env.STEP_TRUSTCENTER_RELAY_PEERS ?? "");
 const advertisePeers = flag("advertise-peers", process.env.STEP_TRUSTCENTER_ADVERTISE_PEERS ?? "");
+const survivalTier = flag("survival-tier", process.env.STEP_TRUSTCENTER_SURVIVAL_TIER ?? "edge");
 const agentBin = flag("bin", join(ROOT, "target/release/step-node-agent"));
 const identifier = flag("identifier", "com.regiominer.step.trustcenter");
 
@@ -43,6 +44,7 @@ if (!/^https?:\/\//.test(rpc)) die("--rpc must be an HTTP(S) URL");
 if (!/^https?:\/\//.test(artifacts)) die("--artifacts must be an HTTP(S) URL");
 if (fleet && !/^https?:\/\//.test(fleet)) die("--fleet must be empty or an HTTP(S) URL");
 if (verifier && !/^0x[0-9a-fA-F]{40}$/.test(verifier)) die("--verifier must be empty or a 0x-prefixed address");
+if (!["edge", "full"].includes(survivalTier)) die("--survival-tier must be edge or full");
 if (!existsSync(agentBin)) die(`agent binary not found at ${agentBin}; build with: cargo build -p step-node-agent --release`);
 const peerList = (raw, name) => raw.split(",").map((s) => s.trim()).filter(Boolean).map((peer) => {
   if (!peer.startsWith("/")) die(`--${name} entries must be libp2p multiaddrs`);
@@ -89,6 +91,11 @@ CHAIN_ID="${chainId}"
 BOOTSTRAP_PEERS="${bootstrapPeers}"
 RELAY_PEERS="${relayPeers}"
 ADVERTISE_PEERS="${advertisePeers}"
+SURVIVAL_TIER="${survivalTier}"
+SURVIVAL_FULL=false
+if [ "$SURVIVAL_TIER" = "full" ]; then
+  SURVIVAL_FULL=true
+fi
 TRANSPORT="http"
 if [ -n "$BOOTSTRAP_PEERS$RELAY_PEERS$ADVERTISE_PEERS" ]; then
   TRANSPORT="peer"
@@ -202,6 +209,14 @@ write_manifest() {
     "rollback": {
       "enabled": true,
       "last_good_required": true
+    },
+    "disaster_survival": {
+      "tier": "$SURVIVAL_TIER",
+      "requires_independent_gateway": $SURVIVAL_FULL,
+      "requires_independent_fleet": $SURVIVAL_FULL,
+      "requires_independent_chain_rpc": $SURVIVAL_FULL,
+      "requires_independent_validator": true,
+      "requires_independent_gossip": true
     }
   },
   "observability": {
