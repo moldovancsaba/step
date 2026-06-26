@@ -1,7 +1,7 @@
 # fastlane Appfile — App Store Connect identity for the STEP app.
 # Fill apple_id / team ids before running deliver/pilot. Keep credentials out of
 # VCS: use APP_STORE_CONNECT_API_KEY or `fastlane spaceauth` / env vars in CI.
-app_identifier("app.step.miner")
+app_identifier("com.regiominer.miner")
 apple_id(ENV["FASTLANE_APPLE_ID"] || "moldovancsaba@gmail.com")
 # team_id("XXXXXXXXXX")          # Developer Portal team id
 # itc_team_id("XXXXXXXX")        # App Store Connect team id

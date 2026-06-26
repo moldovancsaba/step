@@ -17,6 +17,9 @@
     "deploy:cloudflare-worker:strict": "bash scripts/ops/deploy-cloudflare-worker.sh",
     "dev:full-stack": "node scripts/dev/start-full-stack.mjs",
     "start:non-sandbox-webapp": "node scripts/start-non-sandbox.mjs",
+    "release:macos-pkg": "node scripts/release/build-macos-pkg.mjs",
+    "release:macos-pkg:test": "node scripts/release/test-macos-pkg-e2e.mjs",
+    "release:macos-pkg:notarize": "node scripts/release/notarize-macos-pkg.mjs",
     "typecheck": "pnpm -r typecheck",
     "lint": "pnpm -r lint"
   },

@@ -65,6 +65,22 @@ const params = parseProtocolParams(
 const deployments = JSON.parse(readFileSync(env("STEP_DEPLOYMENTS_FILE"), "utf8"));
 const verifierAddress = deployments.MiningClaimVerifier as Address;
 const validatorRegistryAddress = deployments.ValidatorRegistry as Address;
+const trustCenterRegistryAddress = (deployments.TrustCenterRegistry ?? process.env.TRUST_CENTER_REGISTRY) as Address | undefined;
+
+const TRUST_CENTER_REGISTRY_ABI = [
+  { type: "function", name: "pairNode", stateMutability: "nonpayable", inputs: [
+    { name: "node", type: "address" },
+    { name: "owner", type: "address" },
+    { name: "challenge", type: "bytes32" },
+    { name: "expiresAt", type: "uint64" },
+    { name: "ownerSignature", type: "bytes" },
+  ], outputs: [] },
+  { type: "function", name: "nodeOwner", stateMutability: "view", inputs: [{ name: "node", type: "address" }], outputs: [{ name: "", type: "address" }] },
+  { type: "function", name: "rewardRecipient", stateMutability: "view", inputs: [{ name: "node", type: "address" }], outputs: [{ name: "", type: "address" }] },
+  { type: "function", name: "nodeStatus", stateMutability: "view", inputs: [{ name: "node", type: "address" }], outputs: [{ name: "", type: "uint8" }] },
+] as const;
+const TRUST_CENTER_STATUS = ["none", "pending", "active", "suspended", "revoked"] as const;
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as Address;
 
 const chain = defineChain({
   id: params.chainId,
@@ -124,6 +140,7 @@ interface NodeDirectoryEntry {
   name?: string;
   weight?: number;
   status?: string;
+  transport?: string;
 }
 function directoryUrls(): string[] {
   const file = process.env.NODE_DIRECTORY_FILE;
@@ -131,7 +148,12 @@ function directoryUrls(): string[] {
   try {
     const dir = JSON.parse(readFileSync(file, "utf8")) as { nodes?: NodeDirectoryEntry[] };
     return (dir.nodes ?? [])
-      .filter((n) => (n.status ?? "active") === "active" && typeof n.url === "string")
+      .filter(
+        (n) =>
+          (n.status ?? "active") === "active" &&
+          (n.transport ?? "http") !== "peer" &&
+          typeof n.url === "string",
+      )
       .map((n) => n.url.trim());
   } catch {
     return []; // a malformed/half-written directory must never break quorum
@@ -226,6 +248,51 @@ const deps: GatewayDeps = {
     });
     return Number(status);
   },
+
+  trustCenters: trustCenterRegistryAddress
+    ? {
+        async pairNode(req) {
+          const { request } = await publicClient.simulateContract({
+            address: trustCenterRegistryAddress,
+            abi: TRUST_CENTER_REGISTRY_ABI,
+            functionName: "pairNode",
+            args: [req.nodeAddress, req.ownerWallet, req.challenge, BigInt(req.expiresAt), req.signature],
+            account: relayer,
+          });
+          const txHash = await walletClient.writeContract(request);
+          const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+          if (receipt.status !== "success") throw new Error(`tx ${txHash} reverted`);
+          return txHash;
+        },
+        async status(nodeAddress) {
+          const [owner, recipient, statusRaw, activeWeight] = await Promise.all([
+            publicClient.readContract({ address: trustCenterRegistryAddress, abi: TRUST_CENTER_REGISTRY_ABI, functionName: "nodeOwner", args: [nodeAddress] }) as Promise<Address>,
+            publicClient.readContract({ address: trustCenterRegistryAddress, abi: TRUST_CENTER_REGISTRY_ABI, functionName: "rewardRecipient", args: [nodeAddress] }) as Promise<Address>,
+            publicClient.readContract({ address: trustCenterRegistryAddress, abi: TRUST_CENTER_REGISTRY_ABI, functionName: "nodeStatus", args: [nodeAddress] }) as Promise<number>,
+            publicClient.readContract({ address: validatorRegistryAddress, abi: ValidatorRegistryAbi, functionName: "activeWeight", args: [nodeAddress] }) as Promise<bigint>,
+          ]);
+          const nodeStatus = TRUST_CENTER_STATUS[Number(statusRaw)] ?? "none";
+          const hasOwner = owner.toLowerCase() !== ZERO_ADDRESS;
+          const nextAction = !hasOwner
+            ? "pair_wallet"
+            : nodeStatus === "pending"
+              ? "wait_for_validator_activation"
+              : nodeStatus === "active" && activeWeight > 0n
+                ? "running"
+                : nodeStatus === "revoked"
+                  ? "contact_support_or_reprovision"
+                  : "check_node_health_or_activation";
+          return {
+            nodeAddress,
+            ownerWallet: hasOwner ? (owner.toLowerCase() as Address) : undefined,
+            rewardRecipient: recipient.toLowerCase() !== ZERO_ADDRESS ? (recipient.toLowerCase() as Address) : undefined,
+            status: nodeStatus,
+            activeWeight: activeWeight.toString(),
+            nextAction,
+          };
+        },
+      }
+    : undefined,
   // Abuse controls (#61/#65). Limits are config; default to permissive (trusted
   // LAN). Tighten these whenever the gateway is publicly exposed via the tunnel.
   rateLimit: {

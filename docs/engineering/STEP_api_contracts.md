@@ -40,3 +40,35 @@ ClaimRecord: `{claim_hash, triangle_id, triangle_id_hash, miner, campaign_id?, s
 ## On-chain interface
 
 The contract ABI set is generated to `@step/shared-types/abis` by `scripts/dev/extract-abis.mjs` after `forge build`; function/event surfaces are specified in the [contract specification](../smart-contracts/STEP_contract_specification.md). Address book per chain: `contracts/deployments/{chainId}.json`.
+
+## Trust Center onboarding API
+
+Trust Center onboarding is defined in detail in `docs/trust-center-onboarding-api.md`.
+
+### POST /v1/trust-centers/pair
+
+Pairs a locally generated desktop node identity to a mobile wallet. The gateway validates payload shape and relays `TrustCenterRegistry.pairNode`.
+
+Required body:
+
+```json
+{
+  "type": "step.trustcenter.pair",
+  "version": 1,
+  "nodeAddress": "0x...",
+  "ownerWallet": "0x...",
+  "challenge": "0x...bytes32",
+  "expiresAt": 1800000000,
+  "signature": "0x..."
+}
+```
+
+Success returns ownership, reward recipient, status, active validator weight, next action, and transaction hash.
+
+### GET /v1/trust-centers/:nodeAddress
+
+Returns onboarding/runtime status for a Trust Center node. Wallet ownership and validator activation are separate fields; a paired node can be `pending` with zero validator weight.
+
+### GET /v1/trust-centers/:nodeAddress/onboarding-status
+
+Mobile/installer polling alias for the same status record.

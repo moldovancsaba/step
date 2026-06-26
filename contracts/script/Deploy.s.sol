@@ -9,6 +9,7 @@ import {SafetyRegistry} from "../src/SafetyRegistry.sol";
 import {ValidatorRegistry} from "../src/ValidatorRegistry.sol";
 import {ReleaseRegistry} from "../src/ReleaseRegistry.sol";
 import {IntegrityAttestation} from "../src/IntegrityAttestation.sol";
+import {TrustCenterRegistry} from "../src/TrustCenterRegistry.sol";
 import {TriangleMiningState} from "../src/TriangleMiningState.sol";
 import {FoundationTreasury} from "../src/FoundationTreasury.sol";
 import {ProofRegistry} from "../src/ProofRegistry.sol";
@@ -37,6 +38,7 @@ contract Deploy is Script {
     ValidatorRegistry internal validators;
     ReleaseRegistry internal releases;
     IntegrityAttestation internal integrity;
+    TrustCenterRegistry internal trustCenters;
     TriangleMiningState internal state;
     FoundationTreasury internal treasury;
     ProofRegistry internal proofs;
@@ -70,6 +72,7 @@ contract Deploy is Script {
         validators = new ValidatorRegistry(access);
         releases = new ReleaseRegistry(access);
         integrity = new IntegrityAttestation(access, validators);
+        trustCenters = new TrustCenterRegistry(access);
         state = new TriangleMiningState(
             access, paramDelay, SLOTS, BASE_REWARD, OPENING_DELAY, COOLDOWN
         );
@@ -120,6 +123,7 @@ contract Deploy is Script {
         vm.serializeAddress(json, "ValidatorRegistry", address(validators));
         vm.serializeAddress(json, "ReleaseRegistry", address(releases));
         vm.serializeAddress(json, "IntegrityAttestation", address(integrity));
+        vm.serializeAddress(json, "TrustCenterRegistry", address(trustCenters));
         vm.serializeAddress(json, "TriangleMiningState", address(state));
         vm.serializeAddress(json, "FoundationTreasury", address(treasury));
         vm.serializeAddress(json, "ProofRegistry", address(proofs));

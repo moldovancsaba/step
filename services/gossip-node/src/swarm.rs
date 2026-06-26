@@ -72,7 +72,7 @@ async fn validate_and_sign(
     validator_url: &str,
     claim: &ClaimMsg,
 ) -> Option<VoteMsg> {
-    let url = format!("{}/validate", validator_url.trim_end_matches('/'));
+    let url = format!("{}/v1/validate", validator_url.trim_end_matches('/'));
     let body = serde_json::json!({ "claim": claim.claim });
     let resp = client.post(&url).json(&body).send().await.ok()?;
     if !resp.status().is_success() {
@@ -300,6 +300,7 @@ where
                         engine.ingest_vote(vote, &|a| weights.get(a).copied().unwrap_or(0))
                     }
                     Gossip::Claim(claim) => {
+                        engine.remember_claim(&claim);
                         match validate_and_sign(&http, &cfg.validator_url, &claim).await {
                             Some(my_vote) => {
                                 cache_weight(&mut weights, &weight_of, my_vote.validator_address())
@@ -340,6 +341,15 @@ where
                 // no DNS, no IP bookkeeping, just copy the dialable peer address.
                 let dialable = address.clone().with(Protocol::P2p(*swarm.local_peer_id()));
                 tracing::info!(%dialable, "listening (use this as a peer's bootstrap/relay address)");
+            }
+            SwarmEvent::ConnectionEstablished { peer_id, .. } => {
+                tracing::info!(%peer_id, "p2p connection established");
+            }
+            SwarmEvent::OutgoingConnectionError { peer_id, error, .. } => {
+                tracing::warn!(?peer_id, %error, "p2p outgoing connection failed");
+            }
+            SwarmEvent::IncomingConnectionError { error, .. } => {
+                tracing::warn!(%error, "p2p incoming connection failed");
             }
             _ => {}
         }

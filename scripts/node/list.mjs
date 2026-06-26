@@ -73,10 +73,13 @@ let totalActive = 0n;
 const rows = [];
 for (const n of nodes) {
   const w = onchainWeight(n.address);
-  const info = await liveInfo(n.url);
-  const healthy = info !== null;
+  const peerNative = (n.transport ?? "http") === "peer";
+  const info = peerNative ? null : await liveInfo(n.url);
+  const healthy = peerNative ? /^\d+$/.test(w) && BigInt(w) > 0n : info !== null;
   // Trust = registered on-chain (weight>0) AND the live address matches.
-  const addrMatch = healthy && info.validator?.toLowerCase() === n.address.toLowerCase();
+  const addrMatch = peerNative
+    ? healthy
+    : healthy && info.validator?.toLowerCase() === n.address.toLowerCase();
   if (healthy && /^\d+$/.test(w)) totalActive += BigInt(w);
   rows.push({
     name: n.name,
@@ -85,8 +88,8 @@ for (const n of nodes) {
     url: n.url,
     address: n.address,
     onchain: w,
-    health: healthy ? "up" : "DOWN",
-    verified: addrMatch ? "yes" : healthy ? "ADDR-MISMATCH" : "-",
+    health: peerNative ? (healthy ? "peer" : "DOWN") : healthy ? "up" : "DOWN",
+    verified: addrMatch ? (peerNative ? "on-chain" : "yes") : healthy ? "ADDR-MISMATCH" : "-",
   });
 }
 

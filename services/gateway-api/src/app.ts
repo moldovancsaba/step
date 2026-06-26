@@ -57,7 +57,7 @@ function extractRevertReason(error: unknown): string {
   if (custom && custom[1]) return custom[1];
 
   const known = raw.match(
-    /\b(ClaimAlreadyFinalised|TriangleIdMalformed|TriangleLevelMismatch|ParentTriangleNotExhausted|TriangleBlocked|AccuracyTooLow|BoundaryAmbiguous|NonceRejected|WalletAlreadyMined|TriangleNotOpen|ParentNotExhausted|ClaimNotFound)\b/,
+    /\b(ClaimAlreadyFinalised|TriangleIdMalformed|TriangleLevelMismatch|ParentTriangleNotExhausted|TriangleBlocked|AccuracyTooLow|BoundaryAmbiguous|NonceRejected|WalletAlreadyMined|TriangleNotOpen|ParentNotExhausted|ClaimNotFound|PairingExpired|PairingReplay|InvalidOwnerSignature|NodeAlreadyOwned|NotNodeOwner|RevokedNode|ZeroAddress)\b/,
   );
   if (known && known[1]) return known[1];
 
@@ -70,6 +70,27 @@ function extractRevertReason(error: unknown): string {
   }
 
   return raw.trim();
+}
+
+export type TrustCenterNodeStatus = "none" | "pending" | "active" | "suspended" | "revoked";
+
+export interface TrustCenterStatusRecord {
+  nodeAddress: Address;
+  ownerWallet?: Address;
+  rewardRecipient?: Address;
+  status: TrustCenterNodeStatus;
+  activeWeight?: string;
+  nextAction: string;
+}
+
+export interface TrustCenterPairRequest {
+  type: "step.trustcenter.pair";
+  version: 1;
+  nodeAddress: Address;
+  ownerWallet: Address;
+  challenge: Hex;
+  expiresAt: number;
+  signature: Hex;
 }
 
 export interface GatewayDeps {
@@ -117,6 +138,10 @@ export interface GatewayDeps {
    *  the mineable frontier. Optional: when absent, the frontier endpoint is off. */
   triangleStatus?(triangleId: string): Promise<number>;
   /** Abuse controls for public exposure (#61/#65). Absent ⇒ limits off (trusted LAN). */
+  trustCenters?: {
+    pairNode(req: TrustCenterPairRequest): Promise<Hex>;
+    status(nodeAddress: Address): Promise<TrustCenterStatusRecord>;
+  };
   rateLimit?: {
     nowMs(): number;
     ipPerMin?: number;
@@ -167,6 +192,65 @@ export function createApp(deps: GatewayDeps) {
   }
 
   app.get("/healthz", (c) => c.text("ok"));
+
+
+  app.post("/v1/trust-centers/pair", async (c) => {
+    if (!deps.trustCenters) return c.json({ error: "trust center pairing unavailable" }, 503);
+    const body = (await c.req.json().catch(() => null)) as Partial<TrustCenterPairRequest> | null;
+    const nodeAddress = body?.nodeAddress?.toLowerCase() as Address | undefined;
+    const ownerWallet = body?.ownerWallet?.toLowerCase() as Address | undefined;
+    const challenge = body?.challenge as Hex | undefined;
+    const signature = body?.signature as Hex | undefined;
+    const expiresAt = Number(body?.expiresAt ?? 0);
+    if (body?.type !== "step.trustcenter.pair" || body?.version !== 1) {
+      return c.json({ error: "invalid_pairing_payload", nextAction: "scan_or_paste_new_pairing_payload" }, 400);
+    }
+    if (!nodeAddress || !/^0x[0-9a-f]{40}$/.test(nodeAddress)) {
+      return c.json({ error: "invalid_node_address", nextAction: "retry_provisioning" }, 400);
+    }
+    if (!ownerWallet || !/^0x[0-9a-f]{40}$/.test(ownerWallet)) {
+      return c.json({ error: "invalid_owner_wallet", nextAction: "unlock_wallet" }, 400);
+    }
+    if (!challenge || !/^0x[0-9a-fA-F]{64}$/.test(challenge)) {
+      return c.json({ error: "invalid_challenge", nextAction: "scan_or_paste_new_pairing_payload" }, 400);
+    }
+    if (!signature || !/^0x[0-9a-fA-F]+$/.test(signature)) {
+      return c.json({ error: "invalid_signature", nextAction: "sign_pairing_in_wallet" }, 400);
+    }
+    if (!Number.isFinite(expiresAt) || expiresAt <= deps.nowUnix()) {
+      return c.json({ error: "pairing_expired", nextAction: "run_step_trustcenter_provision_again" }, 400);
+    }
+    const req: TrustCenterPairRequest = {
+      type: "step.trustcenter.pair",
+      version: 1,
+      nodeAddress,
+      ownerWallet,
+      challenge,
+      expiresAt,
+      signature,
+    };
+    try {
+      const txHash = await deps.trustCenters.pairNode(req);
+      const status = await deps.trustCenters.status(nodeAddress);
+      return c.json({ ...status, txHash, nextAction: status.nextAction }, 200);
+    } catch (err) {
+      return c.json({ error: `chain_revert:${shorten(extractRevertReason(err), 220)}`, nextAction: "retry_or_contact_support" }, 409);
+    }
+  });
+
+  app.get("/v1/trust-centers/:nodeAddress", async (c) => {
+    if (!deps.trustCenters) return c.json({ error: "trust center registry unavailable" }, 503);
+    const nodeAddress = c.req.param("nodeAddress").toLowerCase() as Address;
+    if (!/^0x[0-9a-f]{40}$/.test(nodeAddress)) return c.json({ error: "invalid_node_address" }, 400);
+    return c.json(await deps.trustCenters.status(nodeAddress));
+  });
+
+  app.get("/v1/trust-centers/:nodeAddress/onboarding-status", async (c) => {
+    if (!deps.trustCenters) return c.json({ error: "trust center registry unavailable" }, 503);
+    const nodeAddress = c.req.param("nodeAddress").toLowerCase() as Address;
+    if (!/^0x[0-9a-f]{40}$/.test(nodeAddress)) return c.json({ error: "invalid_node_address" }, 400);
+    return c.json(await deps.trustCenters.status(nodeAddress));
+  });
 
   app.get("/v1/mesh/resolve", async (c) => {
     if (!meshUrl) return c.json({ error: "mesh API unavailable" }, 503);
@@ -399,6 +483,122 @@ export function createApp(deps: GatewayDeps) {
       record.reject_reasons = [
         `chain_revert:${shorten(chainReason, 220)}`,
       ];
+    }
+    return c.json(record, 200);
+  });
+
+  // Peer-native finalisation endpoint for `step-gossip-node`.
+  //
+  // A gossip node validates a claim locally, gossips the signed vote, aggregates
+  // a weighted quorum of peer votes, then posts the complete bundle here. This
+  // endpoint does NOT fan out to validators again and does NOT trust the gossip
+  // node's reported total weight. It recomputes claim identity, signature
+  // consistency, active weights, evidence storage, and lets the contract perform
+  // the final verification.
+  app.post("/v1/gossip/finalise", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as
+      | { claim?: Claim; approvals?: SignedVote[] }
+      | null;
+    const claim = body?.claim;
+    const approvals = body?.approvals ?? [];
+    if (!claim || claim.schema_version !== "step.proof.location.v1") {
+      return c.json({ error: "claim with schema step.proof.location.v1 required" }, 400);
+    }
+    if (!Array.isArray(approvals) || approvals.length === 0) {
+      return c.json({ error: "approval votes required" }, 400);
+    }
+
+    const ch = claimHash(canonicalClaimMessage(claim));
+    const th = triangleIdHash(claim.triangle_id);
+    const miner = claim.wallet_address.toLowerCase() as Address;
+    const existing = records.get(ch);
+    if (existing?.status === "finalised") return c.json(existing, 200);
+
+    const record: ClaimRecord =
+      existing ?? {
+        claim_hash: ch,
+        triangle_id: claim.triangle_id,
+        triangle_id_hash: th,
+        miner,
+        campaign_id: claim.campaign_id,
+        status: "validating",
+        reject_reasons: [],
+        votes: [],
+        submitted_at: new Date().toISOString(),
+      };
+    records.set(ch, record);
+
+    if (!votesAreConsistent(approvals, ch, th, miner)) {
+      record.status = "rejected";
+      record.reject_reasons = ["inconsistent_votes"];
+      return c.json(record, 200);
+    }
+
+    const votes: WeightedVote[] = [];
+    record.votes = [];
+    for (const vote of approvals) {
+      const weight = await deps.weightOf(vote.validator);
+      votes.push({ vote, weight });
+      record.votes.push({
+        validator: vote.validator,
+        approve: vote.approve,
+        weight: weight.toString(),
+      });
+    }
+    const quorum = aggregateQuorum(votes, deps.quorumThresholdWeight);
+    if (!quorum.reached) {
+      record.status = "rejected";
+      record.reject_reasons = ["quorum_not_reached"];
+      return c.json(record, 200);
+    }
+
+    if (deps.rateLimit?.relayerBalanceWei && deps.rateLimit.relayerMinBalanceWei !== undefined) {
+      let balance: bigint;
+      try {
+        balance = await deps.rateLimit.relayerBalanceWei();
+      } catch {
+        balance = 0n;
+      }
+      if (balance <= deps.rateLimit.relayerMinBalanceWei) {
+        record.status = "validating";
+        return c.json({ ...record, error: "submission paused (relayer balance low)" }, 503);
+      }
+    }
+
+    const proofCidHash = await deps.storeEvidence({
+      schema_version: "step.evidence.bundle.v1",
+      claim_hash: ch,
+      claim,
+      validator_signatures: quorum.sortedApprovals,
+      created_at: new Date().toISOString(),
+    });
+
+    try {
+      const txHash = claim.campaign_id
+        ? await deps.submitSponsored({
+            claimHash: ch,
+            triangleIdHash: th,
+            campaignId: claim.campaign_id as Hex,
+            miner,
+            proofCidHash,
+            sortedApprovals: quorum.sortedApprovals,
+          })
+        : await deps.submitNatural({
+            claimHash: ch,
+            triangleId: claim.triangle_id,
+            triangleIdHash: th,
+            meshLevel: claim.mesh_level,
+            miner,
+            proofCidHash,
+            sortedApprovals: quorum.sortedApprovals,
+          });
+      record.status = "finalised";
+      record.tx_hash = txHash;
+      record.finalised_at = new Date().toISOString();
+      record.reject_reasons = [];
+    } catch (err) {
+      record.status = "rejected";
+      record.reject_reasons = [`chain_revert:${shorten(extractRevertReason(err), 220)}`];
     }
     return c.json(record, 200);
   });

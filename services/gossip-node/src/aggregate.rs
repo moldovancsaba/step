@@ -24,6 +24,10 @@ pub struct VoteAggregator {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Bundle {
     pub claim_hash: String,
+    /// Full claim payload. Required for finalisation because the contract call
+    /// needs the triangle id / level and evidence storage needs the original
+    /// proof object; votes alone are not enough.
+    pub claim: serde_json::Value,
     pub total_weight: u128,
     /// Approving votes sorted by validator address ascending — the exact order
     /// `MiningClaimVerifier` expects (cheap on-chain dedup).
@@ -88,6 +92,7 @@ impl VoteAggregator {
         }
         Some(Bundle {
             claim_hash: ch,
+            claim: serde_json::Value::Null,
             total_weight: total,
             approvals: approvals.into_iter().map(|(_, v)| v).collect(),
         })

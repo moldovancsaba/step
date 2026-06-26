@@ -10,6 +10,7 @@
 use crate::aggregate::{Bundle, VoteAggregator};
 use crate::messages::{ClaimMsg, Gossip, VoteMsg};
 use crate::replay::SeenSet;
+use std::collections::HashMap;
 use step_validation_rules::sign::Address;
 
 /// What the node should do in response to an inbound message.
@@ -27,6 +28,7 @@ pub struct Engine {
     quorum_threshold: u128,
     seen: SeenSet,
     agg: VoteAggregator,
+    claims: HashMap<String, serde_json::Value>,
 }
 
 impl Engine {
@@ -42,6 +44,7 @@ impl Engine {
             quorum_threshold,
             seen: SeenSet::new(seen_capacity),
             agg: VoteAggregator::new(),
+            claims: HashMap::new(),
         }
     }
 
@@ -67,12 +70,22 @@ impl Engine {
             return vec![]; // replay / duplicate flood
         }
         match msg {
-            Gossip::Claim(claim) => match vote_on_claim(&claim) {
-                Some(my_vote) => self.vote_actions(my_vote, &weight_of),
-                None => vec![],
-            },
+            Gossip::Claim(claim) => {
+                self.remember_claim(&claim);
+                match vote_on_claim(&claim) {
+                    Some(my_vote) => self.vote_actions(my_vote, &weight_of),
+                    None => vec![],
+                }
+            }
             Gossip::Vote(vote) => self.ingest_vote(vote, &weight_of),
         }
+    }
+
+    /// Remember the full claim payload so a later vote quorum can be submitted
+    /// without a central gateway lookup.
+    pub fn remember_claim(&mut self, claim: &ClaimMsg) {
+        self.claims
+            .insert(claim.claim_hash.to_lowercase(), claim.claim.clone());
     }
 
     /// Decode an inbound message and mark it seen; returns it only if it is fresh
@@ -116,8 +129,16 @@ impl Engine {
             .agg
             .try_bundle(&claim_hash, self.quorum_threshold, weight_of)
         {
-            Some(bundle) => {
+            Some(mut bundle) => {
+                let Some(claim) = self.claims.get(&claim_hash.to_lowercase()).cloned() else {
+                    // We have votes but not the original claim yet. Keep the
+                    // votes; when the claim arrives, vote_actions() will try
+                    // bundling again with the payload available.
+                    return vec![];
+                };
+                bundle.claim = claim;
                 self.agg.forget(&claim_hash);
+                self.claims.remove(&claim_hash.to_lowercase());
                 vec![Action::Submit(bundle)]
             }
             None => vec![],

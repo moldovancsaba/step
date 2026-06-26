@@ -78,6 +78,7 @@ async fn main() {
                 Some(u) => {
                     let body = serde_json::json!({
                         "claim_hash": bundle.claim_hash,
+                        "claim": bundle.claim,
                         "total_weight": bundle.total_weight.to_string(),
                         "approvals": bundle.approvals,
                     });

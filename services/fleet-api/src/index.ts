@@ -14,6 +14,14 @@ import { createApp } from "./app.js";
 import type { DirectoryNode, NodeProbe } from "./fleet.js";
 import { HeartbeatStore } from "./heartbeat.js";
 
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as Address;
+const TRUST_CENTER_STATUS = ["none", "pending", "active", "suspended", "revoked"] as const;
+const TRUST_CENTER_REGISTRY_ABI = [
+  { type: "function", name: "nodeOwner", stateMutability: "view", inputs: [{ name: "node", type: "address" }], outputs: [{ name: "", type: "address" }] },
+  { type: "function", name: "rewardRecipient", stateMutability: "view", inputs: [{ name: "node", type: "address" }], outputs: [{ name: "", type: "address" }] },
+  { type: "function", name: "nodeStatus", stateMutability: "view", inputs: [{ name: "node", type: "address" }], outputs: [{ name: "", type: "uint8" }] },
+] as const;
+
 const ACTIVE_WEIGHT_ABI = [
   {
     type: "function",
@@ -36,9 +44,12 @@ const chainId = Number(env("STEP_CHAIN_ID", "31337"));
 const quorumThreshold = BigInt(env("STEP_QUORUM_THRESHOLD", "100"));
 
 let registry = process.env.VALIDATOR_REGISTRY as Address | undefined;
+let trustCenterRegistry = process.env.TRUST_CENTER_REGISTRY as Address | undefined;
 const deploymentsFile = process.env.STEP_DEPLOYMENTS_FILE;
-if (!registry && deploymentsFile && existsSync(deploymentsFile)) {
-  registry = JSON.parse(readFileSync(deploymentsFile, "utf8")).ValidatorRegistry as Address;
+if (deploymentsFile && existsSync(deploymentsFile)) {
+  const deployments = JSON.parse(readFileSync(deploymentsFile, "utf8"));
+  registry = (registry ?? deployments.ValidatorRegistry) as Address;
+  trustCenterRegistry = (trustCenterRegistry ?? deployments.TrustCenterRegistry) as Address | undefined;
 }
 if (!registry) throw new Error("could not resolve ValidatorRegistry address");
 
@@ -68,6 +79,19 @@ async function probe(node: DirectoryNode): Promise<NodeProbe> {
     args: [node.address as Address],
   })) as bigint;
 
+  const trustCenter = trustCenterRegistry
+    ? await trustCenterInfo(node.address as Address).catch(() => ({}))
+    : {};
+
+  if ((node.transport ?? "http") === "peer") {
+    return {
+      reachable: onChainWeight > 0n,
+      version: "peer-native",
+      onChainWeight,
+      ...trustCenter,
+    };
+  }
+
   let reachable = false;
   let version: string | undefined;
   try {
@@ -81,7 +105,21 @@ async function probe(node: DirectoryNode): Promise<NodeProbe> {
   } catch {
     reachable = false;
   }
-  return { reachable, version, onChainWeight };
+  return { reachable, version, onChainWeight, ...trustCenter };
+}
+
+async function trustCenterInfo(addr: Address) {
+  if (!trustCenterRegistry) return {};
+  const [owner, recipient, statusRaw] = await Promise.all([
+    client.readContract({ address: trustCenterRegistry, abi: TRUST_CENTER_REGISTRY_ABI, functionName: "nodeOwner", args: [addr] }) as Promise<Address>,
+    client.readContract({ address: trustCenterRegistry, abi: TRUST_CENTER_REGISTRY_ABI, functionName: "rewardRecipient", args: [addr] }) as Promise<Address>,
+    client.readContract({ address: trustCenterRegistry, abi: TRUST_CENTER_REGISTRY_ABI, functionName: "nodeStatus", args: [addr] }) as Promise<number>,
+  ]);
+  return {
+    ownerWallet: owner.toLowerCase() !== ZERO_ADDRESS ? owner.toLowerCase() : undefined,
+    rewardRecipient: recipient.toLowerCase() !== ZERO_ADDRESS ? recipient.toLowerCase() : undefined,
+    trustCenterStatus: TRUST_CENTER_STATUS[Number(statusRaw)] ?? "none",
+  };
 }
 
 const corsOrigins = process.env.STEP_CORS_ORIGINS

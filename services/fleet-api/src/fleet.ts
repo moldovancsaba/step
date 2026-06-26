@@ -17,6 +17,8 @@ export interface DirectoryNode {
   address: string;
   url: string;
   location?: string;
+  /** peer-native nodes are reached through libp2p/gossip, not hub HTTP polling. */
+  transport?: "http" | "peer" | string;
   /** declared weight from the directory (for drift display) */
   weight?: number;
 }
@@ -30,6 +32,9 @@ export interface NodeProbe {
   onChainWeight: bigint;
   /** target version the node should be running (from ReleaseRegistry), if known */
   targetVersion?: string;
+  ownerWallet?: string;
+  rewardRecipient?: string;
+  trustCenterStatus?: "none" | "pending" | "active" | "suspended" | "revoked";
 }
 
 export type Severity = "critical" | "warning";
@@ -52,6 +57,9 @@ export interface FleetNode {
   onChainWeight: string;
   inQuorum: boolean;
   alert?: Alert;
+  ownerWallet?: string;
+  rewardRecipient?: string;
+  trustCenterStatus?: "none" | "pending" | "active" | "suspended" | "revoked";
 }
 
 export interface FleetView {
@@ -122,6 +130,9 @@ export function buildFleetView(
       onChainWeight: probe.onChainWeight.toString(),
       inQuorum,
       alert,
+      ownerWallet: probe.ownerWallet,
+      rewardRecipient: probe.rewardRecipient,
+      trustCenterStatus: probe.trustCenterStatus,
     });
   }
 

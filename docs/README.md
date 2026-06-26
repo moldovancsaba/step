@@ -43,6 +43,13 @@ STEP is a proof-of-location / proof-of-presence blockchain system on a determini
 - [Repository structure](engineering/STEP_repository_structure.md)
 - [API contracts](engineering/STEP_api_contracts.md)
 - [Data models](engineering/STEP_data_models.md)
+- [Trust Center macOS package install](install-macos-pkg.md)
+- [Trust Center identity and wallet ownership](trust-center-identity.md)
+- [Trust Center onboarding API](trust-center-onboarding-api.md)
+- [macOS package release process](release-macos-pkg.md)
+- [Release acceptance matrix](release-acceptance-matrix.md)
+- [Node lifecycle management](node-lifecycle-management.md)
+- [Independent P2P status](independent-p2p-status.md)
 - [Go-live runbook](operations/STEP_go_live_runbook.md) — native + container bring-up, the binding go-live checklist, external gates
 - [Mac mini online sandbox](operations/STEP_mac_mini_static_hosting.md) — local backend + static frontend + Cloudflare Tunnel/GitHub Pages path
 - [Incident response](operations/STEP_incident_response.md)

@@ -77,3 +77,42 @@ Deployment: `script/Deploy.s.sol` executed successfully against live Anvil (chai
 - `DisputeManager` and `Exchange` are specified (SYS §13.2) but intentionally not implemented: disputes are admin-mediated in alpha (claim review console) and the exchange is excluded from alpha entirely (ADR-011). Both are post-alpha contracts.
 - Static analysis (Slither) and Echidna campaigns are CI tasks, not yet executed in this environment — tracked in the release log.
 - Upgradeability: contracts are non-upgradeable by design for alpha; redeployment is the upgrade path on the internal testnet. A governed proxy strategy is a pre-mainnet decision.
+
+## TrustCenterRegistry
+
+`TrustCenterRegistry` binds a desktop Trust Center node identity to a user wallet for ownership and reward routing. It does not grant validator voting weight.
+
+State:
+
+```solidity
+mapping(address => address) nodeOwner;
+mapping(address => address) rewardRecipient;
+mapping(address => NodeStatus) nodeStatus;
+mapping(bytes32 => bool) usedPairingDigest;
+```
+
+Statuses:
+
+```solidity
+None, Pending, Active, Suspended, Revoked
+```
+
+Pairing digest:
+
+```solidity
+keccak256(abi.encode(
+  keccak256("STEP_TRUST_CENTER_PAIR_V1"),
+  block.chainid,
+  address(this),
+  node,
+  owner,
+  challenge,
+  expiresAt
+))
+```
+
+`pairNode(node, owner, challenge, expiresAt, ownerSignature)` verifies the owner wallet's Ethereum personal-sign signature, prevents replay, records ownership, initializes reward recipient, and moves the node to `Pending` if it was `None`.
+
+`setRewardRecipient(node, recipient)` is restricted to the node owner.
+
+`setNodeStatus(node, status)` is restricted to `VALIDATOR_ADMIN_ROLE` and is the administrative bridge from paired ownership to operational status. Validator voting weight remains controlled by `ValidatorRegistry`.
