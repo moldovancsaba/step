@@ -110,7 +110,10 @@ async fn main() {
         .route("/v1/agent/status", get(status_handler))
         .route("/artifacts/status", get(artifact_status_handler))
         .route("/artifacts/{platform}/{version}", get(artifact_handler))
-        .route("/artifacts/{platform}/{version}/{part}", get(artifact_part_handler))
+        .route(
+            "/artifacts/{platform}/{version}/{part}",
+            get(artifact_part_handler),
+        )
         .with_state(app_state);
     let addr = format!("0.0.0.0:{}", cfg.agent_port);
     let listener = tokio::net::TcpListener::bind(&addr)
@@ -239,14 +242,20 @@ async fn serve_artifact(
     };
     let release_dir = artifacts.releases_dir.join(packed.to_string());
     let (path, content_type) = match part {
-        "package" => (release_dir.join("step-validator-node"), "application/octet-stream"),
+        "package" => (
+            release_dir.join("step-validator-node"),
+            "application/octet-stream",
+        ),
         "manifest.json" | "manifest" => (release_dir.join("manifest.json"), "application/json"),
         p if p.starts_with("chunks-") => {
             let idx = p.trim_start_matches("chunks-");
             if idx.is_empty() || idx.contains('/') || idx.contains("..") {
                 return (StatusCode::BAD_REQUEST, "bad_chunk").into_response();
             }
-            (release_dir.join("chunks").join(idx), "application/octet-stream")
+            (
+                release_dir.join("chunks").join(idx),
+                "application/octet-stream",
+            )
         }
         _ => return (StatusCode::NOT_FOUND, "unknown_artifact_part").into_response(),
     };
