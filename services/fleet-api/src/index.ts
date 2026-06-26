@@ -139,7 +139,13 @@ const heartbeats = {
   maxBodyBytes: Number(process.env.HEARTBEAT_MAX_BODY_BYTES ?? 4096),
 };
 
-const { app } = createApp({ listNodes, probe, quorumThreshold, corsOrigins, heartbeats });
+const peerDirectory = {
+  now: () => Date.now(),
+  ttlMs: Number(process.env.PEER_RECORD_TTL_SECONDS ?? 90_000),
+  maxBodyBytes: Number(process.env.PEER_ANNOUNCEMENT_MAX_BODY_BYTES ?? 8192),
+};
+
+const { app } = createApp({ listNodes, probe, quorumThreshold, corsOrigins, heartbeats, peerDirectory });
 const port = Number(process.env.FLEET_PORT ?? 8099);
 console.log(`fleet-api listening on :${port}`);
 serve({ fetch: app.fetch, port });

@@ -72,3 +72,32 @@ Returns onboarding/runtime status for a Trust Center node. Wallet ownership and 
 ### GET /v1/trust-centers/:nodeAddress/onboarding-status
 
 Mobile/installer polling alias for the same status record.
+
+## Public edge and peer routing API
+
+The public frontend uses same-origin Worker routes and must not know backend topology.
+
+### GET /api/edge/health
+
+Returns Worker routing health, deploy mode, and available peers by service.
+
+### GET /api/peers
+
+Returns known peer records from static config, bootstrap config, and the peer directory.
+
+### GET /api/peers/healthy?service=gateway
+
+Returns active, non-expired, public HTTPS peers able to serve the requested service.
+
+### /api/gateway/*, /api/mesh/*, /api/indexer/*, /api/fleet/*
+
+Routes to healthy peers. Responses include route metadata headers where available:
+
+```text
+x-step-route-id
+x-step-peer
+x-step-peer-service
+x-step-route-attempts
+```
+
+If no healthy peer exists, the Worker returns structured JSON with `error: "no_healthy_peer"` and does not synthesize protocol success.

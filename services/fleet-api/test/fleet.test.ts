@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildFleetView, type DirectoryNode, type NodeProbe } from "../src/fleet.js";
+import { buildFleetView, buildPeerRecords, type DirectoryNode, type NodeProbe } from "../src/fleet.js";
 
 const nodes: DirectoryNode[] = [
   { name: "validator-0", address: "0xaaa", url: "http://a", location: "hub" },
@@ -59,5 +59,26 @@ describe("buildFleetView", () => {
     // node 0xBBB in directory, probe keyed lowercase — must still match
     const v = buildFleetView(nodes, probes({}), 100n);
     expect(v.nodes.find((n) => n.name === "chappie")?.inQuorum).toBe(true);
+  });
+
+  it("builds healthy public peer records only from reachable quorum nodes", () => {
+    const peerNodes: DirectoryNode[] = [
+      { name: "public", address: "0x111", url: "https://public.example", services: ["gateway", "mesh"] },
+      { name: "local", address: "0x222", url: "http://127.0.0.1:8080", services: ["gateway"] },
+      { name: "dark", address: "0x333", url: "https://dark.example", services: ["indexer"] },
+    ];
+    const records = buildPeerRecords(
+      peerNodes,
+      {
+        "0x111": { reachable: true, version: "1.0.0", onChainWeight: 50n },
+        "0x222": { reachable: true, version: "1.0.0", onChainWeight: 50n },
+        "0x333": { reachable: false, version: "1.0.0", onChainWeight: 50n },
+      },
+      1_800_000_000_000,
+      90_000,
+    );
+    expect(records).toHaveLength(1);
+    expect(records[0]?.publicUrl).toBe("https://public.example");
+    expect(records[0]?.services).toEqual(["gateway", "mesh"]);
   });
 });

@@ -101,8 +101,8 @@ const KEY_STORAGE = "step.wallet.pk.v1";
 const KEY_ALIAS_STORAGE = "step.wallet.alias.v1";
 
 const defaultConfig: AppConfig = {
-  gatewayUrl: window.STEP_CONFIG?.gatewayUrl ?? "http://127.0.0.1:8080",
-  indexerUrl: window.STEP_CONFIG?.indexerUrl ?? "http://127.0.0.1:8090",
+  gatewayUrl: window.STEP_CONFIG?.gatewayUrl ?? "/api/gateway",
+  indexerUrl: window.STEP_CONFIG?.indexerUrl ?? "/api/indexer",
   explorerUrl: window.STEP_CONFIG?.explorerUrl ?? "",
   minerUrl: window.STEP_CONFIG?.minerUrl ?? "",
 };
@@ -658,6 +658,11 @@ function Miner({
     } catch {
       indexerHealthy = false;
     }
+    if (!indexerHealthy) {
+      throw new Error(
+        "Indexer is not reachable through the STEP edge gateway. Mining is fail-closed because mineable triangle state cannot be verified.",
+      );
+    }
 
     for (let level = 1; level <= MAX_MESH_LEVEL; level += 1) {
       const resolutionHint = `Resolving your triangle at level ${level}.`;
@@ -667,10 +672,6 @@ function Miner({
       const tri = await json<TriangleInfo>(
         `${config.gatewayUrl}/v1/mesh/resolve?lat=${loc.lat}&lon=${loc.lon}&level=${level}`,
       );
-
-      if (!indexerHealthy) {
-        return { triangle: tri, level };
-      }
 
       const state = await readTriangleState(tri.triangle_id_hash);
       if (state?.frozen) {
@@ -709,7 +710,7 @@ function Miner({
 
       const gatewayHealth = await fetch(`${config.gatewayUrl}/healthz`);
       if (!gatewayHealth.ok) {
-        throw new Error("Gateway is not reachable (/api/gateway). Set STEP_BACKEND_GATEWAY_URL before continuing.");
+        throw new Error("Gateway is not reachable through the STEP edge gateway. Wait for a healthy Trust Center peer and retry.");
       }
 
       const { triangle: tri, level: attemptLevel } = await resolveMineableTriangle(loc);

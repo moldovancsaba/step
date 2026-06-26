@@ -4,8 +4,9 @@
  */
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import type { DirectoryNode, FleetView, NodeProbe } from "./fleet.js";
-import { buildFleetView } from "./fleet.js";
+import { recoverMessageAddress } from "viem";
+import type { DirectoryNode, FleetView, NodeProbe, PeerRecord } from "./fleet.js";
+import { buildFleetView, buildPeerRecords } from "./fleet.js";
 import { RateLimiter } from "./ratelimit.js";
 import type { Heartbeat } from "./heartbeat.js";
 import { classifyState, HeartbeatStore, verifyHeartbeat } from "./heartbeat.js";
@@ -34,10 +35,16 @@ export interface FleetDeps {
     /** ms to cache the registered-set snapshot (avoids rebuilding it per request). */
     registeredCacheTtlMs?: number;
   };
+  peerDirectory?: {
+    now(): number;
+    ttlMs?: number;
+    maxBodyBytes?: number;
+  };
 }
 
 export function createApp(deps: FleetDeps) {
   const app = new Hono();
+  const announcedPeers = new Map<string, PeerRecord>();
   if (deps.corsOrigins?.length) {
     app.use("*", cors({ origin: deps.corsOrigins, allowMethods: ["GET", "OPTIONS"] }));
   }
@@ -57,7 +64,111 @@ export function createApp(deps: FleetDeps) {
     return buildFleetView(nodes, probes, deps.quorumThreshold);
   }
 
+  async function probeMap(): Promise<Record<string, NodeProbe>> {
+    const nodes = deps.listNodes();
+    const probes: Record<string, NodeProbe> = {};
+    await Promise.all(
+      nodes.map(async (n) => {
+        try {
+          probes[n.address.toLowerCase()] = await deps.probe(n);
+        } catch {
+          probes[n.address.toLowerCase()] = { reachable: false, onChainWeight: 0n };
+        }
+      }),
+    );
+    return probes;
+  }
+
+  const peerNow = () => deps.peerDirectory?.now?.() ?? Date.now();
+  const peerTtl = () => deps.peerDirectory?.ttlMs ?? 90_000;
+  const registeredNodes = () => new Set(deps.listNodes().map((n) => n.address.toLowerCase()));
+  const peerMessage = (record: Omit<PeerRecord, "signature" | "source">): string =>
+    JSON.stringify({
+      nodeAddress: record.nodeAddress.toLowerCase(),
+      publicUrl: record.publicUrl,
+      p2pAddress: record.p2pAddress ?? "",
+      services: [...record.services].sort(),
+      status: record.status,
+      version: record.version ?? "",
+      chainId: record.chainId ?? "",
+      lastSeen: record.lastSeen,
+      expiresAt: record.expiresAt,
+    });
+
+  async function verifyPeerAnnouncement(record: PeerRecord): Promise<boolean> {
+    if (!record.signature || !/^0x[0-9a-fA-F]+$/.test(record.signature)) return false;
+    if (!registeredNodes().has(record.nodeAddress.toLowerCase())) return false;
+    if (!/^https:\/\//i.test(record.publicUrl)) return false;
+    if (!record.services?.length) return false;
+    if (Date.parse(record.expiresAt) <= peerNow()) return false;
+    try {
+      const messageRecord = {
+        nodeAddress: record.nodeAddress,
+        publicUrl: record.publicUrl,
+        p2pAddress: record.p2pAddress,
+        services: record.services,
+        status: record.status,
+        version: record.version,
+        chainId: record.chainId,
+        lastSeen: record.lastSeen,
+        expiresAt: record.expiresAt,
+      };
+      const recovered = await recoverMessageAddress({
+        message: peerMessage(messageRecord),
+        signature: record.signature,
+      });
+      return recovered.toLowerCase() === record.nodeAddress.toLowerCase();
+    } catch {
+      return false;
+    }
+  }
+
+  async function peers(service?: string): Promise<PeerRecord[]> {
+    const nodes = deps.listNodes();
+    const records = buildPeerRecords(nodes, await probeMap(), peerNow(), peerTtl());
+    for (const [node, record] of [...announcedPeers.entries()]) {
+      if (Date.parse(record.expiresAt) <= peerNow()) {
+        announcedPeers.delete(node);
+        continue;
+      }
+      records.push(record);
+    }
+    const seen = new Set<string>();
+    return records
+      .filter((p) => p.status === "active")
+      .filter((p) => !service || p.services.includes(service) || (service === "mesh" && p.services.includes("gateway")))
+      .filter((p) => {
+        const key = `${p.nodeAddress}|${p.publicUrl}|${p.services.join(",")}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+  }
+
   app.get("/healthz", (c) => c.text("ok"));
+
+  const peerList = async (c: { req: { query(name: string): string | undefined }; json(data: unknown): Response }) => {
+    const service = c.req.query("service");
+    return c.json({ peers: await peers(service), generatedAt: new Date(peerNow()).toISOString(), service: service ?? null });
+  };
+
+  app.get("/api/peers", peerList);
+  app.get("/api/peers/healthy", peerList);
+  app.get("/v1/peers", peerList);
+  app.get("/v1/peers/healthy", peerList);
+
+  app.post("/api/peers/announce", async (c) => {
+    const max = deps.peerDirectory?.maxBodyBytes ?? 8192;
+    const len = Number(c.req.header("content-length") ?? "0");
+    if (len > max) return c.json({ error: "body too large" }, 413);
+    const raw = await c.req.text();
+    if (raw.length > max) return c.json({ error: "body too large" }, 413);
+    const body = JSON.parse(raw) as PeerRecord;
+    const record: PeerRecord = { ...body, nodeAddress: body.nodeAddress?.toLowerCase(), source: "announcement" };
+    if (!(await verifyPeerAnnouncement(record))) return c.json({ error: "invalid_peer_announcement" }, 401);
+    announcedPeers.set(record.nodeAddress, record);
+    return c.json({ ok: true, nodeAddress: record.nodeAddress, expiresAt: record.expiresAt });
+  });
 
   // Signed heartbeat intake (#56): hub-independent supervision signal. The hub
   // verifies the node's signature against its REGISTERED on-chain address (no

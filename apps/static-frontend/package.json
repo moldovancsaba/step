@@ -8,7 +8,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 0.0.0.0 --port 3010",
     "deploy:cloudflare": "pnpm build && pnpm dlx wrangler pages deploy dist",
-    "deploy:cloudflare-worker": "pnpm build && pnpm dlx wrangler deploy --keep-vars ${STEP_BACKEND_GATEWAY_URL:+--var STEP_BACKEND_GATEWAY_URL:${STEP_BACKEND_GATEWAY_URL}} ${STEP_BACKEND_INDEXER_URL:+--var STEP_BACKEND_INDEXER_URL:${STEP_BACKEND_INDEXER_URL}} ${STEP_WEB_EXPLORER_URL:+--var STEP_WEB_EXPLORER_URL:${STEP_WEB_EXPLORER_URL}} ${STEP_WEB_MINER_URL:+--var STEP_WEB_MINER_URL:${STEP_WEB_MINER_URL}}",
+    "deploy:cloudflare-worker": "pnpm build && pnpm dlx wrangler deploy --keep-vars ${STEP_BACKEND_GATEWAY_URL:+--var STEP_BACKEND_GATEWAY_URL:${STEP_BACKEND_GATEWAY_URL}} ${STEP_BACKEND_INDEXER_URL:+--var STEP_BACKEND_INDEXER_URL:${STEP_BACKEND_INDEXER_URL}} ${STEP_WEB_EXPLORER_URL:+--var STEP_WEB_EXPLORER_URL:${STEP_WEB_EXPLORER_URL}} ${STEP_WEB_MINER_URL:+--var STEP_WEB_MINER_URL:${STEP_WEB_MINER_URL}} ${STEP_DEPLOY_ENV:+--var STEP_DEPLOY_ENV:${STEP_DEPLOY_ENV}} ${STEP_API_MODE:+--var STEP_API_MODE:${STEP_API_MODE}} ${STEP_BACKEND_FLEET_URL:+--var STEP_BACKEND_FLEET_URL:${STEP_BACKEND_FLEET_URL}} ${STEP_PEER_DIRECTORY_URL:+--var STEP_PEER_DIRECTORY_URL:${STEP_PEER_DIRECTORY_URL}} ${STEP_PEERS_JSON:+--var STEP_PEERS_JSON:${STEP_PEERS_JSON}}",
     "test": "vitest run --passWithNoTests",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit"

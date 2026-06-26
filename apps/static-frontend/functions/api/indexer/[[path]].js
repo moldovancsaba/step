@@ -1,49 +1,36 @@
-const HOP_BY_HOP_HEADERS = new Set([
-  "connection",
-  "keep-alive",
-  "proxy-authenticate",
-  "proxy-authorization",
-  "te",
-  "trailer",
-  "transfer-encoding",
-  "upgrade",
-  "host",
-]);
-
-function copyHeaders(headers) {
-  const next = new Headers();
-  for (const [key, value] of headers) {
-    if (!HOP_BY_HOP_HEADERS.has(key.toLowerCase())) next.set(key, value);
+function isForbiddenProductionUrl(value, env) {
+  if (!value || env.STEP_DEPLOY_ENV === "local") return false;
+  try {
+    const url = new URL(value);
+    const host = url.hostname.toLowerCase();
+    if (url.protocol !== "https:") return true;
+    if (["localhost", "127.0.0.1", "0.0.0.0", "::1"].includes(host)) return true;
+    if (/^10\./.test(host) || /^192\.168\./.test(host) || /^172\.(1[6-9]|2\d|3[0-1])\./.test(host)) return true;
+  } catch {
+    return true;
   }
-  return next;
+  return false;
 }
 
-function pathParam(value) {
-  const path = Array.isArray(value) ? value.join("/") : value || "";
-  return path.replace(/^\/+/, "");
+function targetUrl(requestUrl, upstream) {
+  const source = new URL(requestUrl);
+  const path = source.pathname.replace(/^\/api\/indexer\/?/, "");
+  const target = new URL(path, upstream.endsWith("/") ? upstream : `${upstream}/`);
+  target.search = source.search;
+  return target;
 }
 
 export async function onRequest(context) {
   const upstream = context.env.STEP_BACKEND_INDEXER_URL;
-  if (!upstream) {
-    return Response.json({ error: "STEP_BACKEND_INDEXER_URL is not configured" }, { status: 502 });
+  if (!upstream) return Response.json({ error: "no_healthy_peer", service: "indexer" }, { status: 503 });
+  if (isForbiddenProductionUrl(upstream, context.env)) {
+    return Response.json({ error: "production_localhost_forbidden", service: "indexer" }, { status: 500 });
   }
-
-  const source = new URL(context.request.url);
-  const target = new URL(pathParam(context.params.path), upstream.endsWith("/") ? upstream : `${upstream}/`);
-  target.search = source.search;
-
   const method = context.request.method;
-  const body = method === "GET" || method === "HEAD" ? undefined : context.request.body;
-  const response = await fetch(target, {
+  const response = await fetch(targetUrl(context.request.url, upstream), {
     method,
-    headers: copyHeaders(context.request.headers),
-    body,
+    headers: context.request.headers,
+    body: method === "GET" || method === "HEAD" ? undefined : context.request.body,
   });
-
-  return new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers: copyHeaders(response.headers),
-  });
+  return new Response(response.body, response);
 }

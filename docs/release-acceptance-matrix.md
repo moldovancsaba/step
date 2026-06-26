@@ -21,3 +21,22 @@ A Trust Center release is acceptable only when every layer below has a passing a
 - Any unverified runtime artifact activation blocks release.
 - Any installer that embeds a production private key or long-lived shared secret blocks release.
 - Any UI path that cannot explain pending vs active node status blocks release.
+
+## M11 public edge acceptance
+
+| Layer | Acceptance |
+| --- | --- |
+| Deploy guard | Production deploy rejects localhost, loopback, private LAN, and non-HTTPS backend URLs |
+| Worker edge | `/api/*` routes are same-origin and return route metadata headers |
+| Peer directory | `/api/peers/healthy` returns only active, public HTTPS, non-expired peers |
+| Peer router | GET routes retry bounded healthy peers; unsafe writes fail closed without silent fallback |
+| Client config | Browser defaults to `/api/gateway` and `/api/indexer`; no production client localhost fallback exists |
+| Mining safety | If indexer state is unavailable, mining stops instead of guessing a lower or fallback level |
+| Release gate | `pnpm release:public-edge:verify` passes before public deployment is accepted |
+
+Blocking failures:
+
+- Production Worker deploy succeeds with localhost/private backend config.
+- Browser request capture shows `localhost` or `127.0.0.1` for production API calls.
+- Worker returns fake success when no healthy peer exists.
+- Mining proceeds when indexer/mineable frontier state is unavailable.

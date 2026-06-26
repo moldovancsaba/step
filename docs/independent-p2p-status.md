@@ -115,3 +115,32 @@ The repository now contains the macOS `.pkg` delivery path for independent Trust
 - Fleet API output includes paired owner, reward recipient, Trust Center status, and validator active weight when registry data is available.
 
 This is the foundation for an independently installable peer. Validator authority still remains explicit: wallet pairing never bypasses validator registry activation or release-registry artifact authorization.
+
+## M11 public edge and no-localhost rule
+
+Public STEP clients must not depend on `localhost`, `127.0.0.1`, or private LAN backends. The public access path is:
+
+```text
+Browser / Mobile
+  -> same-origin STEP Worker /api
+  -> signed peer directory or public bootstrap peers
+  -> healthy Trust Center services
+  -> chain-backed gateway, mesh, indexer, and fleet APIs
+```
+
+The Cloudflare Worker now exposes peer-aware routes:
+
+```text
+/api/gateway/*
+/api/mesh/*
+/api/indexer/*
+/api/fleet/*
+/api/trust-centers/*
+/api/peers
+/api/peers/healthy
+/api/edge/health
+```
+
+Production deployment fails before upload if public backend configuration points to localhost, loopback, private LAN, or non-HTTPS endpoints. Local-only development must explicitly set `STEP_DEPLOY_ENV=local`.
+
+The web miner is fail-closed: if indexer state is not reachable through the STEP edge gateway, mining is blocked because the app cannot prove the mineable frontier.

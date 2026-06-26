@@ -16,11 +16,31 @@ export interface DirectoryNode {
   name: string;
   address: string;
   url: string;
+  /** Public HTTPS endpoint advertised to the edge router, if different from url. */
+  publicUrl?: string;
+  /** Optional libp2p/multiaddr for peer-native transport. */
+  p2pAddress?: string;
+  /** Services this node can publicly serve. */
+  services?: string[];
   location?: string;
   /** peer-native nodes are reached through libp2p/gossip, not hub HTTP polling. */
   transport?: "http" | "peer" | string;
   /** declared weight from the directory (for drift display) */
   weight?: number;
+}
+
+export interface PeerRecord {
+  nodeAddress: string;
+  publicUrl: string;
+  p2pAddress?: string;
+  services: string[];
+  status: "active" | "degraded" | "suspended" | "revoked" | "stale";
+  version?: string;
+  chainId?: string;
+  lastSeen: string;
+  expiresAt: string;
+  source: "directory" | "announcement";
+  signature?: `0x${string}`;
 }
 
 export interface NodeProbe {
@@ -68,6 +88,33 @@ export interface FleetView {
   quorumThreshold: string;
   quorumReachable: boolean;
   alerts: Alert[];
+}
+
+export function buildPeerRecords(
+  nodes: DirectoryNode[],
+  probes: Record<string, NodeProbe>,
+  nowMs: number,
+  ttlMs: number,
+): PeerRecord[] {
+  const lastSeen = new Date(nowMs).toISOString();
+  const expiresAt = new Date(nowMs + ttlMs).toISOString();
+  return nodes.flatMap((node) => {
+    const publicUrl = node.publicUrl ?? node.url;
+    if (!/^https:\/\//i.test(publicUrl)) return [];
+    const probe = probes[node.address.toLowerCase()];
+    if (!probe?.reachable || probe.onChainWeight <= 0n) return [];
+    return [{
+      nodeAddress: node.address.toLowerCase(),
+      publicUrl,
+      p2pAddress: node.p2pAddress,
+      services: node.services?.length ? node.services : ["gateway", "mesh", "indexer", "fleet"],
+      status: "active" as const,
+      version: probe.version,
+      lastSeen,
+      expiresAt,
+      source: "directory" as const,
+    }];
+  });
 }
 
 /**
