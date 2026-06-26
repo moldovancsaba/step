@@ -1,5 +1,32 @@
 # STEP iOS miner app
 
+## System role
+
+The iOS app now has a **choosable launcher** after wallet/login:
+
+- **Mine & explore**: normal user mode for visiting triangles, signing
+  proof-of-location claims, managing the wallet, viewing the mesh, and trading.
+- **Mobile Trust Center**: foreground iPhone/iPad mode for users who keep a
+  device powered, awake, connected, and running STEP continuously. This mode is
+  designed to support future mobile trust-center enrollment, vote signing,
+  attested device contribution, and rewards that do **not** require the owner to
+  visit new locations.
+
+The Mobile Trust Center is a real trust-center class, but not the same class as
+a full macOS/Linux Trust Center. iOS/iPadOS can hold the wallet identity, use
+Secure Enclave/App Attest, sign future validator votes, and participate while
+the app is alive. It cannot honestly guarantee boot-daemon startup, unattended
+binary self-update, local chain RPC, public gateway/fleet APIs, or launchd-style
+crash restart after the app is backgrounded, terminated, or the device reboots.
+
+So the system has three roles:
+
+- `mobile_peer`: normal miner/user app.
+- `mobile_trust_center`: iPhone/iPad kept running as an attested trust device,
+  eligible for future uptime/participation rewards.
+- `full_trust_center`: macOS/Linux infrastructure node running agent,
+  validator, gossip, chain RPC, gateway, and fleet continuously.
+
 **Status: protocol core + full product surface (auth, mining, oasis/desert map, wallet/NFTs, device attestation, trusted-anchor capture, marketplace) implemented and test-verified as a Swift package; a reproducible XcodeGen app target ([`App/`](App/)) packages it for the simulator/device/TestFlight. Device-only APIs (App Attest, NFC, camera) and the on-chain marketplace round-trip are field/deploy-verified — documented honestly below, no hidden gaps.**
 
 All UI is built natively with SwiftUI against a GDS-parity design system (`StepAppUI/Theme.swift` mirrors the @doneisbetter/gds tokens used by the web apps, because GDS is React/Mantine and cannot run on iOS). Accessibility (Dynamic Type, VoiceOver labels, colour-independent state, Reduce Motion) is treated as mandatory, not optional.

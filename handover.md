@@ -343,3 +343,71 @@ The system is acceptable only when:
 - Quorum is consistently `2/3 + 1`.
 - UI/operator surfaces are GDS-only and accessible.
 - Release gates fail closed on fake data, sandbox fallback, unsafe secrets, or hub-only assumptions.
+
+## 2026-06-26 system identity proof update
+
+Implemented proof gates for the current delivery request:
+
+- `pnpm release:system-identity:verify` proves the installer contract, full Trust Center manifest parity, iOS mobile peer/client capability, and live fleet quorum on Tribecca and Chappie.
+- `scripts/release/build-macos-pkg.mjs` now refuses `--survival-tier full` unless `--fullstack-dir` exists and contains `node`, `gateway-api.mjs`, `fleet-api.mjs`, `chain-rpc.mjs`, `validator-node`, and `gossip-node`.
+- The generated `step-trustcenter provision` command writes a full-role manifest and installs launchd services for `app.step.chain`, `app.step.gateway`, `app.step.fleet`, `app.step.gossip`, `app.step.validator`, and `app.step.node-agent`.
+- `scripts/node/install.sh` now has the same fail-closed contract through `--fullstack-artifact` and `--fullstack-sha256`.
+- `docs/operations/STEP_system_identity_proof.md` is the canonical proof contract.
+- `apps/ios/README.md` now states the iOS app role precisely: mobile peer/client, not an always-on full Trust Center.
+
+Verification results recorded from this machine:
+
+```bash
+pnpm release:system-identity:verify
+# passed: local fleet active=200 threshold=101 nodes=4
+# passed: chappie fleet active=200 threshold=101 nodes=4
+
+pnpm release:disaster-survival:verify
+# passed: Chappie agent/gateway/fleet/chain_rpc/validator/gossip survived while Tribecca gateway/fleet/validators were stopped
+
+pnpm release:p2p-independence:verify
+# passed: peer-native/keychain/runtime-manifest/quorum invariants
+
+pnpm release:live-federation:verify
+# passed: local gateway healthy, fleet active=200 threshold=101, chappie peer-native and in quorum
+
+cd apps/ios/StepCore && swift build
+# passed: StepCore builds successfully
+
+node --check scripts/release/build-macos-pkg.mjs
+sh -n scripts/node/install.sh
+node --check scripts/ops/verify-system-identity.mjs
+# passed: release script syntax
+```
+
+Remaining truth boundary:
+
+- The iOS app is fully updated for its mobile peer/client responsibilities: wallet, proof signing, attestation path, Trust Center pairing, mesh/map, NFT, and marketplace client surfaces.
+- The iOS app is intentionally not treated as a full Trust Center because iOS cannot honestly guarantee always-on chain/gateway/fleet/validator/gossip services while backgrounded or terminated.
+- A full macOS install now requires a verified fullstack payload. A package without that payload cannot claim `survival-tier full`.
+
+## 2026-06-26 iOS Mobile Trust Center launcher update
+
+The iOS app now has a choosable launcher after wallet/login:
+
+- `Mine & explore`: normal mobile peer/miner mode.
+- `Mobile Trust Center`: foreground iPhone/iPad trust-device mode for users who keep a device powered, awake, connected, and running STEP continuously.
+
+The Mobile Trust Center mode is designed for future protocol enrollment, vote signing, uptime/participation accounting, and trust-center rewards that do not require the owner to visit new triangles. It is a real trust-center class, but it is not the same class as a full macOS/Linux Trust Center because iOS cannot guarantee boot-daemon startup, unattended executable self-update, public chain/gateway/fleet servers, or launchd-style crash restart after background/termination/reboot.
+
+Canonical role names:
+
+- `mobile_peer`: normal miner/user app.
+- `mobile_trust_center`: iPhone/iPad kept running as an attested mobile trust device.
+- `full_trust_center`: macOS/Linux infrastructure node running agent, validator, gossip, chain RPC, gateway, and fleet continuously.
+
+## 2026-06-26 TestFlight and Mobile Trust Center delivery update
+
+- iOS build `0.1.0 (3)` was generated from the Mobile Trust Center launcher implementation.
+- Archive path: `apps/ios/App/build/StepApp-0.1.0-3.xcarchive`.
+- Export path: `apps/ios/App/build/export-0.1.0-3/StepApp.ipa`.
+- App Store Connect upload succeeded with delivery/build id `341038d6-3b1b-4174-b8e6-4e7b427cbe87`.
+- App Store Connect processing state for build `3` is `VALID`.
+- Build `3` is attached to TestFlight group `Friendly Pilot` (`7f2f4147-1cd1-404b-8d3c-5af2bab17e80`).
+- Tester `moldovancsaba@gmail.com` remains attached to `Friendly Pilot`.
+- External TestFlight review submission for build `3` is blocked by Apple with `ENTITY_UNPROCESSABLE.ANOTHER_BUILD_IN_REVIEW` because another build in the same train is already in Beta App Review. Submit build `3` again after the existing review completes.

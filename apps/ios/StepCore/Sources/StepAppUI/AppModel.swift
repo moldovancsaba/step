@@ -21,11 +21,18 @@ public enum ClaimUIStatus: Equatable, Sendable {
 
 @MainActor
 public final class AppModel: ObservableObject {
+    public enum LauncherMode: String, CaseIterable, Sendable {
+        case miner = "Mine & explore"
+        case mobileTrustCenter = "Mobile Trust Center"
+    }
+
     @Published public private(set) var walletAddress: String?
     @Published public private(set) var currentTriangle: TriangleInfo?
     @Published public private(set) var status: ClaimUIStatus = .idle
     @Published public private(set) var claimHistory: [ClaimRecord] = []
     @Published public var privacyMode: PrivacyMode = .privateMiner
+    @Published public private(set) var launcherMode: LauncherMode?
+    @Published public private(set) var mobileTrustCenterActive = false
 
     public enum PrivacyMode: String, CaseIterable, Sendable {
         // Default is privacy-protective (HARD §13.4).
@@ -100,6 +107,27 @@ public final class AppModel: ObservableObject {
     /// device-local-key onboarding.
     public var hasAccount: Bool { account != nil }
 
+    public func chooseLauncherMode(_ mode: LauncherMode) {
+        launcherMode = mode
+        if mode != .mobileTrustCenter {
+            mobileTrustCenterActive = false
+        }
+    }
+
+    public func returnToLauncher() {
+        mobileTrustCenterActive = false
+        launcherMode = nil
+    }
+
+    public func startMobileTrustCenter() {
+        launcherMode = .mobileTrustCenter
+        mobileTrustCenterActive = true
+    }
+
+    public func stopMobileTrustCenter() {
+        mobileTrustCenterActive = false
+    }
+
     /// Flow A step 4–5: create wallet, store key securely.
     public func createWallet() {
         do {
@@ -131,6 +159,8 @@ public final class AppModel: ObservableObject {
         walletAddress = nil
         walletKeyData = nil
         currentIdentity = nil
+        launcherMode = nil
+        mobileTrustCenterActive = false
         currentTriangle = nil
         claimHistory = []
         status = .idle

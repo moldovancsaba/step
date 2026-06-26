@@ -11,7 +11,7 @@
  * local identity creation and installs a user LaunchAgent.
  */
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, writeFileSync, copyFileSync, rmSync, chmodSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync, copyFileSync, cpSync, rmSync, chmodSync, readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -36,6 +36,7 @@ const bootstrapPeers = flag("bootstrap-peers", process.env.STEP_TRUSTCENTER_BOOT
 const relayPeers = flag("relay-peers", process.env.STEP_TRUSTCENTER_RELAY_PEERS ?? "");
 const advertisePeers = flag("advertise-peers", process.env.STEP_TRUSTCENTER_ADVERTISE_PEERS ?? "");
 const survivalTier = flag("survival-tier", process.env.STEP_TRUSTCENTER_SURVIVAL_TIER ?? "edge");
+const fullstackDir = flag("fullstack-dir", process.env.STEP_TRUSTCENTER_FULLSTACK_DIR ?? "");
 const agentBin = flag("bin", join(ROOT, "target/release/step-node-agent"));
 const identifier = flag("identifier", "com.regiominer.step.trustcenter");
 
@@ -46,6 +47,12 @@ if (fleet && !/^https?:\/\//.test(fleet)) die("--fleet must be empty or an HTTP(
 if (verifier && !/^0x[0-9a-fA-F]{40}$/.test(verifier)) die("--verifier must be empty or a 0x-prefixed address");
 if (!["edge", "full"].includes(survivalTier)) die("--survival-tier must be edge or full");
 if (!existsSync(agentBin)) die(`agent binary not found at ${agentBin}; build with: cargo build -p step-node-agent --release`);
+if (survivalTier === "full") {
+  if (!fullstackDir || !existsSync(fullstackDir)) die("--survival-tier full requires --fullstack-dir containing node, gateway, fleet, chain RPC, validator, and gossip launch payloads");
+  for (const name of ["node", "gateway-api.mjs", "fleet-api.mjs", "chain-rpc.mjs", "validator-node", "gossip-node"]) {
+    if (!existsSync(join(fullstackDir, name))) die(`fullstack payload missing ${name}`);
+  }
+}
 const peerList = (raw, name) => raw.split(",").map((s) => s.trim()).filter(Boolean).map((peer) => {
   if (!peer.startsWith("/")) die(`--${name} entries must be libp2p multiaddrs`);
   return peer;
@@ -60,10 +67,15 @@ if (!/^0x[0-9a-fA-F]{64}$/.test(platformId)) die("platform id must be 0x + 32 by
 
 const build = join(ROOT, ".runtime/pkgbuild");
 const payloadBin = join(build, "payload/usr/local/bin");
+const payloadFullstack = join(build, "payload/usr/local/lib/step-trustcenter/fullstack");
 const scripts = join(build, "scripts");
 const dist = join(ROOT, ".runtime/dist");
 rmSync(build, { recursive: true, force: true });
 mkdirSync(payloadBin, { recursive: true });
+if (survivalTier === "full") {
+  mkdirSync(payloadFullstack, { recursive: true });
+  cpSync(fullstackDir, payloadFullstack, { recursive: true });
+}
 mkdirSync(scripts, { recursive: true });
 mkdirSync(dist, { recursive: true });
 
@@ -80,6 +92,7 @@ PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 LOG_DIR="$ROOT/logs"
 NODE_ENV="$ROOT/node.env"
 MANIFEST="$ROOT/trust-center.manifest.json"
+FULLSTACK_DIR="/usr/local/lib/step-trustcenter/fullstack"
 RPC="${rpc}"
 REGISTRY="${registry}"
 PLATFORM="${platform}"
@@ -103,6 +116,8 @@ fi
 VALIDATOR_PORT="\${STEP_VALIDATOR_PORT:-9101}"
 AGENT_PORT="\${STEP_AGENT_PORT:-9200}"
 SERVICE="app.step.node"
+FULL_ROLES='["agent", "validator", "gossip", "chain", "gateway", "fleet"]'
+EDGE_ROLES='["agent", "validator", "gossip"]'
 
 usage() {
   cat <<USAGE
@@ -153,8 +168,18 @@ GOSSIP_ADVERTISE=$ADVERTISE_PEERS
 ENV
 }
 
+manifest_roles() { if [ "$SURVIVAL_TIER" = "full" ]; then printf '%s' "$FULL_ROLES"; else printf '%s' "$EDGE_ROLES"; fi; }
+
+fullstack_required() {
+  [ "$SURVIVAL_TIER" != "full" ] && return 0
+  for f in node gateway-api.mjs fleet-api.mjs chain-rpc.mjs validator-node gossip-node; do
+    [ -e "$FULLSTACK_DIR/$f" ] || { echo "full Trust Center payload missing $FULLSTACK_DIR/$f" >&2; exit 1; }
+  done
+}
+
 write_manifest() {
   addr="$1"
+  roles="$(manifest_roles)"
   cat > "$MANIFEST" <<JSON
 {
   "schema_version": "step.trust-center.manifest.v1",
@@ -166,7 +191,7 @@ write_manifest() {
     "location": "local",
     "identity_backend": "keychain"
   },
-  "roles": ["agent", "validator", "gossip"],
+  "roles": $roles,
   "services": {
     "agent": {
       "enabled": true,
@@ -181,6 +206,21 @@ write_manifest() {
     "gossip": {
       "enabled": true,
       "bind": "0.0.0.0:4001"
+    },
+    "chain_rpc": {
+      "enabled": $SURVIVAL_FULL,
+      "bind": "0.0.0.0:8645",
+      "healthz": "http://127.0.0.1:8645"
+    },
+    "gateway": {
+      "enabled": $SURVIVAL_FULL,
+      "bind": "0.0.0.0:8080",
+      "healthz": "http://127.0.0.1:8080/healthz"
+    },
+    "fleet": {
+      "enabled": $SURVIVAL_FULL,
+      "bind": "0.0.0.0:8099",
+      "healthz": "http://127.0.0.1:8099/v1/fleet"
     }
   },
   "peer": {
@@ -229,6 +269,62 @@ write_manifest() {
   }
 }
 JSON
+}
+
+write_full_service_plist() {
+  label="$1"; script="$2"; out="$3"; err="$4"
+  plist="$HOME/Library/LaunchAgents/$label.plist"
+  cat > "$plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>$label</string>
+  <key>ProgramArguments</key><array><string>$script</string></array>
+  <key>WorkingDirectory</key><string>$ROOT</string>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>$out</string>
+  <key>StandardErrorPath</key><string>$err</string>
+</dict></plist>
+PLIST
+  launchctl bootout "gui/$(id -u)" "$plist" >/dev/null 2>&1 || true
+  launchctl bootstrap "gui/$(id -u)" "$plist"
+}
+
+install_full_services() {
+  [ "$SURVIVAL_TIER" != "full" ] && return 0
+  fullstack_required
+  cat > "$ROOT/run-chain-rpc.sh" <<RUN
+#!/bin/sh
+set -a; . "$NODE_ENV"; set +a
+exec "$FULLSTACK_DIR/node" "$FULLSTACK_DIR/chain-rpc.mjs"
+RUN
+  cat > "$ROOT/run-gateway.sh" <<RUN
+#!/bin/sh
+set -a; . "$NODE_ENV"; set +a
+exec "$FULLSTACK_DIR/node" "$FULLSTACK_DIR/gateway-api.mjs"
+RUN
+  cat > "$ROOT/run-fleet.sh" <<RUN
+#!/bin/sh
+set -a; . "$NODE_ENV"; set +a
+exec "$FULLSTACK_DIR/node" "$FULLSTACK_DIR/fleet-api.mjs"
+RUN
+  cat > "$ROOT/run-gossip.sh" <<RUN
+#!/bin/sh
+set -a; . "$NODE_ENV"; set +a
+exec "$FULLSTACK_DIR/gossip-node"
+RUN
+  cat > "$ROOT/run-validator.sh" <<RUN
+#!/bin/sh
+set -a; . "$NODE_ENV"; set +a
+exec "$FULLSTACK_DIR/validator-node"
+RUN
+  chmod +x "$ROOT"/run-chain-rpc.sh "$ROOT"/run-gateway.sh "$ROOT"/run-fleet.sh "$ROOT"/run-gossip.sh "$ROOT"/run-validator.sh
+  write_full_service_plist app.step.chain "$ROOT/run-chain-rpc.sh" "$LOG_DIR/chain.out.log" "$LOG_DIR/chain.err.log"
+  write_full_service_plist app.step.gateway "$ROOT/run-gateway.sh" "$LOG_DIR/gateway.out.log" "$LOG_DIR/gateway.err.log"
+  write_full_service_plist app.step.fleet "$ROOT/run-fleet.sh" "$LOG_DIR/fleet.out.log" "$LOG_DIR/fleet.err.log"
+  write_full_service_plist app.step.gossip "$ROOT/run-gossip.sh" "$LOG_DIR/gossip.out.log" "$LOG_DIR/gossip.err.log"
+  write_full_service_plist app.step.validator "$ROOT/run-validator.sh" "$LOG_DIR/validator.out.log" "$LOG_DIR/validator.err.log"
 }
 
 write_plist() {
@@ -298,6 +394,7 @@ cmd_provision() {
   write_env "$addr"
   write_manifest "$addr"
   write_plist
+  install_full_services
   launchctl bootout "gui/$(id -u)" "$PLIST" >/dev/null 2>&1 || true
   launchctl bootstrap "gui/$(id -u)" "$PLIST"
   launchctl kickstart -k "$(launch_domain)" >/dev/null 2>&1 || true
@@ -349,6 +446,11 @@ cmd_doctor() {
   launchctl print "$(launch_domain)" >/dev/null 2>&1 && add launchd.loaded pass "$LABEL" || add launchd.loaded fail "not loaded"
   curl -fsS -m 2 "http://127.0.0.1:$AGENT_PORT/healthz" >/dev/null 2>&1 && add agent.health pass ":$AGENT_PORT" || add agent.health fail ":$AGENT_PORT down"
   curl -fsS -m 2 "http://127.0.0.1:$VALIDATOR_PORT/healthz" >/dev/null 2>&1 && add validator.health pass ":$VALIDATOR_PORT" || add validator.health fail ":$VALIDATOR_PORT down"
+  if [ "$SURVIVAL_TIER" = "full" ]; then
+    curl -fsS -m 2 "http://127.0.0.1:8080/healthz" >/dev/null 2>&1 && add gateway.health pass ":8080" || add gateway.health fail ":8080 down"
+    curl -fsS -m 2 "http://127.0.0.1:8099/v1/fleet" >/dev/null 2>&1 && add fleet.health pass ":8099" || add fleet.health fail ":8099 down"
+    curl -fsS -m 2 -H "content-type: application/json" --data '{"jsonrpc":"2.0","id":1,"method":"eth_chainId","params":[]}' "http://127.0.0.1:8645" >/dev/null 2>&1 && add chain.health pass ":8645" || add chain.health fail ":8645 down"
+  fi
   curl -fsS -m 3 "$ARTIFACTS/healthz" >/dev/null 2>&1 && add network.artifacts pass "$ARTIFACTS" || add network.artifacts warn "$ARTIFACTS unreachable"
   if [ "$json" = "1" ]; then
     printf '%b' "$checks" | awk -F'|' 'BEGIN{printf "["} NF>=3{printf "%s{\"id\":\"%s\",\"level\":\"%s\",\"message\":\"%s\"}",sep,$1,$2,$3; sep=","} END{print "]"}'

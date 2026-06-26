@@ -19,7 +19,7 @@ packages:
 settings:
   base:
     MARKETING_VERSION: "0.1.0"
-    CURRENT_PROJECT_VERSION: "2"   # 0.1.0(1) is live on TestFlight; this is build (2)
+    CURRENT_PROJECT_VERSION: "3"   # 0.1.0(3) contains the Mobile Trust Center launcher
     SWIFT_VERSION: "6.0"
     ALWAYS_SEARCH_USER_PATHS: NO   # silence the legacy-headermap build warning
     DEVELOPMENT_TEAM: "" # set locally / in CI signing; empty for unsigned simulator builds

@@ -215,6 +215,18 @@ from chain** (M8) — you never re-package or re-deliver.
   replicas. The accepted release state is remote active weight `200`, quorum
   threshold `101`, and no remote fleet alerts while Tribecca gateway/fleet/
   validators are stopped.
+- **Identical full-role installation is also a release gate.** The macOS package
+  and shell installer refuse `--survival-tier full` unless a verified fullstack
+  payload is supplied. That payload must contain the local Node runtime plus
+  gateway, fleet, chain RPC, validator, and gossip executables/bundles. The
+  installer then writes a full-role manifest and installs launchd services for
+  chain, gateway, fleet, gossip, validator, and agent. Verify the invariant with:
+  ```bash
+  pnpm release:system-identity:verify
+  ```
+  This gate proves every full Trust Center has the same baseline capability
+  profile. Bootstrap/relay/artifact mirroring can be added per topology, but the
+  full survival baseline is non-optional.
 
 > Optional P2P layer: a center that should also gossip claims/votes peer-to-peer
 > runs `step-gossip-node` alongside the validator (#54) — see the architecture doc

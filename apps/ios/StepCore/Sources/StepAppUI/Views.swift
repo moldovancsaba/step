@@ -19,7 +19,19 @@ public struct RootView: View {
     public var body: some View {
         Group {
             if model.walletAddress != nil {
-                shell
+                if let mode = model.launcherMode {
+                    switch mode {
+                    case .miner:
+                        shell
+                    case .mobileTrustCenter:
+                        NavigationStack {
+                            MobileTrustCenterView(model: model)
+                                .stepChrome("Mobile Trust Center", model: model)
+                        }
+                    }
+                } else {
+                    LauncherView(model: model)
+                }
             } else if model.hasAccount {
                 LoginWall(model: model)   // #27: account/login gate
             } else {
@@ -72,6 +84,7 @@ private struct StepChrome: ViewModifier {
                         if let addr = model.walletAddress {
                             Text(addr).font(.system(.caption2, design: .monospaced))
                         }
+                        Button("Launcher") { model.returnToLauncher() }
                         Button("Sign out", role: .destructive) { model.signOut() }
                     } label: {
                         Image(systemName: "person.crop.circle")
@@ -85,6 +98,166 @@ private struct StepChrome: ViewModifier {
 extension View {
     func stepChrome(_ title: String, model: AppModel) -> some View {
         modifier(StepChrome(title: title, model: model))
+    }
+}
+
+/// Choosable launcher: users can either mine/explore or run this device as a
+/// Mobile Trust Center while it is awake and the app remains running.
+struct LauncherView: View {
+    @ObservedObject var model: AppModel
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: StepSpacing.lg) {
+                Text("STEP").font(.largeTitle.bold()).foregroundStyle(StepColor.text)
+                Text("Choose how this device helps the network")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(StepColor.text)
+                Text("You can switch modes any time from the account menu.")
+                    .font(.callout)
+                    .foregroundStyle(StepColor.textMuted)
+
+                LauncherCard(
+                    title: "Mine & explore",
+                    icon: "triangle.fill",
+                    description: "Visit triangles, create signed proof-of-location claims, manage your wallet, and trade triangle slots.",
+                    footnote: "Rewards come from mining actual locations."
+                ) {
+                    model.chooseLauncherMode(.miner)
+                }
+
+                LauncherCard(
+                    title: "Mobile Trust Center",
+                    icon: "ipad.and.iphone",
+                    description: "Keep this iPhone or iPad awake to act as an attested mobile trust device. It can later contribute signed votes and earn trust-center rewards without visiting new locations.",
+                    footnote: "Requires the app to stay open, network connected, powered, and enrolled by protocol policy."
+                ) {
+                    model.startMobileTrustCenter()
+                }
+            }
+            .padding(StepSpacing.lg)
+        }
+        .background(StepColor.background.ignoresSafeArea())
+    }
+}
+
+struct LauncherCard: View {
+    let title: String
+    let icon: String
+    let description: String
+    let footnote: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: StepSpacing.sm) {
+                HStack(spacing: StepSpacing.sm) {
+                    Image(systemName: icon)
+                        .font(.title2)
+                        .foregroundStyle(StepColor.primary)
+                    Text(title)
+                        .font(.headline)
+                        .foregroundStyle(StepColor.text)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .foregroundStyle(StepColor.textMuted)
+                }
+                Text(description)
+                    .font(.callout)
+                    .foregroundStyle(StepColor.text)
+                    .multilineTextAlignment(.leading)
+                Text(footnote)
+                    .font(.caption)
+                    .foregroundStyle(StepColor.textMuted)
+                    .multilineTextAlignment(.leading)
+            }
+            .padding(StepSpacing.md)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(StepColor.surface)
+            .clipShape(RoundedRectangle(cornerRadius: StepRadius.lg, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: StepRadius.lg, style: .continuous)
+                    .stroke(StepColor.border, lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(Text(title + ". " + description + ". " + footnote))
+    }
+}
+
+/// Foreground Mobile Trust Center screen. This mode does not claim background
+/// daemon guarantees; it is explicit about the device obligations.
+struct MobileTrustCenterView: View {
+    @ObservedObject var model: AppModel
+
+    var body: some View {
+        List {
+            Section {
+                VStack(alignment: .leading, spacing: StepSpacing.sm) {
+                    Label(
+                        model.mobileTrustCenterActive ? "Mobile Trust Center is active" : "Mobile Trust Center is paused",
+                        systemImage: model.mobileTrustCenterActive ? "checkmark.seal.fill" : "pause.circle"
+                    )
+                    .font(.headline)
+                    .foregroundStyle(model.mobileTrustCenterActive ? StepColor.success : StepColor.textMuted)
+                    Text("Keep this device unlocked, powered, connected, and on this screen to contribute as a mobile trust device.")
+                        .font(.callout)
+                        .foregroundStyle(StepColor.textMuted)
+                }
+                .accessibilityElement(children: .combine)
+            }
+
+            Section("This device can contribute") {
+                TrustCapabilityRow(icon: "key.fill", title: "Wallet identity", detail: "Signs as your self-custody STEP address.")
+                TrustCapabilityRow(icon: "checkmark.shield.fill", title: "Device attestation", detail: "Uses App Attest on real hardware when available.")
+                TrustCapabilityRow(icon: "signature", title: "Future vote signing", detail: "Prepared for protocol-enrolled mobile trust votes and rewards.")
+                TrustCapabilityRow(icon: "network", title: "P2P support", detail: "Acts as a mobile participant while the app is running.")
+            }
+
+            Section("Reward model") {
+                Text("Mobile Trust Center rewards are separate from location mining. They can later reward uptime, valid participation, and attested device contribution without requiring the owner to visit new triangles.")
+                    .font(.callout)
+                    .foregroundStyle(StepColor.text)
+                Text("No production reward is promised until the protocol parameter and enrollment policy are activated.")
+                    .font(.caption)
+                    .foregroundStyle(StepColor.textMuted)
+            }
+
+            Section {
+                if model.mobileTrustCenterActive {
+                    Button("Pause Mobile Trust Center", role: .destructive) {
+                        model.stopMobileTrustCenter()
+                    }
+                } else {
+                    Button("Start Mobile Trust Center") {
+                        model.startMobileTrustCenter()
+                    }
+                }
+                Button("Return to launcher") {
+                    model.returnToLauncher()
+                }
+            }
+        }
+    }
+}
+
+struct TrustCapabilityRow: View {
+    let icon: String
+    let title: String
+    let detail: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: StepSpacing.sm) {
+            Image(systemName: icon)
+                .foregroundStyle(StepColor.primary)
+                .frame(width: 28)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.callout.weight(.semibold))
+                Text(detail).font(.caption).foregroundStyle(StepColor.textMuted)
+            }
+        }
+        .accessibilityElement(children: .combine)
     }
 }
 

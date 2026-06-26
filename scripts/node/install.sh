@@ -12,7 +12,7 @@
 # After that the node self-updates from chain forever (ADR-019/M8).
 set -eu
 
-RPC=""; REGISTRY=""; PLATFORM_ID=""; ARTIFACT=""; NONCE_SECRET=""; FLEET=""; SHA256=""
+RPC=""; REGISTRY=""; PLATFORM_ID=""; ARTIFACT=""; NONCE_SECRET=""; FLEET=""; SHA256=""; FULLSTACK_ARTIFACT=""; FULLSTACK_SHA256=""
 BOOTSTRAP_PEERS="${STEP_TRUSTCENTER_BOOTSTRAP_PEERS:-}"
 RELAY_PEERS="${STEP_TRUSTCENTER_RELAY_PEERS:-}"
 ADVERTISE_PEERS="${STEP_TRUSTCENTER_ADVERTISE_PEERS:-}"
@@ -33,6 +33,8 @@ while [ $# -gt 0 ]; do
     --advertise-peers) ADVERTISE_PEERS="$2"; shift 2;;
     --transport) TRANSPORT="$2"; shift 2;;
     --survival-tier) SURVIVAL_TIER="$2"; shift 2;;
+    --fullstack-artifact) FULLSTACK_ARTIFACT="$2"; shift 2;;
+    --fullstack-sha256) FULLSTACK_SHA256="$2"; shift 2;;
     *) echo "unknown arg: $1" >&2; exit 2;;
   esac
 done
@@ -94,12 +96,41 @@ if [ "$SURVIVAL_TIER" != "edge" ] && [ "$SURVIVAL_TIER" != "full" ]; then
   echo "[step-install] --survival-tier must be edge or full" >&2
   exit 2
 fi
+if [ "$SURVIVAL_TIER" = "full" ]; then
+  [ -n "$FULLSTACK_ARTIFACT" ] && [ -n "$FULLSTACK_SHA256" ] || { echo "[step-install] --survival-tier full requires --fullstack-artifact and --fullstack-sha256" >&2; exit 2; }
+fi
 SURVIVAL_FULL=false
 if [ "$SURVIVAL_TIER" = "full" ]; then
   SURVIVAL_FULL=true
 fi
+verify_sha256_file() {
+  file="$1"; want_raw="$2"
+  if command -v sha256sum >/dev/null 2>&1; then got=$(sha256sum "$file" | awk '{print $1}')
+  elif command -v shasum >/dev/null 2>&1; then got=$(shasum -a 256 "$file" | awk '{print $1}')
+  else echo "[step-install] no sha256 tool (sha256sum/shasum) — cannot verify; aborting" >&2; return 1; fi
+  want=$(printf '%s' "$want_raw" | tr 'A-Z' 'a-z' | sed 's/^0x//')
+  [ "$got" = "$want" ] || { echo "[step-install] HASH MISMATCH for $file" >&2; echo "expected: $want" >&2; echo "got:      $got" >&2; return 1; }
+}
+
+install_fullstack_payload() {
+  [ "$SURVIVAL_TIER" != "full" ] && return 0
+  echo "[step-install] downloading full Trust Center runtime …"
+  curl -fsSL "$FULLSTACK_ARTIFACT" -o "$ROOT/fullstack.tgz.unverified"
+  verify_sha256_file "$ROOT/fullstack.tgz.unverified" "$FULLSTACK_SHA256" || { rm -f "$ROOT/fullstack.tgz.unverified"; exit 1; }
+  rm -rf "$ROOT/fullstack"
+  mkdir -p "$ROOT/fullstack"
+  tar -xzf "$ROOT/fullstack.tgz.unverified" -C "$ROOT/fullstack"
+  rm -f "$ROOT/fullstack.tgz.unverified"
+  for f in node gateway-api.mjs fleet-api.mjs chain-rpc.mjs validator-node gossip-node; do
+    [ -e "$ROOT/fullstack/$f" ] || { echo "[step-install] fullstack payload missing $f" >&2; exit 1; }
+  done
+  chmod +x "$ROOT/fullstack/node" "$ROOT/fullstack/validator-node" "$ROOT/fullstack/gossip-node"
+  echo "[step-install] ✓ full Trust Center runtime verified"
+}
+
 mv "$ROOT/step-node-agent.unverified" "$ROOT/step-node-agent"
 chmod +x "$ROOT/step-node-agent"
+install_fullstack_payload
 echo "[step-install] ✓ binary sha256 verified"
 [ "$(uname -s)" = "Darwin" ] && xattr -dr com.apple.quarantine "$ROOT/step-node-agent" 2>/dev/null || true
 
@@ -147,7 +178,7 @@ cat > "$MANIFEST" <<EOF
     "location": "local",
     "identity_backend": "${SECRET_BACKEND:-keychain}"
   },
-  "roles": ["agent", "validator", "gossip"],
+  "roles": $( [ "$SURVIVAL_TIER" = "full" ] && echo '["agent", "validator", "gossip", "chain", "gateway", "fleet"]' || echo '["agent", "validator", "gossip"]' ),
   "services": {
     "agent": {
       "enabled": true,
@@ -162,6 +193,21 @@ cat > "$MANIFEST" <<EOF
     "gossip": {
       "enabled": true,
       "bind": "0.0.0.0:4001"
+    },
+    "chain_rpc": {
+      "enabled": $SURVIVAL_FULL,
+      "bind": "0.0.0.0:8645",
+      "healthz": "http://127.0.0.1:8645"
+    },
+    "gateway": {
+      "enabled": $SURVIVAL_FULL,
+      "bind": "0.0.0.0:8080",
+      "healthz": "http://127.0.0.1:8080/healthz"
+    },
+    "fleet": {
+      "enabled": $SURVIVAL_FULL,
+      "bind": "0.0.0.0:8099",
+      "healthz": "http://127.0.0.1:8099/v1/fleet"
     }
   },
   "peer": {
@@ -218,6 +264,64 @@ exec "$ROOT/step-node-agent"
 EOF
 chmod +x "$ROOT/run-agent.sh"
 
+install_full_launchd_services() {
+  [ "$SURVIVAL_TIER" != "full" ] && return 0
+  for pair in \
+    "app.step.chain:$ROOT/run-chain-rpc.sh:$ROOT/chain.out.log:$ROOT/chain.err.log" \
+    "app.step.gateway:$ROOT/run-gateway.sh:$ROOT/gateway.out.log:$ROOT/gateway.err.log" \
+    "app.step.fleet:$ROOT/run-fleet.sh:$ROOT/fleet.out.log:$ROOT/fleet.err.log" \
+    "app.step.gossip:$ROOT/run-gossip.sh:$ROOT/gossip.out.log:$ROOT/gossip.err.log" \
+    "app.step.validator:$ROOT/run-validator.sh:$ROOT/validator.out.log:$ROOT/validator.err.log"; do
+    label=$(printf '%s' "$pair" | cut -d: -f1)
+    script=$(printf '%s' "$pair" | cut -d: -f2)
+    out=$(printf '%s' "$pair" | cut -d: -f3)
+    err=$(printf '%s' "$pair" | cut -d: -f4)
+    plist="$HOME/Library/LaunchAgents/$label.plist"
+    cat > "$plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>$label</string>
+  <key>ProgramArguments</key><array><string>$script</string></array>
+  <key>RunAtLoad</key><true/><key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>$out</string>
+  <key>StandardErrorPath</key><string>$err</string>
+</dict></plist>
+PLIST
+    launchctl bootout "gui/$(id -u)/$label" 2>/dev/null || true
+    launchctl bootstrap "gui/$(id -u)" "$plist"
+  done
+}
+
+if [ "$SURVIVAL_TIER" = "full" ]; then
+  cat > "$ROOT/run-chain-rpc.sh" <<EOF
+#!/bin/sh
+set -a; . "$ROOT/node.env"; set +a
+exec "$ROOT/fullstack/node" "$ROOT/fullstack/chain-rpc.mjs"
+EOF
+  cat > "$ROOT/run-gateway.sh" <<EOF
+#!/bin/sh
+set -a; . "$ROOT/node.env"; set +a
+exec "$ROOT/fullstack/node" "$ROOT/fullstack/gateway-api.mjs"
+EOF
+  cat > "$ROOT/run-fleet.sh" <<EOF
+#!/bin/sh
+set -a; . "$ROOT/node.env"; set +a
+exec "$ROOT/fullstack/node" "$ROOT/fullstack/fleet-api.mjs"
+EOF
+  cat > "$ROOT/run-gossip.sh" <<EOF
+#!/bin/sh
+set -a; . "$ROOT/node.env"; set +a
+exec "$ROOT/fullstack/gossip-node"
+EOF
+  cat > "$ROOT/run-validator.sh" <<EOF
+#!/bin/sh
+set -a; . "$ROOT/node.env"; set +a
+exec "$ROOT/fullstack/validator-node"
+EOF
+  chmod +x "$ROOT"/run-chain-rpc.sh "$ROOT"/run-gateway.sh "$ROOT"/run-fleet.sh "$ROOT"/run-gossip.sh "$ROOT"/run-validator.sh
+fi
+
 # Boot-persistent service: launchd (mac) or systemd --user (linux).
 if [ "$(uname -s)" = "Darwin" ]; then
   PLIST="$HOME/Library/LaunchAgents/app.step.node-agent.plist"
@@ -234,6 +338,7 @@ if [ "$(uname -s)" = "Darwin" ]; then
 EOF
   launchctl bootout "gui/$(id -u)/app.step.node-agent" 2>/dev/null || true
   launchctl bootstrap "gui/$(id -u)" "$PLIST"
+  install_full_launchd_services
 else
   mkdir -p "$HOME/.config/systemd/user"
   cat > "$HOME/.config/systemd/user/step-node-agent.service" <<EOF
