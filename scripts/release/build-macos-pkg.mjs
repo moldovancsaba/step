@@ -32,6 +32,9 @@ const artifacts = flag("artifacts", process.env.STEP_TRUSTCENTER_ARTIFACTS ?? "h
 const fleet = flag("fleet", process.env.STEP_TRUSTCENTER_FLEET ?? "http://192.168.100.64:8099");
 const verifier = flag("verifier", process.env.VERIFIER_CONTRACT_ADDRESS ?? "");
 const chainId = flag("chain-id", process.env.STEP_CHAIN_ID ?? "262144");
+const bootstrapPeers = flag("bootstrap-peers", process.env.STEP_TRUSTCENTER_BOOTSTRAP_PEERS ?? "");
+const relayPeers = flag("relay-peers", process.env.STEP_TRUSTCENTER_RELAY_PEERS ?? "");
+const advertisePeers = flag("advertise-peers", process.env.STEP_TRUSTCENTER_ADVERTISE_PEERS ?? "");
 const agentBin = flag("bin", join(ROOT, "target/release/step-node-agent"));
 const identifier = flag("identifier", "com.regiominer.step.trustcenter");
 
@@ -41,6 +44,13 @@ if (!/^https?:\/\//.test(artifacts)) die("--artifacts must be an HTTP(S) URL");
 if (fleet && !/^https?:\/\//.test(fleet)) die("--fleet must be empty or an HTTP(S) URL");
 if (verifier && !/^0x[0-9a-fA-F]{40}$/.test(verifier)) die("--verifier must be empty or a 0x-prefixed address");
 if (!existsSync(agentBin)) die(`agent binary not found at ${agentBin}; build with: cargo build -p step-node-agent --release`);
+const peerList = (raw, name) => raw.split(",").map((s) => s.trim()).filter(Boolean).map((peer) => {
+  if (!peer.startsWith("/")) die(`--${name} entries must be libp2p multiaddrs`);
+  return peer;
+});
+const bootstrapPeerList = peerList(bootstrapPeers, "bootstrap-peers");
+const relayPeerList = peerList(relayPeers, "relay-peers");
+const advertisePeerList = peerList(advertisePeers, "advertise-peers");
 
 const cast = existsSync(join(process.env.HOME ?? "", ".foundry/bin/cast")) ? join(process.env.HOME, ".foundry/bin/cast") : "cast";
 const platformId = flag("platform-id", execFileSync(cast, ["keccak", platform], { encoding: "utf8" }).trim());
@@ -76,6 +86,9 @@ ARTIFACTS="${artifacts}"
 FLEET="${fleet}"
 VERIFIER="${verifier}"
 CHAIN_ID="${chainId}"
+BOOTSTRAP_PEERS="${bootstrapPeers}"
+RELAY_PEERS="${relayPeers}"
+ADVERTISE_PEERS="${advertisePeers}"
 VALIDATOR_PORT="\${STEP_VALIDATOR_PORT:-9101}"
 AGENT_PORT="\${STEP_AGENT_PORT:-9200}"
 SERVICE="app.step.node"
@@ -123,6 +136,8 @@ SECRET_SERVICE=$SERVICE
 AGENT_POLL_INTERVAL=30
 AGENT_INTEGRITY_INTERVAL=120
 AGENT_WATCH_ATTEMPTS=20
+GOSSIP_BOOTSTRAP=$BOOTSTRAP_PEERS
+GOSSIP_RELAYS=$RELAY_PEERS
 ENV
 }
 
@@ -152,9 +167,9 @@ write_manifest() {
     }
   },
   "peer": {
-    "bootstrap_peers": [],
-    "relay_peers": [],
-    "advertise": []
+    "bootstrap_peers": ${JSON.stringify(bootstrapPeerList)},
+    "relay_peers": ${JSON.stringify(relayPeerList)},
+    "advertise": ${JSON.stringify(advertisePeerList)}
   },
   "chain": {
     "chain_id": "$CHAIN_ID",

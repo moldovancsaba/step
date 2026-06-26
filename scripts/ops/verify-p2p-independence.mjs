@@ -80,6 +80,9 @@ if (!pkgBuilder.includes("SECRET_BACKEND=keychain")) {
 if (!pkgBuilder.includes("trust-center.manifest.json") || !pkgBuilder.includes("write_manifest")) {
   fail("macOS package provisioning does not write a Trust Center manifest");
 }
+for (const token of ["bootstrap-peers", "relay-peers", "advertise-peers", "GOSSIP_BOOTSTRAP", "GOSSIP_RELAYS"]) {
+  if (!pkgBuilder.includes(token)) fail(`macOS package builder is missing peer seed support token ${token}`);
+}
 
 const installScript = read("scripts/node/install.sh");
 if (!installScript.includes("trust-center.manifest.json")) {
@@ -87,6 +90,9 @@ if (!installScript.includes("trust-center.manifest.json")) {
 }
 if (!installScript.includes('"schema_version": "step.trust-center.manifest.v1"')) {
   fail("shell Trust Center installer manifest is missing schema_version");
+}
+for (const token of ["--bootstrap-peers", "--relay-peers", "--advertise-peers", "json_peer_array", "GOSSIP_BOOTSTRAP", "GOSSIP_RELAYS"]) {
+  if (!installScript.includes(token)) fail(`shell Trust Center installer is missing peer seed support token ${token}`);
 }
 
 const fleetApp = read("services/fleet-api/src/app.ts");

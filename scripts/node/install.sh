@@ -13,6 +13,9 @@
 set -eu
 
 RPC=""; REGISTRY=""; PLATFORM_ID=""; ARTIFACT=""; NONCE_SECRET=""; FLEET=""; SHA256=""
+BOOTSTRAP_PEERS="${STEP_TRUSTCENTER_BOOTSTRAP_PEERS:-}"
+RELAY_PEERS="${STEP_TRUSTCENTER_RELAY_PEERS:-}"
+ADVERTISE_PEERS="${STEP_TRUSTCENTER_ADVERTISE_PEERS:-}"
 PLATFORM="${STEP_PLATFORM:-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m)}"
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -23,6 +26,9 @@ while [ $# -gt 0 ]; do
     --nonce-secret) NONCE_SECRET="$2"; shift 2;;
     --fleet) FLEET="$2"; shift 2;;
     --sha256) SHA256="$2"; shift 2;;
+    --bootstrap-peers) BOOTSTRAP_PEERS="$2"; shift 2;;
+    --relay-peers) RELAY_PEERS="$2"; shift 2;;
+    --advertise-peers) ADVERTISE_PEERS="$2"; shift 2;;
     *) echo "unknown arg: $1" >&2; exit 2;;
   esac
 done
@@ -48,6 +54,28 @@ if [ "$GOT" != "$WANT" ]; then
   echo "[step-install]   got:      $GOT" >&2
   rm -f "$ROOT/step-node-agent.unverified"; exit 1
 fi
+
+validate_peer_list() {
+  name="$1"; raw="$2"
+  [ -z "$raw" ] && return 0
+  old_ifs="$IFS"; IFS=,
+  for peer in $raw; do
+    case "$peer" in /*) : ;; *) echo "[step-install] $name entries must be libp2p multiaddrs: $peer" >&2; IFS="$old_ifs"; exit 2 ;; esac
+  done
+  IFS="$old_ifs"
+}
+json_peer_array() {
+  raw="$1"
+  python3 - "$raw" <<'PY'
+import json, sys
+raw = sys.argv[1]
+items = [p.strip() for p in raw.split(",") if p.strip()]
+print(json.dumps(items))
+PY
+}
+validate_peer_list "--bootstrap-peers" "$BOOTSTRAP_PEERS"
+validate_peer_list "--relay-peers" "$RELAY_PEERS"
+validate_peer_list "--advertise-peers" "$ADVERTISE_PEERS"
 mv "$ROOT/step-node-agent.unverified" "$ROOT/step-node-agent"
 chmod +x "$ROOT/step-node-agent"
 echo "[step-install] ✓ binary sha256 verified"
@@ -74,12 +102,17 @@ PLATFORM_ID=$PLATFORM_ID
 PLATFORM=$PLATFORM
 ARTIFACT_BASE_URLS=$(dirname "$ARTIFACT")
 SECRET_BACKEND=${SECRET_BACKEND:-keychain}
+GOSSIP_BOOTSTRAP=$BOOTSTRAP_PEERS
+GOSSIP_RELAYS=$RELAY_PEERS
 ${FLEET:+FLEET_URL=$FLEET}
 EOF
 
 NODE_NAME=$(hostname -s 2>/dev/null | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9-' | cut -c1-63)
 [ -n "$NODE_NAME" ] || NODE_NAME="step-node"
 ARTIFACT_BASE=$(dirname "$ARTIFACT")
+BOOTSTRAP_JSON=$(json_peer_array "$BOOTSTRAP_PEERS")
+RELAY_JSON=$(json_peer_array "$RELAY_PEERS")
+ADVERTISE_JSON=$(json_peer_array "$ADVERTISE_PEERS")
 cat > "$MANIFEST" <<EOF
 {
   "schema_version": "step.trust-center.manifest.v1",
@@ -104,9 +137,9 @@ cat > "$MANIFEST" <<EOF
     }
   },
   "peer": {
-    "bootstrap_peers": [],
-    "relay_peers": [],
-    "advertise": []
+    "bootstrap_peers": $BOOTSTRAP_JSON,
+    "relay_peers": $RELAY_JSON,
+    "advertise": $ADVERTISE_JSON
   },
   "chain": {
     "chain_id": "${STEP_CHAIN_ID:-262144}",

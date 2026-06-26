@@ -14,6 +14,7 @@
 - The P2P independence release verifier now checks key custody, keyless packaging, quorum terminology, Chappie keychain migration, and Trust Center manifest validity.
 - `step-trustcenter provision` and the shell Trust Center installer now generate `trust-center.manifest.json` beside the node runtime, so each installed Trust Center has a local role/service/update/recovery contract.
 - Fleet peer announcements now use signed `step.peer-record.v1` records with monotonic `sequence`, HTTPS-only public URLs, bounded TTL, and stale-record rejection.
+- Trust Center pkg and shell installer now accept configurable `bootstrap-peers`, `relay-peers`, and `advertise-peers`, persist them as `GOSSIP_BOOTSTRAP` and `GOSSIP_RELAYS`, and write them into the local manifest.
 
 ## Shared terminology
 
@@ -317,11 +318,10 @@ The current App Store Connect API key can read app/build status, but returned `4
 
 1. Finish `#90` by adding CI/release assertions that production runtime node files cannot contain plaintext `privateKey` and by updating any remaining docs that describe keyed remote bundles as normal operation.
 2. Execute `#92` to make Chappie a real supervised Trust Center.
-3. Finish `#94` by adding replaceable bootstrap/relay seed rotation and non-hub discovery convergence.
-4. Execute `#95` and `#96` to make chain participation and quorum rules real.
-5. Execute `#97`, `#98`, and `#100` to package, update, recover, and block unsafe production releases.
-6. Execute `#99` for GDS-only operator visibility.
-7. Execute `#101` as the final two-node independence release proof.
+3. Execute `#95` and `#96` to make chain participation and quorum rules real.
+4. Execute `#97`, `#98`, and `#100` to package, update, recover, and block unsafe production releases.
+5. Execute `#99` for GDS-only operator visibility.
+6. Execute `#101` as the final two-node independence release proof.
 
 ## Operational acceptance target
 
