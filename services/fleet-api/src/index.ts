@@ -4,7 +4,7 @@
  * serves the aggregated fleet view + alerts.
  *
  * Env: NODE_DIRECTORY_FILE, STEP_RPC_URL, STEP_DEPLOYMENTS_FILE (or
- * VALIDATOR_REGISTRY), STEP_QUORUM_THRESHOLD (default 100), FLEET_PORT (8099),
+ * VALIDATOR_REGISTRY), STEP_QUORUM_THRESHOLD (default 101), FLEET_PORT (8099),
  * STEP_CORS_ORIGINS.
  */
 import { serve } from "@hono/node-server";
@@ -41,7 +41,7 @@ function env(key: string, fallback?: string): string {
 const directoryFile = env("NODE_DIRECTORY_FILE");
 const rpcUrl = env("STEP_RPC_URL");
 const chainId = Number(env("STEP_CHAIN_ID", "31337"));
-const quorumThreshold = BigInt(env("STEP_QUORUM_THRESHOLD", "100"));
+const quorumThreshold = BigInt(env("STEP_QUORUM_THRESHOLD", "101"));
 
 let registry = process.env.VALIDATOR_REGISTRY as Address | undefined;
 let trustCenterRegistry = process.env.TRUST_CENTER_REGISTRY as Address | undefined;
