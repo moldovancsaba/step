@@ -1,0 +1,102 @@
+{
+  "schema_version": "step.trust-center.manifest.v1",
+  "node": {
+    "name": "tribecca",
+    "address": "0x6f6421a07fef68c0c782bd68c83f1ea347782ce9",
+    "platform": "darwin-arm64",
+    "location": "this-machine",
+    "identity_backend": "keychain"
+  },
+  "roles": [
+    "agent",
+    "validator",
+    "gossip",
+    "chain",
+    "bootstrap",
+    "relay",
+    "gateway",
+    "fleet",
+    "artifact"
+  ],
+  "services": {
+    "agent": {
+      "enabled": true,
+      "bind": "0.0.0.0:9201",
+      "healthz": "http://127.0.0.1:9201/healthz"
+    },
+    "validator": {
+      "enabled": true,
+      "bind": "0.0.0.0:9101",
+      "healthz": "http://127.0.0.1:9101/healthz"
+    },
+    "gossip": {
+      "enabled": true,
+      "bind": "0.0.0.0:4001"
+    },
+    "chain_rpc": {
+      "enabled": true,
+      "bind": "192.168.100.64:8645",
+      "healthz": "http://192.168.100.64:8645"
+    },
+    "gateway": {
+      "enabled": true,
+      "bind": "0.0.0.0:8080",
+      "healthz": "http://127.0.0.1:8080/healthz"
+    },
+    "fleet": {
+      "enabled": true,
+      "bind": "0.0.0.0:8099",
+      "healthz": "http://127.0.0.1:8099/healthz"
+    },
+    "artifact": {
+      "enabled": true,
+      "bind": "0.0.0.0:8078",
+      "healthz": "http://127.0.0.1:8078"
+    }
+  },
+  "peer": {
+    "bootstrap_peers": [],
+    "relay_peers": [],
+    "advertise": [
+      "/ip4/192.168.100.64/tcp/4001"
+    ]
+  },
+  "chain": {
+    "chain_id": "262144",
+    "rpc_urls": [
+      "http://192.168.100.64:8645",
+      "http://127.0.0.1:8645"
+    ],
+    "release_registry": "0x6e7B8A754A8a9111F211bC8C8f619E462f8DdF5F",
+    "validator_registry": "0x71725163aa51A55386194A5091448726c2eb237d"
+  },
+  "update": {
+    "platform_id": "0x3bdd03393e221a1bbdac482d1ae2470a13d84a69452fd2a9d88a645036f90658",
+    "artifact_base_urls": [
+      "http://127.0.0.1:8078",
+      "http://192.168.100.64:8078"
+    ],
+    "poll_interval_s": 30,
+    "integrity_interval_s": 120
+  },
+  "recovery": {
+    "supervisor": "launchd",
+    "restart": {
+      "enabled": true,
+      "max_attempts": 20
+    },
+    "rollback": {
+      "enabled": true,
+      "last_good_required": true
+    }
+  },
+  "observability": {
+    "healthz": "http://127.0.0.1:9201/healthz",
+    "logs": [
+      ".runtime/logs/node-agent-tribecca-0.out.log",
+      ".runtime/logs/gossip-tribecca.out.log",
+      ".runtime/logs/fleet-api.out.log"
+    ],
+    "fleet_heartbeat": true
+  }
+}

@@ -20,6 +20,7 @@
     "release:macos-pkg": "node scripts/release/build-macos-pkg.mjs",
     "release:macos-pkg:test": "node scripts/release/test-macos-pkg-e2e.mjs",
     "release:macos-pkg:notarize": "node scripts/release/notarize-macos-pkg.mjs",
+    "trust-center:manifest:validate": "node scripts/node/validate-manifest.mjs",
     "typecheck": "pnpm -r typecheck",
     "lint": "pnpm -r lint",
     "release:public-edge:verify": "node scripts/ops/verify-public-edge.mjs",

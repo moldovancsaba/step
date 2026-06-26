@@ -1,0 +1,75 @@
+{
+  "schema_version": "step.trust-center.manifest.v1",
+  "node": {
+    "name": "chappie",
+    "address": "0xbb0b44e189c69357ac19b627b7d421968d2678bb",
+    "platform": "darwin-arm64",
+    "location": "remote",
+    "identity_backend": "keychain"
+  },
+  "roles": [
+    "agent",
+    "validator",
+    "gossip"
+  ],
+  "services": {
+    "agent": {
+      "enabled": true,
+      "bind": "0.0.0.0:9200",
+      "healthz": "http://127.0.0.1:9200/healthz"
+    },
+    "validator": {
+      "enabled": true,
+      "bind": "0.0.0.0:9104",
+      "healthz": "http://127.0.0.1:9104/healthz"
+    },
+    "gossip": {
+      "enabled": true,
+      "bind": "0.0.0.0:4001"
+    }
+  },
+  "peer": {
+    "bootstrap_peers": [
+      "/ip4/192.168.100.64/tcp/4001/p2p/16Uiu2HAm1ajkbCHt7U2hg4e7Sdt3qn9CEzq7j3dW3nKdMHhevYbj"
+    ],
+    "relay_peers": [
+      "/ip4/192.168.100.64/tcp/4001/p2p/16Uiu2HAm1ajkbCHt7U2hg4e7Sdt3qn9CEzq7j3dW3nKdMHhevYbj/p2p-circuit"
+    ],
+    "advertise": []
+  },
+  "chain": {
+    "chain_id": "262144",
+    "rpc_urls": [
+      "http://192.168.100.64:8645"
+    ],
+    "release_registry": "0x6e7B8A754A8a9111F211bC8C8f619E462f8DdF5F",
+    "validator_registry": "0x71725163aa51A55386194A5091448726c2eb237d"
+  },
+  "update": {
+    "platform_id": "0x3bdd03393e221a1bbdac482d1ae2470a13d84a69452fd2a9d88a645036f90658",
+    "artifact_base_urls": [
+      "http://192.168.100.64:8078"
+    ],
+    "poll_interval_s": 30,
+    "integrity_interval_s": 120
+  },
+  "recovery": {
+    "supervisor": "launchd",
+    "restart": {
+      "enabled": true,
+      "max_attempts": 20
+    },
+    "rollback": {
+      "enabled": true,
+      "last_good_required": true
+    }
+  },
+  "observability": {
+    "healthz": "http://127.0.0.1:9200/healthz",
+    "logs": [
+      "$HOME/Library/Application Support/step-node-agent/agent.out.log",
+      "$HOME/Library/Application Support/step-node-agent/agent.err.log"
+    ],
+    "fleet_heartbeat": true
+  }
+}

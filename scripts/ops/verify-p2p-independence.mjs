@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { spawnSync } from "node:child_process";
 
 const root = new URL("../..", import.meta.url).pathname;
 const fail = (msg) => {
@@ -84,9 +85,28 @@ if (!handover.includes("2/3 + 1 quorum")) {
 if (!handover.includes("Chappie validator identity exists in macOS Keychain")) {
   fail("handover.md does not record the Chappie keychain migration");
 }
+if (!handover.includes("Trust Center role manifest contract exists")) {
+  fail("handover.md does not record the Trust Center manifest contract delivery");
+}
+
+read("packages/schemas/step.trust-center.manifest.v1.json");
+for (const manifestPath of [
+  "config/trust-center.tribecca.example.json",
+  "config/trust-center.chappie.example.json"
+]) {
+  const result = spawnSync(process.execPath, ["scripts/node/validate-manifest.mjs", manifestPath], {
+    cwd: root,
+    encoding: "utf8"
+  });
+  if (result.status !== 0) {
+    process.stderr.write(result.stderr || result.stdout || "");
+    fail(`Trust Center manifest validation failed: ${manifestPath}`);
+  }
+}
 
 ok("runtime node records contain public metadata only");
 ok("join flow stores node identity in the OS secret backend");
 ok("legacy keyed bundles are explicit local-dev migration paths only");
 ok("keyless macOS Trust Center package path is present");
+ok("symmetric Trust Center role manifests validate");
 ok("handover records quorum and Chappie identity migration");
