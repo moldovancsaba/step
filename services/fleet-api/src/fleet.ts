@@ -30,6 +30,7 @@ export interface DirectoryNode {
 }
 
 export interface PeerRecord {
+  schemaVersion?: "step.peer-record.v1";
   nodeAddress: string;
   publicUrl: string;
   p2pAddress?: string;
@@ -37,6 +38,7 @@ export interface PeerRecord {
   status: "active" | "degraded" | "suspended" | "revoked" | "stale";
   version?: string;
   chainId?: string;
+  sequence?: number;
   lastSeen: string;
   expiresAt: string;
   source: "directory" | "announcement";
@@ -110,6 +112,7 @@ export function buildPeerRecords(
       services: node.services?.length ? node.services : ["gateway", "mesh", "indexer", "fleet"],
       status: "active" as const,
       version: probe.version,
+      sequence: nowMs,
       lastSeen,
       expiresAt,
       source: "directory" as const,

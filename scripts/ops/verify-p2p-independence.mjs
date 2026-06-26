@@ -89,6 +89,14 @@ if (!installScript.includes('"schema_version": "step.trust-center.manifest.v1"')
   fail("shell Trust Center installer manifest is missing schema_version");
 }
 
+const fleetApp = read("services/fleet-api/src/app.ts");
+if (!fleetApp.includes("stale_peer_record_sequence") || !fleetApp.includes("sequence_required")) {
+  fail("fleet peer directory does not enforce monotonic signed peer-record sequence numbers");
+}
+if (!fleetApp.includes("public_url_must_be_https") || !fleetApp.includes("peer_record_ttl_too_long")) {
+  fail("fleet peer directory does not fail closed on unsafe peer URLs or excessive TTL");
+}
+
 const handover = read("handover.md");
 if (!handover.includes("2/3 + 1 quorum")) {
   fail("handover.md is missing the canonical 2/3 + 1 quorum terminology");

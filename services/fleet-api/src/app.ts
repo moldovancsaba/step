@@ -84,6 +84,7 @@ export function createApp(deps: FleetDeps) {
   const registeredNodes = () => new Set(deps.listNodes().map((n) => n.address.toLowerCase()));
   const peerMessage = (record: Omit<PeerRecord, "signature" | "source">): string =>
     JSON.stringify({
+      schemaVersion: record.schemaVersion ?? "step.peer-record.v1",
       nodeAddress: record.nodeAddress.toLowerCase(),
       publicUrl: record.publicUrl,
       p2pAddress: record.p2pAddress ?? "",
@@ -91,18 +92,33 @@ export function createApp(deps: FleetDeps) {
       status: record.status,
       version: record.version ?? "",
       chainId: record.chainId ?? "",
+      sequence: record.sequence ?? 0,
       lastSeen: record.lastSeen,
       expiresAt: record.expiresAt,
     });
 
-  async function verifyPeerAnnouncement(record: PeerRecord): Promise<boolean> {
-    if (!record.signature || !/^0x[0-9a-fA-F]+$/.test(record.signature)) return false;
-    if (!registeredNodes().has(record.nodeAddress.toLowerCase())) return false;
-    if (!/^https:\/\//i.test(record.publicUrl)) return false;
-    if (!record.services?.length) return false;
-    if (Date.parse(record.expiresAt) <= peerNow()) return false;
+  async function verifyPeerAnnouncement(record: PeerRecord): Promise<{ ok: true } | { ok: false; error: string; status: number }> {
+    if (!record.signature || !/^0x[0-9a-fA-F]+$/.test(record.signature)) return { ok: false, error: "missing_signature", status: 401 };
+    if (!registeredNodes().has(record.nodeAddress.toLowerCase())) return { ok: false, error: "unregistered_node", status: 401 };
+    if (!/^https:\/\//i.test(record.publicUrl)) return { ok: false, error: "public_url_must_be_https", status: 400 };
+    if (!record.services?.length) return { ok: false, error: "services_required", status: 400 };
+    if (record.schemaVersion && record.schemaVersion !== "step.peer-record.v1") {
+      return { ok: false, error: "unsupported_peer_record_schema", status: 400 };
+    }
+    if (!Number.isSafeInteger(record.sequence) || (record.sequence ?? 0) < 1) {
+      return { ok: false, error: "sequence_required", status: 400 };
+    }
+    const sequence = record.sequence as number;
+    const lastSeen = Date.parse(record.lastSeen);
+    const expiresAt = Date.parse(record.expiresAt);
+    const now = peerNow();
+    if (!Number.isFinite(lastSeen) || !Number.isFinite(expiresAt)) return { ok: false, error: "invalid_peer_record_time", status: 400 };
+    if (expiresAt <= now) return { ok: false, error: "expired_peer_record", status: 400 };
+    if (lastSeen > now + 30_000) return { ok: false, error: "last_seen_in_future", status: 400 };
+    if (expiresAt - lastSeen > peerTtl() * 2) return { ok: false, error: "peer_record_ttl_too_long", status: 400 };
     try {
       const messageRecord = {
+        schemaVersion: record.schemaVersion,
         nodeAddress: record.nodeAddress,
         publicUrl: record.publicUrl,
         p2pAddress: record.p2pAddress,
@@ -110,6 +126,7 @@ export function createApp(deps: FleetDeps) {
         status: record.status,
         version: record.version,
         chainId: record.chainId,
+        sequence: record.sequence,
         lastSeen: record.lastSeen,
         expiresAt: record.expiresAt,
       };
@@ -117,9 +134,16 @@ export function createApp(deps: FleetDeps) {
         message: peerMessage(messageRecord),
         signature: record.signature,
       });
-      return recovered.toLowerCase() === record.nodeAddress.toLowerCase();
+      if (recovered.toLowerCase() !== record.nodeAddress.toLowerCase()) {
+        return { ok: false, error: "signature_node_mismatch", status: 401 };
+      }
+      const existing = announcedPeers.get(record.nodeAddress.toLowerCase());
+      if (existing?.sequence && existing.sequence >= sequence) {
+        return { ok: false, error: "stale_peer_record_sequence", status: 409 };
+      }
+      return { ok: true };
     } catch {
-      return false;
+      return { ok: false, error: "invalid_peer_record_signature", status: 401 };
     }
   }
 
@@ -163,11 +187,36 @@ export function createApp(deps: FleetDeps) {
     if (len > max) return c.json({ error: "body too large" }, 413);
     const raw = await c.req.text();
     if (raw.length > max) return c.json({ error: "body too large" }, 413);
-    const body = JSON.parse(raw) as PeerRecord;
-    const record: PeerRecord = { ...body, nodeAddress: body.nodeAddress?.toLowerCase(), source: "announcement" };
-    if (!(await verifyPeerAnnouncement(record))) return c.json({ error: "invalid_peer_announcement" }, 401);
+    let body: PeerRecord;
+    try {
+      body = JSON.parse(raw) as PeerRecord;
+    } catch {
+      return c.json({ error: "bad json" }, 400);
+    }
+    const record: PeerRecord = { ...body, nodeAddress: String(body.nodeAddress ?? "").toLowerCase(), source: "announcement" };
+    const verified = await verifyPeerAnnouncement(record);
+    if (!verified.ok) return c.json({ error: verified.error }, verified.status as 400 | 401 | 409);
     announcedPeers.set(record.nodeAddress, record);
-    return c.json({ ok: true, nodeAddress: record.nodeAddress, expiresAt: record.expiresAt });
+    return c.json({ ok: true, nodeAddress: record.nodeAddress, sequence: record.sequence, expiresAt: record.expiresAt });
+  });
+
+  app.post("/v1/peers/announce", async (c) => {
+    const max = deps.peerDirectory?.maxBodyBytes ?? 8192;
+    const len = Number(c.req.header("content-length") ?? "0");
+    if (len > max) return c.json({ error: "body too large" }, 413);
+    const raw = await c.req.text();
+    if (raw.length > max) return c.json({ error: "body too large" }, 413);
+    let body: PeerRecord;
+    try {
+      body = JSON.parse(raw) as PeerRecord;
+    } catch {
+      return c.json({ error: "bad json" }, 400);
+    }
+    const record: PeerRecord = { ...body, nodeAddress: String(body.nodeAddress ?? "").toLowerCase(), source: "announcement" };
+    const verified = await verifyPeerAnnouncement(record);
+    if (!verified.ok) return c.json({ error: verified.error }, verified.status as 400 | 401 | 409);
+    announcedPeers.set(record.nodeAddress, record);
+    return c.json({ ok: true, nodeAddress: record.nodeAddress, sequence: record.sequence, expiresAt: record.expiresAt });
   });
 
   // Signed heartbeat intake (#56): hub-independent supervision signal. The hub
