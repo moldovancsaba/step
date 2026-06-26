@@ -213,6 +213,10 @@ mod tests {
         let mut e = engine(100);
         let k1 = SigningKey::from_slice(&[7; 32]).unwrap();
         let k2 = SigningKey::from_slice(&[9; 32]).unwrap();
+        e.remember_claim(&ClaimMsg {
+            claim_hash: format!("0x{}", hex::encode(CH)),
+            claim: serde_json::json!({"x": 1}),
+        });
         let r1 = e.on_gossip(
             &Gossip::Vote(vote_from(&k1, true)).encode(),
             |_| 50,
