@@ -9,14 +9,14 @@
  *   node scripts/node/bundle-agent.mjs --name chappie \
  *        --advertise-host chappie.tailc0f646.ts.net --port 9104
  *
- * Reads .runtime/.env.runtime (hub chain config) + .runtime/nodes/<name>.json
- * (the node's saved key/identity). The remote node needs NO repo, foundry, or
- * chain write access — only this bundle + the hub reachable over the tailnet.
+ * Legacy keyed mode reads .runtime/.env.runtime (hub chain config) plus local
+ * key material. This is disabled by default because production Trust Centers
+ * must generate/store identity on the target machine.
  *
- * SECURITY: provision-secrets.sh carries the node's key + nonce secret; move the
- * bundle only to a trusted machine over the tailnet. Written under .runtime/.
+ * SECURITY: use the keyless Trust Center installer/package for real nodes.
+ * Set STEP_ALLOW_KEYED_BUNDLE=1 only for local-dev migration.
  */
-import { execSync } from "node:child_process";
+import { execSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, copyFileSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -34,6 +34,9 @@ const args = (() => {
   return a;
 })();
 if (!args.name) die("--name required");
+if (process.env.STEP_ALLOW_KEYED_BUNDLE !== "1") {
+  die("legacy keyed agent bundles are disabled. Use scripts/node/install.sh or scripts/release/build-macos-pkg.mjs so the node generates its own local Keychain identity.");
+}
 // L2 (audit): this bundle EMBEDS the node's private key (provision-secrets.sh), so
 // it must travel only over a trusted channel (LAN/scp/USB). For anything off a
 // trusted LAN, prefer the keyless installer — the node generates its own key and
@@ -47,10 +50,24 @@ function loadRuntimeEnv() {
   }
   return out;
 }
+function keychainGet(address, key) {
+  const service = process.env.SECRET_SERVICE ?? "app.step.node";
+  const out = spawnSync("security", [
+    "find-generic-password",
+    "-s",
+    service,
+    "-a",
+    `step.node.${address.toLowerCase()}.${key}`,
+    "-w",
+  ], { encoding: "utf8" });
+  return out.status === 0 ? out.stdout.trim() : null;
+}
 
 const cfgFile = join(RUNTIME, "nodes", `${args.name}.json`);
 if (!existsSync(cfgFile)) die(`no saved identity for "${args.name}" — register it first (node join … --no-launch)`);
 const node = JSON.parse(readFileSync(cfgFile, "utf8"));
+const nodePrivateKey = node.privateKey ?? keychainGet(node.address, "validatorKey");
+if (!nodePrivateKey) die(`no local key material for "${args.name}" — use the keyless installer/package on the target node`);
 const env = loadRuntimeEnv();
 
 const platform = args.platform ?? "darwin-arm64";
@@ -96,7 +113,7 @@ else die("no released config (config-1.0.0.json) — publish a release first");
 writeFileSync(join(stage, "provision-secrets.sh"), `#!/usr/bin/env bash
 # Store this node's secrets in the macOS keychain (run ONCE).
 set -euo pipefail
-security add-generic-password -U -s "${keychainService}" -a "${acct("validatorKey")}" -w "${node.privateKey}"
+security add-generic-password -U -s "${keychainService}" -a "${acct("validatorKey")}" -w "${nodePrivateKey}"
 security add-generic-password -U -s "${keychainService}" -a "${acct("nonceSecret")}" -w "${env.GATEWAY_NONCE_SECRET}"
 echo "secrets provisioned for ${args.name}."
 `, { mode: 0o700 });
@@ -190,7 +207,8 @@ Verify on the hub:
   curl -s http://127.0.0.1:8099/v1/fleet | jq   # fleet view
 
 SECURITY: provision-secrets.sh contains this node's private key + the shared nonce
-secret. Keep this bundle on trusted machines only.
+secret. This legacy bundle is only for explicit local-dev migration. Use the
+keyless Trust Center installer/package for real nodes.
 `);
 
 const tgz = join(RUNTIME, `agent-${args.name}.tgz`);

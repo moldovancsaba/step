@@ -25,7 +25,7 @@
  * STEP_CHAIN_ID, GATEWAY_NONCE_SECRET, STEP_PROTOCOL_PARAMS and a funded
  * STEP_ADMIN_KEY in the environment, and run the same command.
  */
-import { execSync, spawn } from "node:child_process";
+import { execSync, spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import { dirname, join } from "node:path";
@@ -100,7 +100,11 @@ const chainId = pick("STEP_CHAIN_ID");
 const nonceSecret = pick("GATEWAY_NONCE_SECRET");
 const paramsFile = pick("STEP_PROTOCOL_PARAMS");
 const deploymentsFile = pick("STEP_DEPLOYMENTS_FILE");
-const adminKey = pick("STEP_ADMIN_KEY", DEV_ADMIN_KEY);
+const adminKey =
+  pick("STEP_ADMIN_KEY") ||
+  (process.env.STEP_LOCAL_DEV === "1"
+    ? DEV_ADMIN_KEY
+    : die("STEP_ADMIN_KEY required (or set STEP_LOCAL_DEV=1 for local dev key)"));
 const corsOrigins = pick("STEP_CORS_ORIGINS", "");
 if (!rpcUrl || !chainId || !nonceSecret || !paramsFile) {
   die("missing chain config — start the stack (scripts/dev/up.mjs) or set STEP_RPC_URL/STEP_CHAIN_ID/GATEWAY_NONCE_SECRET/STEP_PROTOCOL_PARAMS");
@@ -124,21 +128,73 @@ if (typeNum === undefined) die(`--type must be one of ${Object.keys(VALIDATOR_TY
 const location = args.location ?? "remote";
 const port = Number(args.port);
 
-// 1. Identity — durable per node: reuse the saved key for this name (so a
-//    restart keeps the same on-chain identity), else the supplied key, else mint.
+const keychainService = process.env.SECRET_SERVICE ?? "app.step.node";
+const secretAccount = (address, key) => `step.node.${address.toLowerCase()}.${key}`;
+function keychainGet(address, key) {
+  const out = spawnSync("security", [
+    "find-generic-password",
+    "-s",
+    keychainService,
+    "-a",
+    secretAccount(address, key),
+    "-w",
+  ], { encoding: "utf8" });
+  return out.status === 0 ? out.stdout.trim() : null;
+}
+function keychainStore(address, key, value) {
+  const out = spawnSync("security", [
+    "add-generic-password",
+    "-U",
+    "-s",
+    keychainService,
+    "-a",
+    secretAccount(address, key),
+    "-w",
+  ], { input: value, encoding: "utf8" });
+  if (out.status !== 0) die(`could not store ${key} in keychain service ${keychainService}`);
+}
+function addressOf(privateKey) {
+  return sh(`cast wallet address ${privateKey}`).toLowerCase();
+}
+
+// 1. Identity — durable per node: reuse the OS-secret-store key for this name
+//    (so a restart keeps the same on-chain identity), else the supplied key, else
+//    mint. Runtime JSON is public metadata only; production must never store
+//    plaintext node private keys in .runtime/nodes/*.json.
 const nodeConfigDir = join(RUNTIME, "nodes");
 mkdirSync(nodeConfigDir, { recursive: true });
 const nodeConfigFile = join(nodeConfigDir, `${args.name}.json`);
 const savedConfig = existsSync(nodeConfigFile)
   ? JSON.parse(readFileSync(nodeConfigFile, "utf8"))
   : null;
-const privateKey = args.key ?? savedConfig?.privateKey ?? `0x${randomBytes(32).toString("hex")}`;
-const address = sh(`cast wallet address ${privateKey}`).toLowerCase();
+let privateKey;
+let address;
+if (args.key) {
+  privateKey = args.key;
+  address = addressOf(privateKey);
+  keychainStore(address, "validatorKey", privateKey);
+} else if (savedConfig?.address) {
+  address = savedConfig.address.toLowerCase();
+  privateKey = keychainGet(address, "validatorKey");
+  if (!privateKey && savedConfig.privateKey) {
+    // One-time migration from the old gitignored plaintext runtime format.
+    privateKey = savedConfig.privateKey;
+    const derived = addressOf(privateKey);
+    if (derived !== address) die(`saved privateKey does not match saved address for ${args.name}`);
+    keychainStore(address, "validatorKey", privateKey);
+    log(`migrated "${args.name}" identity from runtime JSON to keychain`);
+  }
+}
+if (!privateKey) {
+  privateKey = `0x${randomBytes(32).toString("hex")}`;
+  address = addressOf(privateKey);
+  keychainStore(address, "validatorKey", privateKey);
+}
 log(`node "${args.name}" identity ${address}${savedConfig ? " (reused)" : ""}`);
-// Persist the node's key + config (gitignored) so this identity is stable.
+// Persist public metadata only. The validator key lives in the OS secret store.
 writeFileSync(
   nodeConfigFile,
-  JSON.stringify({ name: args.name, address, privateKey, port, weight, type: typeName, location }, null, 2) + "\n",
+  JSON.stringify({ name: args.name, address, port, weight, type: typeName, location, keyBackend: "keychain" }, null, 2) + "\n",
 );
 
 // 2. Trust — register the node on-chain (explicit grant; weighted). Skip if it

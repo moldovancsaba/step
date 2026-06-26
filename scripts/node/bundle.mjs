@@ -18,11 +18,11 @@
  * Usage:  node scripts/node/bundle.mjs --name vienna --port 9104 \
  *              --url http://vienna.tailnet.ts.net:9104
  *
- * SECURITY: the bundle contains the node's private key and the shared nonce
- * secret. Move it only to a machine you trust, over a trusted transport (the
- * tailnet). It is written under .runtime/ (gitignored).
+ * SECURITY: this legacy keyed bundle is disabled by default. Use the keyless
+ * Trust Center installer/package for real nodes. To generate this local-dev-only
+ * bundle, set STEP_ALLOW_KEYED_BUNDLE=1.
  */
-import { execSync } from "node:child_process";
+import { execSync, spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -59,9 +59,24 @@ function loadRuntimeEnv() {
   }
   return out;
 }
+function keychainGet(address, key) {
+  const service = process.env.SECRET_SERVICE ?? "app.step.node";
+  const out = spawnSync("security", [
+    "find-generic-password",
+    "-s",
+    service,
+    "-a",
+    `step.node.${address.toLowerCase()}.${key}`,
+    "-w",
+  ], { encoding: "utf8" });
+  return out.status === 0 ? out.stdout.trim() : null;
+}
 
 const args = parseArgs(process.argv.slice(2));
 if (!args.name) die("--name is required");
+if (process.env.STEP_ALLOW_KEYED_BUNDLE !== "1") {
+  die("legacy keyed bundles are disabled. Use scripts/node/install.sh or scripts/release/build-macos-pkg.mjs; set STEP_ALLOW_KEYED_BUNDLE=1 only for local-dev migration.");
+}
 
 const nodeCfgFile = join(RUNTIME, "nodes", `${args.name}.json`);
 if (!existsSync(nodeCfgFile)) {
@@ -69,6 +84,10 @@ if (!existsSync(nodeCfgFile)) {
     `  node scripts/node/join.mjs --name ${args.name} --port <port> --no-launch --url <url>`);
 }
 const cfg = JSON.parse(readFileSync(nodeCfgFile, "utf8"));
+const privateKey = cfg.privateKey ?? keychainGet(cfg.address, "validatorKey");
+if (!privateKey) {
+  die(`no local key material for ${args.name}; use keyless installer/package on the target node instead of a keyed bundle`);
+}
 const rt = loadRuntimeEnv();
 const pick = (k) => process.env[k] ?? rt[k];
 
@@ -119,7 +138,7 @@ const provisionSh = `#!/usr/bin/env bash
 # Store this node's secrets in the macOS keychain (run ONCE). Linux: use
 # secret-tool store --label step "account" "${acct("validatorKey")}".
 set -euo pipefail
-security add-generic-password -U -s "${keychainService}" -a "${acct("validatorKey")}" -w "${cfg.privateKey}"
+security add-generic-password -U -s "${keychainService}" -a "${acct("validatorKey")}" -w "${privateKey}"
 security add-generic-password -U -s "${keychainService}" -a "${acct("nonceSecret")}" -w "${nonceSecret}"
 echo "secrets provisioned to keychain for ${cfg.name}; you may delete any plaintext copies."
 `;
@@ -171,8 +190,9 @@ To run:
   3. Back on the hub, verify it joined and votes:
        node scripts/node/list.mjs
 
-SECURITY: run.sh contains this node's private key and the shared nonce secret.
-Keep the bundle on trusted machines only.
+SECURITY: provision-secrets.sh contains this node's private key and the shared
+nonce secret. This legacy bundle is only for explicit local-dev migration.
+Use the keyless Trust Center installer/package for real nodes.
 `;
 writeFileSync(join(stage, "README.txt"), readme);
 

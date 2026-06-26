@@ -7,6 +7,9 @@
 - TestFlight/App Store Connect has STEP `0.1.0 (2)` uploaded and processed as `VALID`.
 - `dictionary.md` was added to establish shared STEP terminology.
 - M12 GitHub milestone and production-grade issue decomposition were created for symmetric Trust Centers and independent P2P operation.
+- M12 execution has started with the identity blocker: `scripts/node/join.mjs` now stores node validator keys in the OS secret backend and writes public runtime node metadata only.
+- Legacy keyed remote bundles are disabled by default; `scripts/node/bundle.mjs` and `scripts/node/bundle-agent.mjs` now require explicit `STEP_ALLOW_KEYED_BUNDLE=1` for local-dev migration.
+- The local `.runtime/nodes/chappie.json` record was migrated so it no longer contains `privateKey`; the Chappie validator identity exists in macOS Keychain service `app.step.node`.
 
 ## Shared terminology
 
@@ -308,7 +311,7 @@ The current App Store Connect API key can read app/build status, but returned `4
 
 ## Immediate next execution order
 
-1. Execute `#90` to remove plaintext remote keys and enforce production key custody.
+1. Finish `#90` by adding CI/release assertions that production runtime node files cannot contain plaintext `privateKey` and by updating any remaining docs that describe keyed remote bundles as normal operation.
 2. Execute `#91` to define the symmetric Trust Center role manifest.
 3. Execute `#92` to make Chappie a real supervised Trust Center.
 4. Execute `#93` and `#94` to remove local file/hub authority from peer discovery.
