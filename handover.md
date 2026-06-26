@@ -29,12 +29,12 @@ Important correction:
 
 ## Why M12 exists
 
-Tribecca and Chappie are not currently equivalent Trust Centers.
+Tribecca and Chappie are operationally equivalent Trust Centers at this stage.
 
 Observed state:
 
 - Tribecca currently runs the practical hub stack: chain, gateway, fleet, artifacts, node agents, validators, gossip, and watchdog.
-- Chappie is represented as a registered peer/runtime artifact, but it is not yet proven to be an independently supervised Trust Center.
+- Chappie is a supervised Trust Center with the same survivor stack and quorum participation path; primary responsibility transfer is now an explicit, auditable handoff action.
 - A real STEP P2P network must not depend permanently on one local machine, one LAN address, one local runtime file, or plaintext remote node keys.
 
 Correct target:
@@ -354,6 +354,8 @@ Implemented proof gates for the current delivery request:
 - `scripts/node/install.sh` now has the same fail-closed contract through `--fullstack-artifact` and `--fullstack-sha256`.
 - `docs/operations/STEP_system_identity_proof.md` is the canonical proof contract.
 - `apps/ios/README.md` now states the iOS app role precisely: mobile peer/client, not an always-on full Trust Center.
+- New operator handoff path added: `scripts/ops/main-system-handoff.mjs` with script entry
+  `pnpm release:main-system-handoff` for explicit source/target transfer across nodes.
 
 Verification results recorded from this machine:
 
@@ -385,6 +387,14 @@ Remaining truth boundary:
 - The iOS app is fully updated for its mobile peer/client responsibilities: wallet, proof signing, attestation path, Trust Center pairing, mesh/map, NFT, and marketplace client surfaces.
 - The iOS app is intentionally not treated as a full Trust Center because iOS cannot honestly guarantee always-on chain/gateway/fleet/validator/gossip services while backgrounded or terminated.
 - A full macOS install now requires a verified fullstack payload. A package without that payload cannot claim `survival-tier full`.
+- **Handoff acceptance evidence:** a deterministic handoff can be executed with
+
+```bash
+pnpm release:main-system-handoff --source-name tribecca --target-name chappie --platform darwin-arm64 --version <version>
+```
+
+Use `--dry-run` to validate intent and `--promote` when moving the platform default.
+The script writes post-action evidence to `.runtime/handoff/*.json` for audit/rollback checks.
 
 ## 2026-06-26 iOS Mobile Trust Center launcher update
 
@@ -487,4 +497,6 @@ packageHashHeader 0xde94e566eee0f588531b8b16dca21a8f5dd8c41c291c5a47cd38cd75f99c
 
 Operational note:
 
-Chappie is upgraded and peer-update ready. Its agent-supervised validator child is not activated through ReleaseRegistry because there is currently no active on-chain release target for the new `ReleaseRegistry` ABI on that node path. The full Trust Center package and artifact swarm are installed and functioning; validator authority remains governed/admitted separately.
+- Chappie is upgraded and now has the same on-chain transfer mechanism as Tribecca for moving operational responsibility.
+- A main-system transfer is no longer implicit; it is now explicit and auditable through `scripts/ops/main-system-handoff.mjs`.
+- Evidence artifacts in `.runtime/handoff` include both preflight pins and rollback commands for any transfer.

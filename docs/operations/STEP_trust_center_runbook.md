@@ -85,6 +85,56 @@ a good target is published.
 Force a specific version (operator override): publish/promote it on-chain, or
 `setNodeTarget(node, version)` to canary one node first.
 
+## 3b. Transfer main-system responsibility between Trust Centers
+
+Use this process to move operational primacy from one Trust Center to another
+without redeploying binaries. The transfer is strictly on-chain and replay-safe:
+
+1. Resolve source and target node addresses.
+2. Confirm platform target version from `ReleaseRegistry`.
+3. Pin the target node to that version with `setNodeTarget(target, version)`.
+4. Optionally clear the source pin (`setNodeTarget(source, 0)`) so it falls back
+   to platform target.
+5. Optionally call `promote(platformId, version)` if the platform default must be
+   moved too.
+
+Use the hardened operator script:
+
+```bash
+pnpm release:main-system-handoff \
+  --source-name tribecca \
+  --target-name chappie \
+  --platform darwin-arm64 \
+  --version 1.0.15 \
+  --promote
+```
+
+Dry-run first:
+
+```bash
+pnpm release:main-system-handoff \
+  --source-name tribecca \
+  --target-name chappie \
+  --platform darwin-arm64 \
+  --version 1.0.15 \
+  --dry-run
+```
+
+Required env values:
+
+- `STEP_RPC_URL`
+- `RELEASE_REGISTRY` (or `.runtime/.env.runtime` equivalent)
+- `RELEASE_SIGNER_KEY`
+
+The script writes auditable evidence to `.runtime/handoff/*.json` with exact
+before/after pins and rollback hints. Use that artifact during handoff review.
+
+Rollback recipe:
+
+1. set the previous source/target pins in reverse (from evidence `source.beforePin`
+   and `target.beforePin`),
+2. re-promote prior platform version if `--promote` was used.
+
 ## 4. Integrity / tamper response
 
 The agent re-measures binary/params/config on a timer. On drift:
