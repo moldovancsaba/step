@@ -210,6 +210,11 @@ from chain** (M8) — you never re-package or re-deliver.
   services, probes the remote Trust Center, and restores Tribecca before exit. If
   any remote endpoint is missing, the release fails and the deployment is not
   disaster-proof.
+  Current Chappie deployment runs launchd services for chain RPC, gateway, fleet,
+  gossip, node agent, its own validator, and redundant protocol validator
+  replicas. The accepted release state is remote active weight `200`, quorum
+  threshold `101`, and no remote fleet alerts while Tribecca gateway/fleet/
+  validators are stopped.
 
 > Optional P2P layer: a center that should also gossip claims/votes peer-to-peer
 > runs `step-gossip-node` alongside the validator (#54) — see the architecture doc

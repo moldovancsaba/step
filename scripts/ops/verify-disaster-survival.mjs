@@ -73,6 +73,9 @@ async function checkEndpoint(check) {
     const fleet = await response.json();
     if (fleet.quorumReachable !== true) throw new Error("remote fleet quorumReachable is not true");
     if (BigInt(fleet.totalActiveWeight ?? 0) < expectedQuorum) throw new Error(`remote fleet active weight ${fleet.totalActiveWeight} below ${expectedQuorum}`);
+    if (Array.isArray(fleet.alerts) && fleet.alerts.length > 0) {
+      throw new Error(`remote fleet has alerts: ${JSON.stringify(fleet.alerts)}`);
+    }
     return;
   }
   if (check.kind === "jsonrpc") {

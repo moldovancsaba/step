@@ -16,6 +16,7 @@
 - Fleet peer announcements now use signed `step.peer-record.v1` records with monotonic `sequence`, HTTPS-only public URLs, bounded TTL, and stale-record rejection.
 - Trust Center pkg and shell installer now accept configurable `bootstrap-peers`, `relay-peers`, `advertise-peers`, and explicit `transport`; peer-native installs persist `GOSSIP_BOOTSTRAP`, `GOSSIP_RELAYS`, `GOSSIP_ADVERTISE`, and write `node.transport = peer` into the local manifest.
 - Trust Center manifests now include `recovery.disaster_survival`; `tier = full` requires independent gateway, fleet, chain RPC, validator, and gossip services, and `pnpm release:disaster-survival:verify` performs the destructive Tribecca-down drill.
+- Chappie now runs the full survival stack: chain RPC, gateway, fleet, gossip, node agent, its own validator, and redundant protocol validator replicas for validator-0/1/2. The destructive drill passes with Tribecca gateway/fleet/validators stopped.
 - Alpha quorum defaults now enforce `2/3 + 1 quorum`: three 50-weight protocol validators require threshold `101`, not `100`.
 
 ## Shared terminology
@@ -42,6 +43,7 @@ Correct target:
 - Chappie is a Trust Center.
 - Future Macs can become Trust Centers from the same package and runtime contract; any third system installed with peer transport must expose libp2p multiaddrs and can be counted in quorum the same way as Chappie.
 - A system is not called disaster-proof unless the destructive survival drill passes with Tribecca gateway/fleet/validators stopped and a remote Trust Center still serving gateway, fleet, chain RPC, validator, and gossip.
+- Current disaster drill result: Chappie survives Tribecca gateway/fleet/validator shutdown with remote active weight `200`, quorum threshold `101`, and remote fleet alerts `[]`.
 - Roles such as bootstrap, relay, chain, gateway, indexer, validator, and artifact server are movable configuration, not hardcoded machine identity.
 
 ## GitHub artifacts created
