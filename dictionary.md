@@ -152,16 +152,24 @@
 
 `Release manifest` - The canonical off-chain JSON document describing a release package, hashes, chunk index, platform, and version.
 
+`Release manifest signature` - The release-signer signature over the canonical manifest hash, proving who published the off-chain release description.
+
 `Package hash` - The SHA-256 hash of the installable Trust Center package or release bundle.
 
 `Manifest hash` - The SHA-256 hash of the canonical release manifest committed by the release authority.
 
 `Chunk root` - The hash commitment for the deterministic release package chunk index.
 
+`Release chunk` - One deterministic piece of a release package used for resumable peer-to-peer update transfer.
+
 `Artifact seed` - A Trust Center or artifact server that can serve release package bytes to other peers.
+
+`Peer-first resolver` - The node-agent update path that tries peer artifact sources first but accepts only bytes matching the on-chain release authority.
 
 `Swarm update` - The process where Trust Centers fetch release bytes from peers while verifying all bytes against on-chain release authority.
 
 `Last known-good release` - The most recent installed release that passed activation and health checks and can be used for rollback.
 
 `Release gate` - The final pass/fail proof that package install, peer update, rollback, docs, and disaster drill are complete before production promotion.
+
+`Mobile Trust Center` - An iPhone or iPad running STEP in foreground trust-device mode, separate from a full always-on macOS/Linux Trust Center.

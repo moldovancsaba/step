@@ -131,13 +131,37 @@ const manifestDraft = {
   created_at: new Date().toISOString(),
 };
 const manifestHash = sha256Bytes(canonicalJson(manifestDraft));
-const manifest = { ...manifestDraft, manifest_sha256: manifestHash };
+function releaseSignature(hash) {
+  if (!signerKey) return null;
+  try {
+    const signer = sh(`cast wallet address --private-key ${signerKey}`);
+    const signature = sh(`cast wallet sign --private-key ${signerKey} ${hash}`);
+    return {
+      scheme: "eip191",
+      signer: signer.toLowerCase(),
+      signature,
+      signed_payload: hash,
+    };
+  } catch (e) {
+    if (!dryRun) {
+      die(`could not sign release manifest: ${String(e.stderr ?? e).split("\n").slice(-3).join(" ")}`);
+    }
+    return null;
+  }
+}
+const signature = releaseSignature(manifestHash);
+const manifest = {
+  ...manifestDraft,
+  manifest_sha256: manifestHash,
+  signatures: signature ? [signature] : [],
+};
 const manifestPath = join(RUNTIME, "releases", `release-${args.version}.json`);
 writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
 // Write EXACTLY the hashed bytes (no trailing newline) so sha256(file) == configHash.
 writeFileSync(join(RUNTIME, "releases", `config-${args.version}.json`), configStr);
 log(`manifest      ${manifestPath}`);
 log(`manifest sha256 ${manifestHash}`);
+log(`manifest signatures ${manifest.signatures.length}`);
 
 if (dryRun) {
   log("--dry-run: not publishing on-chain.");

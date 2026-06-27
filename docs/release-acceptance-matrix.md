@@ -12,13 +12,14 @@ A Trust Center release is acceptable only when every layer below has a passing a
 | Pairing | mobile wallet validates payload, signs digest, gateway relays `TrustCenterRegistry.pairNode` |
 | Registry | paired node becomes `pending`; activation is separate from wallet ownership |
 | Fleet | fleet API reports owner wallet, reward recipient, Trust Center status, and validator active weight |
-| Updates | node-agent verifies artifact sha256 against on-chain `ReleaseRegistry` before activation |
+| Updates | node-agent verifies canonical manifest hash, chunk root, chunk hashes, package hash, binary hash, params hash, and config hash against on-chain `ReleaseRegistry` before activation |
 | Observability | `doctor --json`, fleet status, launchd logs, and API status endpoints expose actionable state |
 
 ## Blocking failures
 
 - Any fallback that mines or validates outside on-chain rules blocks release.
 - Any unverified runtime artifact activation blocks release.
+- Any release artifact source missing a contract-matching manifest and chunk index blocks swarm-update acceptance.
 - Any installer that embeds a production private key or long-lived shared secret blocks release.
 - Any UI path that cannot explain pending vs active node status blocks release.
 

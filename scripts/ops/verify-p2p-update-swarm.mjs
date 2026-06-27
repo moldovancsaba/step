@@ -46,7 +46,16 @@ function fail(message, extra = {}) {
 
 const results = [];
 for (const peer of peers) {
-  const result = { peer, healthz: false, agentStatus: false, artifactStatus: false, releaseAvailable: false, errors: [] };
+  const result = {
+    peer,
+    healthz: false,
+    agentStatus: false,
+    artifactStatus: false,
+    releaseAvailable: false,
+    manifestAvailable: false,
+    chunksAvailable: false,
+    errors: [],
+  };
   try {
     const h = await fetchWithTimeout(`${peer}/healthz`);
     result.healthz = h.ok;
@@ -61,22 +70,41 @@ for (const peer of peers) {
     result.artifactStatus = s.platform === platform;
     result.releases = s.releases ?? [];
     if (version) {
-      result.releaseAvailable = result.releases.some((r) => r.version === version && (r.package || r.manifest));
-      if (!result.releaseAvailable) result.errors.push(`release ${platform}/${version} not available`);
+      const release = result.releases.find((r) => r.version === version);
+      result.releaseAvailable = Boolean(release?.package);
+      result.manifestAvailable = Boolean(release?.manifest);
+      result.chunksAvailable = Number(release?.chunks ?? 0) > 0;
+      if (!result.releaseAvailable) result.errors.push(`release ${platform}/${version} package not available`);
+      if (!result.manifestAvailable) result.errors.push(`release ${platform}/${version} manifest not available`);
+      if (!result.chunksAvailable) result.errors.push(`release ${platform}/${version} chunks not available`);
     } else {
       result.releaseAvailable = result.releases.length > 0;
     }
   } catch (e) { result.errors.push(`artifact status ${e.message}`); }
   if (version) {
     try {
+      const manifest = await json(`${peer}/artifacts/${platform}/${version}/manifest.json`);
+      result.manifestSchema = manifest.schema ?? null;
+      if (manifest.schema !== 'step.release-manifest.v1') result.errors.push(`manifest schema ${manifest.schema ?? 'missing'}`);
+      if (!manifest.manifest_sha256) result.errors.push('manifest missing manifest_sha256');
+      if (!Array.isArray(manifest.chunks) || manifest.chunks.length === 0) result.errors.push('manifest missing chunks');
+    } catch (e) { result.errors.push(`manifest ${e.message}`); }
+    try {
       const res = await fetchWithTimeout(`${peer}/artifacts/${platform}/${version}/package`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       result.packageHashHeader = res.headers.get('x-step-content-sha256');
+      if (!result.packageHashHeader) result.errors.push('package missing x-step-content-sha256');
     } catch (e) { result.errors.push(`package ${e.message}`); }
   }
   results.push(result);
 }
 
-const healthy = results.filter((r) => r.healthz && r.agentStatus && r.artifactStatus && (!version || r.releaseAvailable));
+const healthy = results.filter((r) =>
+  r.healthz &&
+  r.agentStatus &&
+  r.artifactStatus &&
+  r.errors.length === 0 &&
+  (!version || (r.releaseAvailable && r.manifestAvailable && r.chunksAvailable && r.packageHashHeader))
+);
 if (!healthy.length) fail('no Trust Center peer passed update swarm readiness', { platform, version: version || null, results });
 console.log(JSON.stringify({ ok: true, platform, version: version || null, healthyPeers: healthy.length, totalPeers: peers.length, results }, null, 2));

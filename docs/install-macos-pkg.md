@@ -86,3 +86,19 @@ step-trustcenter uninstall --yes --delete-keychain
 ```
 
 After a full wipe, the node has a new identity and must be paired again.
+
+## Auto-update and seeding
+
+The installed node agent is responsible for release convergence after provisioning. It polls `ReleaseRegistry`, fetches release manifests and chunks from configured artifact peers, verifies every byte against on-chain commitments, and stages only contract-matching releases.
+
+The default artifact source order is local first, then configured peers:
+
+```text
+http://127.0.0.1:{agent_port},<configured artifact peers>
+```
+
+That means a freshly installed Trust Center can become an update seed after it has a verified release staged locally. A peer can serve bytes, but it cannot authorize bytes.
+
+## Full Trust Center package mode
+
+The package builder supports `--survival-tier full` for a self-contained Trust Center payload that carries local chain RPC, gateway, fleet, validator, gossip, and agent launch payloads. A full package must pass `step-trustcenter doctor --json` and the destructive disaster-survival drill before it can be called production-ready.

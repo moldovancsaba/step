@@ -64,7 +64,7 @@ All UI is built natively with SwiftUI against a GDS-parity design system (`StepA
 | `LoginWall` (#27) | GDS-parity sign-in / sign-up, secure fields, accessible validation |
 | `AppModel` | `@MainActor` state machine: onboarding/login gate, register/sign-in (Argon2 off-main), mining (via `MineableResolver` + `attester`), owned NFTs, sign-out |
 | `Views` | Themed 4-tab shell (Mine / Map / Wallet / Market), testnet banner, account menu, claim history, privacy settings |
-| `MapView` (#28) | MapKit oasis/desert overlay — per-triangle depletion fill, debounced viewport fetch, legend, truncation/zoom hint |
+| `MapView` (#28) | MapLibre oasis/desert overlay — per-triangle depletion fill, debounced viewport fetch, legend, truncation/zoom hint |
 | `AnchorCapture` / `AnchorReaders` (#32) | Accessible capture state machine + transport readers — `QRAnchorReader` (AVFoundation, iOS), `NFCAnchorReader` (CoreNFC, iOS), `BLEAnchorReader` (CoreBluetooth) — each behind `#if canImport(...)`; offers only the transports the device has |
 | `MarketplaceView` (#30) | Browse active listings + my-listings filter, buy/cancel/gift/list with explicit price-showing confirmation, decoded-revert + paused + not-deployed states; GDS-parity, fully accessible |
 
@@ -116,7 +116,7 @@ and the App Store / TestFlight review notes.
 ## What is NOT done yet (requires a physical device, Apple Developer Program, or the #5 deploy — the build machine has Command Line Tools only)
 
 1. **Server-side App Attest verification.** Gateway/validator must verify Apple attestation objects + assertions before accepting `attested` claims (paired backend issue).
-2. **MapLibre Native basemap.** The map renders the mesh overlay on MapKit; the full vector basemap (MapLibre Native iOS via SPM) is an app-target integration.
+2. **MapLibre Native basemap.** The map renders the mesh overlay on MapLibre Native iOS via SPM; vector basemap and overlays now render on-device in the map tab.
 3. **TestFlight distribution.** Apple Developer Program membership, signing (`DEVELOPMENT_TEAM`), App Attest `production` entitlement, `xcodebuild archive` + upload; app-store crypto-rules review (LEG-003/IOS-008) before distribution.
 4. **Device/field verification.** App Attest, NFC, and camera are device-only (Simulator degrades to unattested); the marketplace on-chain round-trip needs the #5 deploy. Field tests F1–F9 (`tests/field-tests/`) need physical iPhones in the pilot area.
 5. **Accessibility ship gate.** Full-app VoiceOver + Dynamic Type + contrast pass before submission (XCUITests cover the automatable slice).

@@ -7,6 +7,11 @@
 - TestFlight/App Store Connect has STEP `0.1.0 (2)` uploaded and processed as `VALID`.
 - `dictionary.md` was added to establish shared STEP terminology.
 - M12 GitHub milestone and production-grade issue decomposition were created for symmetric Trust Centers and independent P2P operation.
+- M13 GitHub milestone and project-board sequence now cover P2P auto-update and swarm distribution issues `#102` through `#113`.
+- M13 implementation hardening added contract-bound release manifests, signed release manifest output, node-agent manifest/chunk/package verification, peer artifact seeding endpoints, peer announcement directory behavior, macOS package self-update documentation, and Mobile Trust Center launcher documentation.
+- Node-agent update fetch is now peer-first and fail-closed: each source must serve a canonical manifest matching `ReleaseRegistry.manifestHash`, chunks matching `ReleaseRegistry.chunkRoot`, and an assembled package matching package/binary hashes before staging.
+- Focused verification passed for `cargo test -p step-node-agent`, `node --test scripts/release/lib.test.mjs`, `forge test --root contracts --match-contract ReleaseRegistryTest`, and `pnpm --filter @step/fleet-api test`.
+- Local `swift build` for `apps/ios/StepCore` was started after the MapLibre update and stopped because SwiftPM blocked on downloading the external MapLibre binary artifact without progress; the authoritative iOS build remains the GitHub `ios-app` workflow on `macos-15`, which runs XcodeGen and `xcodebuild` after the push.
 - M12 execution has started with the identity blocker: `scripts/node/join.mjs` now stores node validator keys in the OS secret backend and writes public runtime node metadata only.
 - Legacy keyed remote bundles are disabled by default; `scripts/node/bundle.mjs` and `scripts/node/bundle-agent.mjs` now require explicit `STEP_ALLOW_KEYED_BUNDLE=1` for local-dev migration.
 - The local `.runtime/nodes/chappie.json` record was migrated so it no longer contains `privateKey`; the Chappie validator identity exists in macOS Keychain service `app.step.node`.
@@ -215,7 +220,7 @@ Board URL:
 
 Repository issue/milestone/label mutation succeeded.
 
-Project board field mutation could not be completed in this run because GitHub GraphQL quota for the account was exhausted.
+M12 project board field mutation could not be completed in that run because GitHub GraphQL quota for the account was exhausted.
 
 Observed quota:
 
@@ -226,6 +231,34 @@ Observed quota:
 Reason this matters:
 
 GitHub Projects v2 item insertion and field mutation require GraphQL. REST cannot fully mutate Projects v2 fields.
+
+## M13 issue sequence
+
+`1102` - `#102` - `P2P Update: release manifest contract for content-addressed Trust Center packages`
+
+`1103` - `#103` - `P2P Update: release publisher creates signed pkg manifests and chunk indexes`
+
+`1104` - `#104` - `P2P Update: node agent verified artifact seeding API`
+
+`1105` - `#105` - `P2P Update: signed peer release announcements and seed directory`
+
+`1106` - `#106` - `P2P Update: peer-first artifact resolver with contract verification`
+
+`1107` - `#107` - `P2P Update: resumable chunk transfer for torrent-style seed/leech distribution`
+
+`1108` - `#108` - `P2P Update: macOS Trust Center self-update, launchd restart, and rollback`
+
+`1109` - `#109` - `P2P Update: wallet-paired Trust Center admission and validator weight request flow`
+
+`1110` - `#110` - `P2P Update: iOS/iPadOS optional Trust Center launcher and seeding mode`
+
+`1111` - `#111` - `P2P Update: swarm telemetry, alerts, and operator status model`
+
+`1112` - `#112` - `P2P Update: destructive independence drill for Tribecca-offline update survival`
+
+`1113` - `#113` - `P2P Update: production release gate for self-updating peer-native Trust Centers`
+
+M13 project board fields were set to `Backlog (SOONER)`, phase `M6 Proof`, and order `1102..1113`. The board does not currently expose an `M13` phase option, so the closest existing phase field remains `M6 Proof` while the milestone carries the actual M13 identity.
 
 Required board mutation after reset:
 
@@ -500,3 +533,100 @@ Operational note:
 - Chappie is upgraded and now has the same on-chain transfer mechanism as Tribecca for moving operational responsibility.
 - A main-system transfer is no longer implicit; it is now explicit and auditable through `scripts/ops/main-system-handoff.mjs`.
 - Evidence artifacts in `.runtime/handoff` include both preflight pins and rollback commands for any transfer.
+
+## 2026-06-27 MapLibre and gap elimination execution plan
+
+Status snapshot:
+
+- `MapView.swift` is compiled as `MapLibre` on iOS and no longer advertises a placeholder map implementation in the normal app path.
+- The only fallback is a non-interactive `ContentUnavailableView` for non-MapLibre/iOS build contexts, which is expected for macOS/CI toolchain paths.
+- Remaining blockers are not map rendering itself; they are operational parity and shipping hardening.
+
+Next implementation sequence (from highest risk to lowest risk):
+
+### 1) Map tab hardening (release-critical)
+
+- **Architecture**: iOS map tab remains single source of truth; no simulator-only or placeholder code path in production iOS.
+- **Runtime flow**: `MapView` -> `MeshMap` -> `MGLMapView` style/events -> `MeshCoverClient.overlay` -> polygon overlay source/layers.
+- **Contracts / APIs**:
+  - `MeshCoverClient.overlay(minLat/minLon/maxLat/maxLon/level)` unchanged.
+  - Use style endpoints as configurable runtime values (app config or env), defaulting to MapLibre demo style only when explicit flag indicates public sandbox mode.
+- **Pseudo-code**:
+
+```swift
+if os(iOS) && canImport(MapLibre) {
+  render MGLMapView with overlay source redraw on every triangle batch
+  emit viewport on region change and load
+  debounce requests to avoid request storms
+} else {
+  show non-interactive unavailable view (non-prod surfaces only)
+}
+```
+
+- **UX/accessibility**:
+  - Keep VoiceOver labels for loading/truncation/retry states.
+  - Keep legend state entirely text + semantic colors.
+- **Retries/timeouts**:
+  - Keep 300ms debounce and cancel stale requests.
+  - Add retry budget for `MeshCoverClient` fetch failures (1 retry at 1.2s, then user retry).
+- **Rollback/recovery**: if fetch repeatedly fails, hold stale overlay until TTL expiry and keep clear retry path.
+- **Testing**:
+  - Unit viewport/truncation tests.
+  - UI tests for map availability/error states.
+  - Device field smoke for pan/zoom + retry.
+- **Acceptance**: no production iOS placeholder map text remains.
+
+### 2) Mobile UX accessibility gate across all iOS screens
+
+- **Architecture/runtime**: one accessibility policy in `StepAppUI`.
+- **Plan**:
+  - Add tests for dynamic type and VoiceOver for Map/Wallet/Launcher/Trust-Center.
+  - Keep reduced-motion-safe map controls and explicit focus order.
+- **Rollback**: if gate fails, no TestFlight upload.
+- **Acceptance**: accessibility report + manual review for screen-reader critical journeys.
+
+### 3) App Attest end-to-end verification unblock
+
+- **Architecture**: client evidence remains stable; backend verifier accepts/rejects against Apple cert chain and nonce binding.
+- **Flow**: claim → claim hash + attestation bundle → backend verification service → validator policy.
+- **Contracts/APIs**: keep existing attestation wire format; add explicit attestation failure reason mapping.
+- **Execution order**: backend verifier first, then validator policy migration.
+- **Rollback**: preserve existing `devUnattested` for unsupported environments.
+- **Acceptance**: device attested claims are accepted when policy is enabled.
+
+### 4) Trust-center parity hardening (Tribecca = Chappie = new peers)
+
+- **Architecture**: role manifests + peer records + release manifest are authoritative; no local-machine-only assumptions.
+- **Current hardening status**: mostly complete via M12.
+- **Remaining**:
+  - harden bootstrap/reachability for 3+ offline-safe peers;
+  - enforce package manifest constraints during initial enrollment.
+- **Dependencies**: no single LAN dependency; bootstrap peers are HTTPS-capable first.
+- **Acceptance**: destructive survival drill passes with other hub path down.
+
+### 5) P2P update and rollout convergence
+
+- **Architecture**: release registry + chunk manifest pipeline from M13.
+- **Remaining**:
+  - signature trust bundle check at install/upgrade;
+  - health + manifest freshness policy for `release:p2p-update-swarm:verify`;
+  - mobile trust-center path uses same signed update announcements.
+- **Operational behavior**: disconnected nodes preserve service and auto-sync on reconnect.
+- **Acceptance**: peer-to-peer rollout works from any newer node.
+
+### 6) TestFlight and external release discipline
+
+- **Current risk**: external review queue can block sequential uploads.
+- **Action**: keep one active review-ready build, publish updates only after release queue clear; bundle release notes with evidence list.
+- **Acceptance**: upload/review states are deterministic with rollback-ready prior version.
+
+Execution order:
+
+1. Complete item 1.
+2. Complete item 2.
+3. Complete item 3.
+4. Complete item 4.
+5. Complete item 5.
+6. Complete item 6.
+
+This is the concrete, non-placeholder path to remove the remaining delivery gaps.

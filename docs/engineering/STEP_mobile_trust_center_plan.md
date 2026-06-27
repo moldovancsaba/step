@@ -1,10 +1,11 @@
 # Plan — mobile app as a trust center (light-client quorum signer)
 
-> Turns a phone running the STEP app into a real, quorum-weighted trust center —
-> **while the app runs** — without making it a 24/7 consensus validator (see
-> `docs/architecture/STEP_local_node_and_trust_federation.md` §9 for why that
-> split is the honest one). This is the implementation plan; nothing here is built
-> yet. Each step is independently shippable and CI-gated.
+> Turns a phone running the STEP app into a real, quorum-weighted trust center
+> **while the app runs** without representing it as a 24/7 consensus validator.
+> The product launcher and foreground Mobile Trust Center surface now exist in
+> the iOS app. The remaining protocol work is vote digest parity, attested
+> enrollment, gateway vote intake, and field verification on physical devices.
+> Each remaining step is independently shippable and CI-gated.
 
 ## What "trust center" means mechanically here
 
@@ -22,6 +23,18 @@ The exact digest to reproduce is `packages/validation-rules/src/sign.rs`
 chainId=`262144` verifyingContract=`MiningClaimVerifier`; struct
 `StepValidatorVote(bytes32 claimHash,bytes32 triangleId,address miner,bool approve)`.
 It must match **bit-for-bit** or the on-chain recovery yields the wrong address.
+
+## Current app surface
+
+The iOS app now presents a post-wallet launcher with two modes:
+
+- `Mine & explore` for the normal mining, wallet, map, and marketplace flow.
+- `Mobile Trust Center` for a foreground iPhone/iPad trust-device mode.
+
+The Mobile Trust Center screen exposes active/paused state, wallet identity, App
+Attest readiness, future vote-signing capability, and reward-model caveats. It
+does not claim background execution, boot restart, local chain RPC, gateway/fleet
+hosting, or package self-update. Those remain full Trust Center responsibilities.
 
 ## Step 1 — Swift EIP-712 signing module (the crux) · 🤖 autonomous
 

@@ -7,7 +7,7 @@ Status: active on Tribecca and Chappie as of 2026-06-25.
 - Nodes restart after service crashes through `launchd` `KeepAlive` plus watchdog timers.
 - Validator child crashes recover through the node watchdog restarting `step-node-agent`.
 - Client/validator updates are authorized by the on-chain `ReleaseRegistry` and fetched from the artifact service.
-- Downloaded artifacts are never trusted by transport. The agent verifies binary, protocol params, and config SHA-256 against on-chain hashes before activation.
+- Downloaded artifacts are never trusted by transport. The agent verifies the canonical manifest hash, manifest fields, chunk root, every chunk hash, assembled package hash, executable binary hash, protocol params hash, and config hash against on-chain release state before activation.
 - Activation is atomic through the `current -> releases/<version>` symlink and `state.json`.
 - Failed updates roll back to `last_good` through the node-agent update state machine.
 
@@ -103,6 +103,18 @@ node scripts/release/serve-artifacts.mjs --stage --version <semver> --platform d
 ```
 
 The artifact service must remain reachable by nodes, but it is not trusted for correctness. On-chain hashes are the authority.
+
+## Peer-first update fetch
+
+Each Trust Center tries configured artifact sources in order. A source is usable only when it can serve a release manifest whose canonical hash matches `ReleaseRegistry.manifestHash` and chunks whose recomputed root matches `ReleaseRegistry.chunkRoot`.
+
+The normal installer order is:
+
+```text
+local node-agent artifact cache -> configured peer artifact seeds
+```
+
+This lets already-updated nodes seed other nodes without giving the transport any authority. If all sources fail verification or are unreachable, the node keeps the current verified release and reports a degraded update state.
 
 ## Tribecca managed validator upgrade - 2026-06-25
 

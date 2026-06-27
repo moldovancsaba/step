@@ -29,6 +29,10 @@ let package = Package(
             url: "https://github.com/tmthecoder/Argon2Swift.git",
             revision: "53543623fefe68461b7eeea03d7f96677c2fd76d" // tag 1.0.4
         ),
+        .package(
+            url: "https://github.com/maplibre/maplibre-native-distribution.git",
+            exact: "6.27.0"
+        ),
     ],
     targets: [
         .target(
@@ -38,7 +42,17 @@ let package = Package(
                 .product(name: "Argon2Swift", package: "Argon2Swift"),
             ]
         ),
-        .target(name: "StepAppUI", dependencies: ["StepCore"]),
+        .target(
+            name: "StepAppUI",
+            dependencies: [
+                "StepCore",
+                .product(
+                    name: "MapLibre",
+                    package: "maplibre-native-distribution",
+                    condition: .when(platforms: [.iOS])
+                ),
+            ]
+        ),
         .testTarget(
             name: "StepCoreTests",
             dependencies: ["StepCore"],

@@ -7,7 +7,7 @@ STEP Trust Centers must be able to update, recover, and seed release artifacts w
 The production rule is simple:
 
 - release authority comes from the on-chain `ReleaseRegistry`;
-- bytes can come from any peer;
+- bytes can come from any peer or mirror;
 - every package, manifest, chunk, binary, params file, and config file is verified before use;
 - failed verification fails closed;
 - failed install rolls back to the last known-good release.
@@ -47,7 +47,7 @@ The response header `x-step-content-sha256` is returned for package/chunk respon
 
 ## Release publishing
 
-The release publisher builds the validator, hashes the binary, generates a canonical release manifest, computes deterministic chunk metadata, and publishes the full package commitment to `ReleaseRegistry`.
+The release publisher builds the validator, hashes the binary, generates a canonical release manifest, computes deterministic chunk metadata, signs the manifest when a release signer is configured, and publishes the full package commitment to `ReleaseRegistry`.
 
 Dry run:
 
@@ -80,6 +80,31 @@ Run the server:
 node scripts/release/serve-artifacts.mjs
 ```
 
+## Peer-first resolver behavior
+
+The node agent now resolves updates from `ARTIFACT_BASE_URLS` in order. Installer defaults put the local peer cache first:
+
+```text
+http://127.0.0.1:{agent_port},<bootstrap artifact peers>
+```
+
+For each source, the agent must complete this sequence before staging anything:
+
+```text
+fetch manifest.json
+verify canonical manifest hash == ReleaseRegistry.manifestHash
+verify manifest package/binary/params/config/chunk hashes == ReleaseRegistry target
+fetch every chunk
+verify each chunk sha256 and size
+recompute chunkRoot
+assemble package
+verify packageHash and executable binaryHash
+copy params/config only if their hashes match
+atomically stage release
+```
+
+If a source fails any step, that source is skipped and the next configured source is tried. If all sources fail, the node keeps its current verified release and reports a degraded update state. No unverified package endpoint can activate a release.
+
 ## Swarm readiness verifier
 
 Use the verifier against any one or more Trust Centers:
@@ -102,6 +127,8 @@ The verifier checks:
 - platform match;
 - release availability when a version is supplied;
 - package endpoint availability and content hash header.
+- manifest endpoint availability through the node-agent artifact surface;
+- chunk presence through `/artifacts/status`.
 
 ## Installer behavior
 

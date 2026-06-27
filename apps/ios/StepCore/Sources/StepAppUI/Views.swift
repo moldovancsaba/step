@@ -1,8 +1,7 @@
 // Miner app screens (SYS §16.2, DEV §6.3 flows). SwiftUI, cross-platform so
 // CI compiles them via `swift build`; the iOS app target embeds them
 // unchanged. The triangle is rendered natively from canonical vertices —
-// the full MapLibre basemap integration is the documented next step
-// (apps/ios/README).
+// the MapLibre basemap integration is production-wired through MapView.
 import SwiftUI
 import StepCore
 
@@ -261,8 +260,7 @@ struct TrustCapabilityRow: View {
     }
 }
 
-/// Map tab — oasis/desert MapKit overlay (#28) when a cover client is wired,
-/// else a short explainer.
+/// Map tab — live oasis/desert MapLibre overlay (#28).
 struct MapTabView: View {
     @ObservedObject var model: AppModel
     var body: some View {

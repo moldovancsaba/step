@@ -9,6 +9,15 @@
       }
     },
     {
+      "identity" : "maplibre-native-distribution",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/maplibre/maplibre-native-distribution.git",
+      "state" : {
+        "revision" : "84a79bc375a301169390ac110c868f06c857b83f",
+        "version" : "6.27.0"
+      }
+    },
+    {
       "identity" : "phc-winner-argon2",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/P-H-C/phc-winner-argon2.git",
