@@ -336,3 +336,143 @@ input {
     overflow-x: auto;
   }
 }
+
+.mesh-map-canvas.mesh-globe-shell {
+  position: relative;
+  min-height: 520px;
+  height: min(78vh, 760px);
+  overflow: hidden;
+  border: 1px solid rgba(52, 211, 153, 0.28);
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at 50% 44%, rgba(20, 184, 166, 0.24), transparent 46%),
+    linear-gradient(135deg, #020807 0%, #071612 52%, #020504 100%);
+  box-shadow: inset 0 0 42px rgba(20, 184, 166, 0.12), 0 24px 70px rgba(0, 0, 0, 0.38);
+  touch-action: none;
+}
+
+.mesh-globe-toolbar {
+  position: absolute;
+  z-index: 2;
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.mesh-globe-toolbar > * {
+  pointer-events: auto;
+}
+
+.mesh-globe-stat {
+  border: 1px solid rgba(45, 212, 191, 0.34);
+  border-radius: 999px;
+  background: rgba(3, 12, 10, 0.72);
+  color: #d8fff4;
+  padding: 8px 12px;
+  font-size: 0.82rem;
+  backdrop-filter: blur(10px);
+}
+
+.mesh-globe-stat.warn {
+  border-color: rgba(245, 158, 11, 0.5);
+  color: #fef3c7;
+}
+
+.primary.subtle {
+  background: rgba(8, 47, 43, 0.86);
+  color: #d8fff4;
+}
+
+.mesh-globe-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: grab;
+  outline: none;
+  touch-action: none;
+}
+
+.mesh-globe-svg:active {
+  cursor: grabbing;
+}
+
+.mesh-globe-svg:focus-visible {
+  box-shadow: inset 0 0 0 3px rgba(245, 158, 11, 0.72);
+}
+
+.mesh-globe-shadow {
+  fill: rgba(0, 0, 0, 0.42);
+  transform: translate(18px, 24px);
+}
+
+.mesh-globe-ocean {
+  stroke: rgba(167, 243, 208, 0.2);
+  stroke-width: 1;
+}
+
+.mesh-globe-grid {
+  fill: none;
+  stroke: rgba(209, 250, 229, 0.2);
+  stroke-width: 1.2;
+  vector-effect: non-scaling-stroke;
+}
+
+.mesh-globe-face {
+  stroke: none;
+}
+
+.mesh-globe-edge {
+  fill: none;
+  stroke: #34d399;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.mesh-globe-edge.selected {
+  stroke: #f59e0b;
+  stroke-width: 4;
+}
+
+.mesh-globe-rim {
+  fill: none;
+  stroke: rgba(216, 255, 244, 0.62);
+  stroke-width: 2.2;
+}
+
+.mesh-globe-marker {
+  fill: #f59e0b;
+  stroke: #111827;
+  stroke-width: 2;
+}
+
+.mesh-globe-marker-ring {
+  fill: none;
+  stroke: rgba(245, 158, 11, 0.64);
+  stroke-width: 2;
+}
+
+@media (max-width: 640px) {
+  .mesh-map-canvas.mesh-globe-shell {
+    min-height: 440px;
+    height: 62vh;
+    border-radius: 20px;
+  }
+
+  .mesh-globe-toolbar {
+    top: 8px;
+    left: 8px;
+    right: 8px;
+  }
+
+  .mesh-globe-stat {
+    font-size: 0.72rem;
+    padding: 7px 9px;
+  }
+}

@@ -630,3 +630,7 @@ Execution order:
 6. Complete item 6.
 
 This is the concrete, non-placeholder path to remove the remaining delivery gaps.
+
+## 2026-06-27 - Web mesh globe correction
+
+The static web mesh explorer no longer uses a flat MapLibre viewport as the canonical mesh visualization. It now renders an orthographic globe, loads the level-1 Earth cover as all 20 spherical icosahedron faces, and samples every triangle boundary as a great-circle arc before projection. Clicking the globe converts the screen point back to latitude/longitude and resolves the canonical triangle through the gateway mesh API. Deeper levels load a bounded spherical cover around the current globe center instead of replacing the mesh with the selected triangle's neighbours.
