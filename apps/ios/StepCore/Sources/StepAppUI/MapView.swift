@@ -283,7 +283,7 @@ private struct MeshMap: UIViewRepresentable {
                     CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lon)
                 }
                 guard points.count >= 3 else { continue }
-                let feature = MLNPolygonFeature(coordinates: &points, count: points.count)
+                let feature = MLNPolygonFeature(coordinates: &points, count: UInt(points.count))
                 shapes.append(feature)
             }
 
