@@ -458,6 +458,43 @@ input {
   stroke-width: 2;
 }
 
+.mesh-mining-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.mesh-mining-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.mesh-mining-header h3 {
+  margin: 2px 0 0;
+  font-size: clamp(1.25rem, 2vw, 1.7rem);
+  color: #f8fafc;
+}
+
+.mesh-mining-map {
+  min-height: 460px;
+  height: min(66vh, 680px);
+  overflow: hidden;
+  border: 1px solid rgba(244, 114, 182, 0.34);
+  border-radius: 24px;
+  background: #07110f;
+  box-shadow: 0 18px 54px rgba(0, 0, 0, 0.28);
+}
+
+.mesh-mining-map .maplibregl-canvas {
+  outline: none;
+}
+
+.mesh-mining-map .maplibregl-ctrl-group {
+  border-radius: 14px;
+  overflow: hidden;
+}
+
 @media (max-width: 640px) {
   .mesh-map-canvas.mesh-globe-shell {
     min-height: 440px;
@@ -474,5 +511,15 @@ input {
   .mesh-globe-stat {
     font-size: 0.72rem;
     padding: 7px 9px;
+  }
+
+  .mesh-mining-header {
+    display: grid;
+  }
+
+  .mesh-mining-map {
+    min-height: 420px;
+    height: 58vh;
+    border-radius: 20px;
   }
 }

@@ -638,3 +638,7 @@ The static web mesh explorer no longer uses a flat MapLibre viewport as the cano
 ## 2026-06-27 - Public mesh cover API proxy
 
 The gateway now exposes `/v1/mesh/cover` and forwards bounding-box cover requests to the validator mesh API. This is required by the web globe renderer so level 1 can load the complete 20-face spherical icosahedron through the same public `/api/gateway` path used by the deployed webapp.
+
+## 2026-06-27 - Mining map fit-to-triangle behavior
+
+The mesh explorer now has two coordinated views. The spherical globe remains the canonical icosahedron overview. A new MapLibre mining map sits below it and is used for practical mining context: resolving a point from device location, globe click, or map click now selects the canonical triangle, samples its spherical edges, overlays it as a polygon on a basemap, and automatically fits the map viewport to the selected triangle bounds. The miner position is shown as a red dot inside the selected triangle when available.

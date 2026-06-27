@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import maplibregl from "maplibre-gl";
+import "maplibre-gl/dist/maplibre-gl.css";
 import type { TriangleInfo } from "@step/shared-types";
 
 const MIN_MESH_LEVEL = 1;
@@ -12,6 +14,7 @@ const GLOBE_RADIUS = 455;
 const DEG = Math.PI / 180;
 const RAD = 180 / Math.PI;
 const LEVEL_ONE_FACE_COUNT = 20;
+const MINING_MAP_STYLE = "https://tiles.openfreemap.org/styles/bright";
 
 interface MeshState {
   used_slots?: number;
@@ -227,6 +230,72 @@ function fullyVisibleFillPath(points: MeshCursor[], view: ViewCenter) {
     .join(" ")} Z`;
 }
 
+function emptyFeatureCollection() {
+  return { type: "FeatureCollection" as const, features: [] };
+}
+
+function unwrappedMapRing(points: MeshCursor[]) {
+  const first = points[0];
+  if (!first) return [];
+  let previousLon: number | null = null;
+  return [...points, first].map((point) => {
+    let lon = point.lon;
+    if (previousLon !== null) {
+      while (lon - previousLon > 180) lon -= 360;
+      while (lon - previousLon < -180) lon += 360;
+    }
+    previousLon = lon;
+    return [lon, point.lat] as [number, number];
+  });
+}
+
+function triangleMiningFeature(triangle: TriangleInfo) {
+  return {
+    type: "Feature" as const,
+    properties: {
+      id: triangle.triangle_id,
+      hash: triangle.triangle_id_hash,
+      level: triangle.level,
+      role: "mining-triangle",
+    },
+    geometry: {
+      type: "Polygon" as const,
+      coordinates: [unwrappedMapRing(sphericalRing(triangle.vertices, triangle.level))],
+    },
+  };
+}
+
+function cursorMiningFeature(cursor: MeshCursor) {
+  return {
+    type: "Feature" as const,
+    properties: { role: "miner-position" },
+    geometry: {
+      type: "Point" as const,
+      coordinates: [cursor.lon, cursor.lat] as [number, number],
+    },
+  };
+}
+
+function triangleMapBounds(triangle: TriangleInfo) {
+  const ring = unwrappedMapRing(sphericalRing(triangle.vertices, triangle.level));
+  if (ring.length === 0) return null;
+  let minLon = Infinity;
+  let minLat = Infinity;
+  let maxLon = -Infinity;
+  let maxLat = -Infinity;
+  for (const [lon, lat] of ring) {
+    minLon = Math.min(minLon, lon);
+    minLat = Math.min(minLat, lat);
+    maxLon = Math.max(maxLon, lon);
+    maxLat = Math.max(maxLat, lat);
+  }
+  if (![minLon, minLat, maxLon, maxLat].every(Number.isFinite)) return null;
+  return [
+    [minLon, minLat],
+    [maxLon, maxLat],
+  ] as [[number, number], [number, number]];
+}
+
 function graticulePaths(view: ViewCenter) {
   const paths: string[] = [];
   const latLines = [-60, -30, 0, 30, 60];
@@ -286,6 +355,11 @@ async function fetchJson<T>(url: string) {
 
 export default function MeshMap({ gatewayUrl, indexerUrl }: MeshMapProps) {
   const svgRef = useRef<SVGSVGElement>(null);
+  const miningMapContainer = useRef<HTMLDivElement>(null);
+  const miningMapRef = useRef<maplibregl.Map | null>(null);
+  const miningMapLoadedRef = useRef(false);
+  const pendingMiningTriangleRef = useRef<TriangleInfo | null>(null);
+  const cursorRef = useRef<MeshCursor | null>(null);
   const dragRef = useRef<DragState | null>(null);
   const coverRequestRef = useRef(0);
   const meshLevelRef = useRef(MIN_MESH_LEVEL);
@@ -297,7 +371,11 @@ export default function MeshMap({ gatewayUrl, indexerUrl }: MeshMapProps) {
   const [meshLevelInput, setMeshLevelInput] = useState(String(MIN_MESH_LEVEL));
   const [cursor, setCursor] = useState<MeshCursor | null>(null);
   const [view, setView] = useState<ViewCenter>(INITIAL_VIEW);
+  const [miningMapStatus, setMiningMapStatus] = useState(
+    "Resolve your position or click the mining map to fit the canonical triangle.",
+  );
   meshLevelRef.current = meshLevel;
+  cursorRef.current = cursor;
 
   const loadCover = useCallback(
     async (level: number, center: ViewCenter) => {
@@ -321,6 +399,38 @@ export default function MeshMap({ gatewayUrl, indexerUrl }: MeshMapProps) {
     [gatewayUrl],
   );
 
+  const syncMiningCursor = useCallback((location: MeshCursor | null) => {
+    const map = miningMapRef.current;
+    if (!map || !miningMapLoadedRef.current) return;
+    const source = map.getSource("mining-cursor") as maplibregl.GeoJSONSource | undefined;
+    source?.setData(
+      location
+        ? { type: "FeatureCollection", features: [cursorMiningFeature(location)] }
+        : emptyFeatureCollection(),
+    );
+  }, []);
+
+  const syncMiningTriangle = useCallback((triangle: TriangleInfo) => {
+    pendingMiningTriangleRef.current = triangle;
+    const map = miningMapRef.current;
+    if (!map || !miningMapLoadedRef.current) return;
+    const source = map.getSource("mining-triangle") as maplibregl.GeoJSONSource | undefined;
+    source?.setData({ type: "FeatureCollection", features: [triangleMiningFeature(triangle)] });
+    const bounds = triangleMapBounds(triangle);
+    if (bounds) {
+      map.fitBounds(bounds, {
+        padding: { top: 90, right: 48, bottom: 72, left: 48 },
+        maxZoom: 18,
+        duration: 700,
+      });
+    } else {
+      map.flyTo({ center: [triangle.centroid.lon, triangle.centroid.lat], zoom: 12, duration: 700 });
+    }
+    setMiningMapStatus(
+      `Mining map fitted to ${triangle.triangle_id}. Area ${formatArea(triangle.area_m2)}, minimum side ${triangle.min_side_m.toFixed(1)} m.`,
+    );
+  }, []);
+
   const refreshFromCoordinates = useCallback(
     async (lat: number, lon: number, level: number) => {
       const targetLevel = Math.min(MAX_MESH_LEVEL, Math.max(MIN_MESH_LEVEL, Math.floor(level)));
@@ -331,6 +441,8 @@ export default function MeshMap({ gatewayUrl, indexerUrl }: MeshMapProps) {
         );
         if (!resolved) throw new Error("mesh resolve API unreachable");
         setSelected(resolved);
+        setView({ lat: clamp(resolved.centroid.lat, -85, 85), lon: normalizeLon(resolved.centroid.lon) });
+        syncMiningTriangle(resolved);
         setMeshLevel(targetLevel);
         setMeshLevelInput(String(targetLevel));
 
@@ -350,7 +462,7 @@ export default function MeshMap({ gatewayUrl, indexerUrl }: MeshMapProps) {
         setError(err instanceof Error ? err.message : "mesh API unreachable");
       }
     },
-    [gatewayUrl, indexerUrl],
+    [gatewayUrl, indexerUrl, syncMiningTriangle],
   );
 
   useEffect(() => {
@@ -359,6 +471,87 @@ export default function MeshMap({ gatewayUrl, indexerUrl }: MeshMapProps) {
     }, meshLevel === 1 ? 0 : 220);
     return () => window.clearTimeout(timeout);
   }, [loadCover, meshLevel, view]);
+
+  useEffect(() => {
+    if (!miningMapContainer.current || miningMapRef.current) return;
+
+    const map = new maplibregl.Map({
+      container: miningMapContainer.current,
+      style: MINING_MAP_STYLE,
+      center: [INITIAL_VIEW.lon, INITIAL_VIEW.lat],
+      zoom: 1.2,
+      pitch: 0,
+    });
+    miningMapRef.current = map;
+    map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
+
+    map.on("load", () => {
+      miningMapLoadedRef.current = true;
+      map.addSource("mining-triangle", { type: "geojson", data: emptyFeatureCollection() });
+      map.addSource("mining-cursor", { type: "geojson", data: emptyFeatureCollection() });
+
+      const firstSymbolLayer = map.getStyle().layers?.find((layer) => layer.type === "symbol")?.id;
+      map.addLayer(
+        {
+          id: "mining-triangle-fill",
+          type: "fill",
+          source: "mining-triangle",
+          paint: {
+            "fill-color": "#f472b6",
+            "fill-opacity": 0.34,
+          },
+        },
+        firstSymbolLayer,
+      );
+      map.addLayer(
+        {
+          id: "mining-triangle-line",
+          type: "line",
+          source: "mining-triangle",
+          paint: {
+            "line-color": "#be185d",
+            "line-width": 2.5,
+          },
+        },
+        firstSymbolLayer,
+      );
+      map.addLayer({
+        id: "mining-cursor-dot",
+        type: "circle",
+        source: "mining-cursor",
+        paint: {
+          "circle-radius": 7,
+          "circle-color": "#dc2626",
+          "circle-stroke-color": "#ffffff",
+          "circle-stroke-width": 2,
+        },
+      });
+
+      if (pendingMiningTriangleRef.current) syncMiningTriangle(pendingMiningTriangleRef.current);
+      syncMiningCursor(cursorRef.current);
+    });
+
+    map.on("click", (event) => {
+      const location = { lat: event.lngLat.lat, lon: event.lngLat.lng };
+      setCursor(location);
+      setView({ lat: clamp(location.lat, -85, 85), lon: normalizeLon(location.lon) });
+      void refreshFromCoordinates(location.lat, location.lon, meshLevelRef.current);
+    });
+
+    return () => {
+      miningMapLoadedRef.current = false;
+      map.remove();
+      miningMapRef.current = null;
+    };
+  }, [refreshFromCoordinates, syncMiningCursor, syncMiningTriangle]);
+
+  useEffect(() => {
+    if (selected) syncMiningTriangle(selected);
+  }, [selected, syncMiningTriangle]);
+
+  useEffect(() => {
+    syncMiningCursor(cursor);
+  }, [cursor, syncMiningCursor]);
 
   const applyLevel = useCallback(() => {
     const next = Number.parseInt(meshLevelInput, 10);
@@ -582,6 +775,27 @@ export default function MeshMap({ gatewayUrl, indexerUrl }: MeshMapProps) {
           )}
         </svg>
       </div>
+
+      <article className="panel mesh-mining-panel">
+        <div className="mesh-mining-header">
+          <div>
+            <div className="eyebrow">Mining map</div>
+            <h3>Actual triangle size</h3>
+          </div>
+          <span className="mesh-globe-stat">Basemap + canonical spherical triangle</span>
+        </div>
+        <div
+          ref={miningMapContainer}
+          className="mesh-mining-map"
+          role="application"
+          aria-label="Mining map fitted to the currently selected STEP triangle"
+        />
+        <p className="mesh-hint">{miningMapStatus}</p>
+        <p className="mesh-hint">
+          Click the mining map to explore a point. The pink polygon is the selected triangle,
+          sampled from spherical great-circle edges and fitted into the map viewport.
+        </p>
+      </article>
 
       {error && (
         <p className="mesh-error">
