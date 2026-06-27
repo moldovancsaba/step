@@ -634,3 +634,7 @@ This is the concrete, non-placeholder path to remove the remaining delivery gaps
 ## 2026-06-27 - Web mesh globe correction
 
 The static web mesh explorer no longer uses a flat MapLibre viewport as the canonical mesh visualization. It now renders an orthographic globe, loads the level-1 Earth cover as all 20 spherical icosahedron faces, and samples every triangle boundary as a great-circle arc before projection. Clicking the globe converts the screen point back to latitude/longitude and resolves the canonical triangle through the gateway mesh API. Deeper levels load a bounded spherical cover around the current globe center instead of replacing the mesh with the selected triangle's neighbours.
+
+## 2026-06-27 - Public mesh cover API proxy
+
+The gateway now exposes `/v1/mesh/cover` and forwards bounding-box cover requests to the validator mesh API. This is required by the web globe renderer so level 1 can load the complete 20-face spherical icosahedron through the same public `/api/gateway` path used by the deployed webapp.

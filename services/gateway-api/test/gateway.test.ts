@@ -111,6 +111,41 @@ function makeDeps(behaviour: {
   return { deps, submitNatural, submitSponsored, storeEvidence };
 }
 
+describe("mesh proxy", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("proxies spherical mesh cover requests to the validator mesh API", async () => {
+    const { deps } = makeDeps({ validatorApproves: [true] });
+    deps.meshUrl = "http://mesh";
+    const fetchMock = vi.fn(async (input: unknown) => {
+      expect(String(input)).toBe(
+        "http://mesh/v1/mesh/cover?minLat=-90&minLon=-180&maxLat=90&maxLon=180&level=1&max=64",
+      );
+      return {
+        status: 200,
+        json: async () => ({
+          triangles: Array.from({ length: 20 }, (_, index) => ({ triangle_id: `STEP-1-F${index}` })),
+          truncated: false,
+          suggested_level: 1,
+          level: 1,
+        }),
+      } as unknown as Response;
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { app } = createApp(deps);
+    const resp = await app.request(
+      "/v1/mesh/cover?minLat=-90&minLon=-180&maxLat=90&maxLon=180&level=1&max=64",
+    );
+    expect(resp.status).toBe(200);
+    const body = (await resp.json()) as { triangles: unknown[]; level: number; truncated: boolean };
+    expect(body.level).toBe(1);
+    expect(body.triangles).toHaveLength(20);
+    expect(body.truncated).toBe(false);
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+});
+
 describe("mining frontier (/v1/mesh/mineable)", () => {
   afterEach(() => vi.unstubAllGlobals());
   // a 4-segment location id is enough to exercise the ancestor walk

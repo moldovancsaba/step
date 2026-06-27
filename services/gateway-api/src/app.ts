@@ -263,6 +263,17 @@ export function createApp(deps: GatewayDeps) {
     return c.json(await resp.json(), resp.status as never);
   });
 
+  app.get("/v1/mesh/cover", async (c) => {
+    if (!meshUrl) return c.json({ error: "mesh API unavailable" }, 503);
+    const url = new URL(`${meshUrl}/v1/mesh/cover`);
+    for (const key of ["minLat", "minLon", "maxLat", "maxLon", "level", "max"]) {
+      const value = c.req.query(key);
+      if (value !== undefined) url.searchParams.set(key, value);
+    }
+    const resp = await fetch(url);
+    return c.json(await resp.json(), resp.status as never);
+  });
+
   app.get("/v1/mesh/triangle/:id", async (c) => {
     if (!meshUrl) return c.json({ error: "mesh API unavailable" }, 503);
     const resp = await fetch(`${meshUrl}/v1/mesh/triangle/${c.req.param("id")}`);
