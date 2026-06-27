@@ -26,8 +26,8 @@ public struct MapView: View {
 
     private static let defaultViewport = MapViewport(
         minLat: 47.4479,
-        maxLat: 47.5479,
         minLon: 18.9902,
+        maxLat: 47.5479,
         maxLon: 19.0902
     )
 
@@ -193,8 +193,8 @@ private struct MeshMap: UIViewRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator(onViewportChange: onViewportChange) }
 
-    func makeUIView(context: Context) -> MGLMapView {
-        let mapView = MGLMapView(frame: .zero, styleURL: mapStyleURL)
+    func makeUIView(context: Context) -> MLNMapView {
+        let mapView = MLNMapView(frame: .zero, styleURL: mapStyleURL)
         mapView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         mapView.delegate = context.coordinator
         mapView.logoView.isHidden = true
@@ -209,15 +209,15 @@ private struct MeshMap: UIViewRepresentable {
         return mapView
     }
 
-    func updateUIView(_ mapView: MGLMapView, context: Context) {
+    func updateUIView(_ mapView: MLNMapView, context: Context) {
         context.coordinator.refreshTriangles(on: mapView, triangles: triangles)
         context.coordinator.mapView = mapView
         context.coordinator.captureCurrentViewportIfPossible(on: mapView)
     }
 
-    final class Coordinator: NSObject, MGLMapViewDelegate {
+    final class Coordinator: NSObject, MLNMapViewDelegate {
         let onViewportChange: (MapViewport) -> Void
-        weak var mapView: MGLMapView?
+        weak var mapView: MLNMapView?
         private let layerIds = ["step-oasis-fill", "step-oasis-line", "step-filling-fill", "step-filling-line", "step-desert-fill", "step-desert-line"]
         private let sourceIds = ["step-oasis", "step-filling", "step-desert"]
 
@@ -225,26 +225,26 @@ private struct MeshMap: UIViewRepresentable {
             self.onViewportChange = onViewportChange
         }
 
-        func mapViewDidFinishLoadingMap(_ mapView: MGLMapView) {
+        func mapViewDidFinishLoadingMap(_ mapView: MLNMapView) {
             captureCurrentViewportIfPossible(on: mapView)
         }
 
-        func mapView(_ mapView: MGLMapView, regionDidChangeAnimated animated: Bool) {
+        func mapView(_ mapView: MLNMapView, regionDidChangeAnimated animated: Bool) {
             captureCurrentViewportIfPossible(on: mapView)
         }
 
-        func captureCurrentViewportIfPossible(on mapView: MGLMapView) {
+        func captureCurrentViewportIfPossible(on mapView: MLNMapView) {
             guard let viewport = self.viewport(from: mapView) else { return }
             onViewportChange(viewport)
         }
 
-        func refreshTriangles(on mapView: MGLMapView, triangles: [MeshOverlayTriangle]) {
+        func refreshTriangles(on mapView: MLNMapView, triangles: [MeshOverlayTriangle]) {
             guard let style = mapView.style else { return }
             removeMeshLayers(from: style)
             addTriangles(to: style, triangles: triangles)
         }
 
-        private func removeMeshLayers(from style: MGLStyle) {
+        private func removeMeshLayers(from style: MLNStyle) {
             for id in layerIds {
                 if let layer = style.layer(withIdentifier: id) {
                     style.removeLayer(layer)
@@ -257,14 +257,14 @@ private struct MeshMap: UIViewRepresentable {
             }
         }
 
-        private func addTriangles(to style: MGLStyle, triangles: [MeshOverlayTriangle]) {
+        private func addTriangles(to style: MLNStyle, triangles: [MeshOverlayTriangle]) {
             addLayer(to: style, triangles: triangles, state: "oasis", color: UIColor.systemGreen, sourceId: "step-oasis", fillLayerId: "step-oasis-fill", lineLayerId: "step-oasis-line")
             addLayer(to: style, triangles: triangles, state: "filling", color: UIColor.systemYellow, sourceId: "step-filling", fillLayerId: "step-filling-fill", lineLayerId: "step-filling-line")
             addLayer(to: style, triangles: triangles, state: "desert", color: UIColor.systemRed, sourceId: "step-desert", fillLayerId: "step-desert-fill", lineLayerId: "step-desert-line")
         }
 
         private func addLayer(
-            to style: MGLStyle,
+            to style: MLNStyle,
             triangles: [MeshOverlayTriangle],
             state: String,
             color: UIColor,
@@ -275,7 +275,7 @@ private struct MeshMap: UIViewRepresentable {
             let stateTriangles = triangles.filter { $0.stateLabel == state }
             if stateTriangles.isEmpty { return }
 
-            var shapes: [MGLPolygonFeature] = []
+            var shapes: [MLNPolygonFeature] = []
             shapes.reserveCapacity(stateTriangles.count)
 
             for triangle in stateTriangles {
@@ -283,32 +283,32 @@ private struct MeshMap: UIViewRepresentable {
                     CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lon)
                 }
                 guard points.count >= 3 else { continue }
-                let feature = MGLPolygonFeature(coordinates: &points, count: points.count)
+                let feature = MLNPolygonFeature(coordinates: &points, count: points.count)
                 shapes.append(feature)
             }
 
             guard !shapes.isEmpty else { return }
 
-            let source = MGLShapeSource(
+            let source = MLNShapeSource(
                 identifier: sourceId,
                 features: shapes,
                 options: nil
             )
             style.addSource(source)
 
-            let fillLayer = MGLFillStyleLayer(identifier: fillLayerId, source: source)
+            let fillLayer = MLNFillStyleLayer(identifier: fillLayerId, source: source)
             fillLayer.fillColor = NSExpression(forConstantValue: color)
             fillLayer.fillOpacity = NSExpression(forConstantValue: 0.45)
             style.addLayer(fillLayer)
 
-            let lineLayer = MGLLineStyleLayer(identifier: lineLayerId, source: source)
+            let lineLayer = MLNLineStyleLayer(identifier: lineLayerId, source: source)
             lineLayer.lineColor = NSExpression(forConstantValue: StepColor.border.uiColor)
             lineLayer.lineWidth = NSExpression(forConstantValue: 0.75)
             lineLayer.lineOpacity = NSExpression(forConstantValue: 0.85)
             style.addLayer(lineLayer)
         }
 
-        private func viewport(from mapView: MGLMapView) -> MapViewport? {
+        private func viewport(from mapView: MLNMapView) -> MapViewport? {
             let bounds = mapView.visibleCoordinateBounds
             let minLat = bounds.sw.latitude
             let maxLat = bounds.ne.latitude
@@ -318,8 +318,8 @@ private struct MeshMap: UIViewRepresentable {
 
             return MapViewport(
                 minLat: minLat,
-                maxLat: maxLat,
                 minLon: minLon,
+                maxLat: maxLat,
                 maxLon: maxLon
             )
         }
