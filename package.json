@@ -24,6 +24,8 @@
     "typecheck": "pnpm -r typecheck",
     "lint": "pnpm -r lint",
     "release:public-edge:verify": "node scripts/ops/verify-public-edge.mjs",
+    "release:prod-safety:scan": "node scripts/release/scan-production-safety.mjs",
+    "test:scripts": "node --test scripts/release/*.test.mjs",
     "release:p2p-independence:verify": "node scripts/ops/verify-p2p-independence.mjs",
     "release:live-federation:verify": "node scripts/ops/verify-live-federation.mjs",
     "release:disaster-survival:verify": "node scripts/ops/verify-disaster-survival.mjs",
