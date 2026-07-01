@@ -48,6 +48,9 @@ export function votesAreConsistent(
   triangleIdHash: string,
   miner: Address,
 ): boolean {
+  // Fail closed on an empty set: `[].every()` is vacuously true, which would let
+  // a claim with zero validator votes pass the consistency gate.
+  if (votes.length === 0) return false;
   return votes.every(
     (v) =>
       v.claim_hash.toLowerCase() === claimHash.toLowerCase() &&

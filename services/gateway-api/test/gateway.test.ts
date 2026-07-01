@@ -18,7 +18,7 @@ import {
 } from "@step/shared-types";
 import { privateKeyToAccount } from "viem/accounts";
 import { createApp, type GatewayDeps } from "../src/app.js";
-import { aggregateQuorum } from "../src/quorum.js";
+import { aggregateQuorum, votesAreConsistent } from "../src/quorum.js";
 
 const VERIFIER = "0x610178dA211FEF7D417bC0e6FeD39F05609AD788" as const;
 const miner = privateKeyToAccount(
@@ -220,6 +220,61 @@ describe("nonce issuance", () => {
       headers: { "content-type": "application/json" },
     });
     expect(bad.status).toBe(400);
+  });
+});
+
+describe("intake hardening", () => {
+  it("votesAreConsistent fails closed on an empty vote set", () => {
+    const th = ("0x" + "11".repeat(32)) as Hex;
+    const ch = ("0x" + "22".repeat(32)) as Hex;
+    expect(votesAreConsistent([], ch, th, miner.address)).toBe(false);
+  });
+
+  it("rejects a malformed campaign_id before any chain work", async () => {
+    const { deps, submitSponsored } = makeDeps({ validatorApproves: [true, true, true] });
+    const { app } = createApp(deps);
+    const claim = await buildClaim({ campaign_id: "not-a-hash" });
+    const resp = await app.request("/v1/claims", {
+      method: "POST",
+      body: JSON.stringify({ claim }),
+      headers: { "content-type": "application/json" },
+    });
+    expect(resp.status).toBe(400);
+    expect(((await resp.json()) as { error: string }).error).toBe("invalid_campaign_id");
+    expect(submitSponsored).not.toHaveBeenCalled();
+  });
+
+  it("rejects an out-of-range mesh_level (Mesh ID v2 terminal is 21)", async () => {
+    const { deps } = makeDeps({ validatorApproves: [true, true, true] });
+    const { app } = createApp(deps);
+    for (const bad of [0, 22, 99]) {
+      const claim = await buildClaim({ mesh_level: bad });
+      const resp = await app.request("/v1/claims", {
+        method: "POST",
+        body: JSON.stringify({ claim }),
+        headers: { "content-type": "application/json" },
+      });
+      expect(resp.status).toBe(400);
+      expect(((await resp.json()) as { error: string }).error).toBe("invalid_mesh_level");
+    }
+  });
+
+  it("gossip/finalise rejects a consistent all-rejection vote set", async () => {
+    const { deps, submitNatural } = makeDeps({ validatorApproves: [false, false, false] });
+    const { app } = createApp(deps);
+    const claim = await buildClaim();
+    const approvals = await Promise.all(
+      [0, 1, 2].map(async (i) => (await fakeValidator(i, false)(claim)).vote),
+    );
+    const resp = await app.request("/v1/gossip/finalise", {
+      method: "POST",
+      body: JSON.stringify({ claim, approvals }),
+      headers: { "content-type": "application/json" },
+    });
+    const record = (await resp.json()) as { status: string; reject_reasons: string[] };
+    expect(record.status).toBe("rejected");
+    expect(record.reject_reasons).toContain("no_approval_votes");
+    expect(submitNatural).not.toHaveBeenCalled();
   });
 });
 

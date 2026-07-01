@@ -44,6 +44,17 @@ function shorten(str: string, maxLen = 180) {
   return str.slice(0, maxLen);
 }
 
+/** 0x + 32-byte hex — the on-chain form for a campaign id / hash. Guards the
+ *  unchecked `as Hex` casts before a value reaches a chain call. */
+function isHex32(v: unknown): v is Hex {
+  return typeof v === "string" && /^0x[0-9a-fA-F]{64}$/.test(v);
+}
+
+/** Mesh ID v2 terminal level is 21; reject out-of-range before any chain work. */
+function isValidMeshLevel(level: unknown): level is number {
+  return typeof level === "number" && Number.isInteger(level) && level >= 1 && level <= 21;
+}
+
 function extractRevertReason(error: unknown): string {
   const raw =
     error instanceof Error ? error.message : typeof error === "string" ? error : JSON.stringify(error ?? "");
@@ -368,6 +379,15 @@ export function createApp(deps: GatewayDeps) {
     if (!claim || claim.schema_version !== "step.proof.location.v1") {
       return c.json({ error: "claim with schema step.proof.location.v1 required" }, 400);
     }
+    // Reject malformed fields at intake rather than relying solely on a contract
+    // revert: a bad campaign_id would be cast blindly to Hex, and an out-of-range
+    // mesh_level would waste validator + gas work.
+    if (claim.campaign_id !== undefined && !isHex32(claim.campaign_id)) {
+      return c.json({ error: "invalid_campaign_id" }, 400);
+    }
+    if (!isValidMeshLevel(claim.mesh_level)) {
+      return c.json({ error: "invalid_mesh_level" }, 400);
+    }
     // #61: per-wallet rate limit (the stronger control behind a shared tunnel IP).
     if (walletClaim && claim.wallet_address) {
       const g = walletClaim.take(claim.wallet_address.toLowerCase(), now());
@@ -518,6 +538,9 @@ export function createApp(deps: GatewayDeps) {
     if (!Array.isArray(approvals) || approvals.length === 0) {
       return c.json({ error: "approval votes required" }, 400);
     }
+    if (claim.campaign_id !== undefined && !isHex32(claim.campaign_id)) {
+      return c.json({ error: "invalid_campaign_id" }, 400);
+    }
 
     const ch = claimHash(canonicalClaimMessage(claim));
     const th = triangleIdHash(claim.triangle_id);
@@ -542,6 +565,13 @@ export function createApp(deps: GatewayDeps) {
     if (!votesAreConsistent(approvals, ch, th, miner)) {
       record.status = "rejected";
       record.reject_reasons = ["inconsistent_votes"];
+      return c.json(record, 200);
+    }
+    // A consistent set of all-rejection votes must not be able to reach quorum
+    // and post an (incorrect) on-chain result — require at least one approval.
+    if (!approvals.some((v) => v.approve)) {
+      record.status = "rejected";
+      record.reject_reasons = ["no_approval_votes"];
       return c.json(record, 200);
     }
 

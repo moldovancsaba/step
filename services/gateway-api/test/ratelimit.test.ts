@@ -12,6 +12,15 @@ describe("RateLimiter", () => {
     expect(denied.retryAfterS).toBe(1);
   });
 
+  it("rejects a non-finite, zero, or negative cost", () => {
+    const r = new RateLimiter(3, 1);
+    expect(() => r.take("a", 0, 0)).toThrow(/positive finite/);
+    expect(() => r.take("a", 0, -1)).toThrow(/positive finite/);
+    expect(() => r.take("a", 0, Number.NaN)).toThrow(/positive finite/);
+    expect(() => r.take("a", 0, Number.POSITIVE_INFINITY)).toThrow(/positive finite/);
+    expect(r.take("a", 0, 1).allowed).toBe(true);
+  });
+
   it("refills over time", () => {
     const r = new RateLimiter(2, 1);
     r.take("a", 0);

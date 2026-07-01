@@ -23,6 +23,11 @@ export class RateLimiter {
   ) {}
 
   take(key: string, nowMs: number, cost = 1): BucketResult {
+    // A non-finite/zero/negative cost would corrupt the bucket math (e.g. a
+    // negative cost mints tokens). Reject it rather than silently misaccount.
+    if (!Number.isFinite(cost) || cost <= 0) {
+      throw new Error("cost must be a positive finite number");
+    }
     let b = this.state.get(key);
     if (!b) {
       if (this.state.size >= this.maxKeys) this.evictOldest();
