@@ -271,6 +271,13 @@ async fn validate(
     if approve {
         state.metrics.approved_total.fetch_add(1, Ordering::Relaxed);
         let mut last = state.last_approved.lock().expect("history lock");
+        // Bound growth over the node's lifetime. A dropped history entry only skips
+        // one wallet's speed/teleport check on its NEXT claim (geometry, nonce, and
+        // rate limit still gate it), and reaching this cap needs 100k distinct
+        // fully-validated wallets, so clearing here fails safe and can't be abused.
+        if last.len() >= 100_000 {
+            last.clear();
+        }
         last.insert(
             wallet,
             PreviousClaim {
