@@ -15,6 +15,7 @@ import { readFileSync } from "node:fs";
 import { createPublicClient, defineChain, http, type Address } from "viem";
 import { createApi } from "./api.js";
 import { applyEvent, decodeLogs } from "./events.js";
+import { scanWindows } from "./scan.js";
 import { NftStore } from "./store.js";
 
 function env(key: string): string {
@@ -37,19 +38,19 @@ const chain = defineChain({
 const client = createPublicClient({ chain, transport: http() });
 const store = new NftStore();
 
+// cosmos-EVM caps eth_getLogs at ~10k blocks; scan in bounded windows so a large
+// catch-up gap doesn't throw and stall NFT indexing (matches services/indexer).
+const MAX_LOG_RANGE = BigInt(process.env.STEP_INDEX_MAX_RANGE ?? "5000");
+
 async function poll() {
   if (watched.length === 0) return;
   try {
     const head = await client.getBlockNumber();
-    if (head > store.lastBlock) {
-      const logs = await client.getLogs({
-        address: watched,
-        fromBlock: store.lastBlock + 1n,
-        toBlock: head,
-      });
+    for (const [from, to] of scanWindows(store.lastBlock + 1n, head, MAX_LOG_RANGE)) {
+      const logs = await client.getLogs({ address: watched, fromBlock: from, toBlock: to });
       for (const event of decodeLogs(logs)) applyEvent(store, event);
-      if (logs.length > 0) console.log(`nft-indexer: applied ${logs.length} logs up to ${head}`);
-      store.lastBlock = head;
+      if (logs.length > 0) console.log(`nft-indexer: applied ${logs.length} logs ${from}..${to}`);
+      store.lastBlock = to;
     }
   } catch (err) {
     console.error("poll error:", err instanceof Error ? err.message : err);

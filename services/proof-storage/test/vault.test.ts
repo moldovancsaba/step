@@ -43,6 +43,16 @@ describe("evidence vault", () => {
     expect(await vault.destroy(cid)).toBe(false); // idempotently gone
   });
 
+  it("returns null for a tampered ciphertext instead of throwing a 500", async () => {
+    const backend = new MemoryBackend();
+    const vault = new EvidenceVault(backend, MASTER);
+    const cid = await vault.store(bundle);
+    const stored = await backend.get(cid);
+    if (!stored) throw new Error("stored bundle missing");
+    stored.ciphertext[0] = (stored.ciphertext[0] ?? 0) ^ 0xff; // flip a byte → auth-tag failure
+    expect(await vault.retrieve(cid)).toBeNull();
+  });
+
   it("CIDs are deterministic per content", () => {
     const a = computeCid(new Uint8Array([1, 2, 3]));
     expect(a).toBe(computeCid(new Uint8Array([1, 2, 3])));
