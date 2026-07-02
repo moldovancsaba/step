@@ -12,7 +12,7 @@
 
 use serde::{Deserialize, Serialize};
 use step_validation_rules::sign::{
-    eip712_vote_digest, format_address, parse_address, recover_address, Address,
+    campaign_id_word, eip712_vote_digest, format_address, parse_address, recover_address, Address,
 };
 
 /// A signed validator vote, wire-compatible with the gateway's `SignedVote`
@@ -31,6 +31,11 @@ pub struct VoteMsg {
     pub miner: String,
     /// approve / reject
     pub approve: bool,
+    /// bytes32 campaign id bound into the vote digest (#115): 0x0…0 for a natural
+    /// claim, the campaign id for a sponsored one. `#[serde(default)]` tolerates
+    /// votes from peers on the old wire format (they only ever voted natural).
+    #[serde(default)]
+    pub campaign_id_hash: String,
 }
 
 impl VoteMsg {
@@ -55,6 +60,8 @@ impl VoteMsg {
         if sig.len() != 65 {
             return None;
         }
+        // #115: reconstruct the campaign-bound digest (empty/old field → 0).
+        let campaign = campaign_id_word(Some(&self.campaign_id_hash));
         let digest = eip712_vote_digest(
             chain_id,
             verifying_contract,
@@ -62,6 +69,7 @@ impl VoteMsg {
             &triangle,
             &miner,
             self.approve,
+            &campaign,
         );
         let recovered = recover_address(&digest, &sig).ok()?;
         (recovered == claimed).then_some(recovered)
@@ -141,8 +149,16 @@ mod tests {
         miner: Address,
         approve: bool,
     ) -> VoteMsg {
-        let digest =
-            eip712_vote_digest(chain_id, contract, &claim_hash, &triangle, &miner, approve);
+        let campaign = [0u8; 32]; // natural vote
+        let digest = eip712_vote_digest(
+            chain_id,
+            contract,
+            &claim_hash,
+            &triangle,
+            &miner,
+            approve,
+            &campaign,
+        );
         let sig = sign_digest(&digest, key);
         VoteMsg {
             validator: format_address(&signer_address(key)),
@@ -151,6 +167,7 @@ mod tests {
             triangle_id_hash: format!("0x{}", hex::encode(triangle)),
             miner: format_address(&miner),
             approve,
+            campaign_id_hash: format!("0x{}", hex::encode(campaign)),
         }
     }
 

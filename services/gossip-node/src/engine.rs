@@ -168,7 +168,8 @@ mod tests {
 
     fn vote_from(key: &SigningKey, approve: bool) -> VoteMsg {
         let c = contract();
-        let digest = eip712_vote_digest(CHAIN, &c, &CH, &TRI, &miner(), approve);
+        let campaign = [0u8; 32];
+        let digest = eip712_vote_digest(CHAIN, &c, &CH, &TRI, &miner(), approve, &campaign);
         VoteMsg {
             validator: format_address(&signer_address(key)),
             signature: format!("0x{}", hex::encode(sign_digest(&digest, key))),
@@ -176,6 +177,7 @@ mod tests {
             triangle_id_hash: format!("0x{}", hex::encode(TRI)),
             miner: format_address(&miner()),
             approve,
+            campaign_id_hash: format!("0x{}", hex::encode(campaign)),
         }
     }
 

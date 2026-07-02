@@ -18,6 +18,7 @@ import {
   triangleIdHash,
   voteDigest,
   parseProtocolParams,
+  ZERO_BYTES32,
   type Claim,
 } from "../src/index.js";
 
@@ -74,6 +75,7 @@ describe("cross-language conformance (Rust vector)", () => {
       vector.triangle_id_hash,
       vector.wallet,
       true,
+      ZERO_BYTES32, // the vector's claim is natural (no campaign)
     );
     expect(digest).toBe(
       vector["vote_digest_chain31337_contract_0x610178dA211FEF7D417bC0e6FeD39F05609AD788"],

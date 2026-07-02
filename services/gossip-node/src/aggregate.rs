@@ -117,6 +117,7 @@ mod tests {
             triangle_id_hash: "0xcd".into(),
             miner: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266".into(),
             approve,
+            campaign_id_hash: String::new(),
         }
     }
 

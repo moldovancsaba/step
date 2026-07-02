@@ -11,6 +11,7 @@ import {
   personalDigest,
   triangleIdHash,
   voteDigest,
+  ZERO_BYTES32,
   type Claim,
   type Hex,
   type SignedVote,
@@ -57,7 +58,8 @@ function fakeValidator(index: number, approve: boolean) {
     const ch = claimHash(canonicalClaimMessage(claim));
     const th = triangleIdHash(claim.triangle_id);
     const account = validators[index]!;
-    const digest = voteDigest(31337n, VERIFIER, ch, th, claim.wallet_address, approve);
+    const campaignIdHash = (claim.campaign_id as Hex | undefined) ?? ZERO_BYTES32;
+    const digest = voteDigest(31337n, VERIFIER, ch, th, claim.wallet_address, approve, campaignIdHash);
     const signature = await account.sign({ hash: digest });
     return {
       verdict: {
@@ -73,6 +75,7 @@ function fakeValidator(index: number, approve: boolean) {
         triangle_id_hash: th,
         miner: claim.wallet_address.toLowerCase() as `0x${string}`,
         approve,
+        campaign_id_hash: campaignIdHash,
       },
       validated_at: new Date().toISOString(),
     };

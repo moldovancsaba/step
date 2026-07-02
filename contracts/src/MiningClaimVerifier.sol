@@ -27,7 +27,7 @@ contract MiningClaimVerifier is Parameterized, EIP712 {
     bytes32 public constant P_QUORUM_WEIGHT = keccak256("verifier.quorum_threshold_weight");
 
     bytes32 public constant VOTE_TYPEHASH = keccak256(
-        "StepValidatorVote(bytes32 claimHash,bytes32 triangleId,address miner,bool approve)"
+        "StepValidatorVote(bytes32 claimHash,bytes32 triangleId,address miner,bool approve,bytes32 campaignId)"
     );
 
     struct ValidatorSig {
@@ -98,14 +98,19 @@ contract MiningClaimVerifier is Parameterized, EIP712 {
         if (value == 0) revert InvalidParamValue(key, value);
     }
 
-    /// @notice EIP-712 digest a validator signs to approve a claim.
-    function voteDigest(bytes32 claimHash, bytes32 triangleId, address miner, bool approve)
-        public
-        view
-        returns (bytes32)
-    {
+    /// @notice EIP-712 digest a validator signs to approve a claim. `campaignId`
+    ///         binds the vote to a finalisation path/campaign (bytes32(0) for a
+    ///         natural claim, the campaign id for a sponsored claim) so a quorum
+    ///         signed for one path/campaign can't be replayed onto another (#115).
+    function voteDigest(
+        bytes32 claimHash,
+        bytes32 triangleId,
+        address miner,
+        bool approve,
+        bytes32 campaignId
+    ) public view returns (bytes32) {
         return _hashTypedDataV4(
-            keccak256(abi.encode(VOTE_TYPEHASH, claimHash, triangleId, miner, approve))
+            keccak256(abi.encode(VOTE_TYPEHASH, claimHash, triangleId, miner, approve, campaignId))
         );
     }
 
@@ -116,9 +121,10 @@ contract MiningClaimVerifier is Parameterized, EIP712 {
         bytes32 claimHash,
         bytes32 triangleId,
         address miner,
+        bytes32 campaignId,
         ValidatorSig[] calldata sigs
     ) internal view {
-        bytes32 digest = voteDigest(claimHash, triangleId, miner, true);
+        bytes32 digest = voteDigest(claimHash, triangleId, miner, true, campaignId);
         uint256 totalWeight = 0;
         address prev = address(0);
         for (uint256 i = 0; i < sigs.length; i++) {
@@ -213,7 +219,9 @@ contract MiningClaimVerifier is Parameterized, EIP712 {
         }
 
         _beginFinalise(claimHash, triangleIdHash);
-        _checkQuorum(claimHash, triangleIdHash, miner, sigs);
+        // Natural claims have no campaign: bind the vote to campaignId 0 so these
+        // signatures can never satisfy the sponsored path (#115).
+        _checkQuorum(claimHash, triangleIdHash, miner, bytes32(0), sigs);
 
         _mintToMiner(claimHash, triangleIdHash, miner, proofCidHash);
     }
@@ -244,7 +252,9 @@ contract MiningClaimVerifier is Parameterized, EIP712 {
         ValidatorSig[] calldata sigs
     ) external whenDomainNotPaused(ACCESS.PAUSE_CAMPAIGNS()) {
         _beginFinalise(claimHash, triangleId);
-        _checkQuorum(claimHash, triangleId, miner, sigs);
+        // Bind the vote to this campaign so a quorum can't be redirected to a
+        // different campaign or reused on the natural path (#115).
+        _checkQuorum(claimHash, triangleId, miner, campaignId, sigs);
 
         uint256 amount = POOL.release(campaignId, triangleId, miner);
         PROOFS.store(claimHash, triangleId, proofCidHash);
