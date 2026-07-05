@@ -48,8 +48,8 @@ if (verifier && !/^0x[0-9a-fA-F]{40}$/.test(verifier)) die("--verifier must be e
 if (!["edge", "full"].includes(survivalTier)) die("--survival-tier must be edge or full");
 if (!existsSync(agentBin)) die(`agent binary not found at ${agentBin}; build with: cargo build -p step-node-agent --release`);
 if (survivalTier === "full") {
-  if (!fullstackDir || !existsSync(fullstackDir)) die("--survival-tier full requires --fullstack-dir containing node, gateway, fleet, chain RPC, validator, and gossip launch payloads");
-  for (const name of ["node", "gateway-api.mjs", "fleet-api.mjs", "chain-rpc.mjs", "validator-node", "gossip-node"]) {
+  if (!fullstackDir || !existsSync(fullstackDir)) die("--survival-tier full requires --fullstack-dir containing node, gateway, fleet, chain RPC, account, indexer, NFT indexer, validator, and gossip launch payloads");
+  for (const name of ["node", "gateway-api.mjs", "fleet-api.mjs", "chain-rpc.mjs", "account-api.mjs", "indexer.mjs", "nft-indexer.mjs", "validator-node", "gossip-node"]) {
     if (!existsSync(join(fullstackDir, name))) die(`fullstack payload missing ${name}`);
   }
   if (!verifier && existsSync(join(fullstackDir, "deployments.json"))) {
@@ -124,7 +124,7 @@ fi
 VALIDATOR_PORT="\${STEP_VALIDATOR_PORT:-9101}"
 AGENT_PORT="\${STEP_AGENT_PORT:-9200}"
 SERVICE="app.step.node"
-FULL_ROLES='["agent", "validator", "gossip", "chain", "gateway", "fleet"]'
+FULL_ROLES='["agent", "validator", "gossip", "chain", "gateway", "fleet", "account", "indexer", "nft"]'
 EDGE_ROLES='["agent", "validator", "gossip"]'
 
 usage() {
@@ -196,6 +196,9 @@ GOSSIP_RELAYS=$RELAY_PEERS
 GOSSIP_ADVERTISE=$ADVERTISE_PEERS
 ENV
   [ -n "$VERIFIER" ] && printf 'VERIFIER_CONTRACT_ADDRESS=%s\n' "$VERIFIER" >> "$NODE_ENV"
+  # Account-api session cookie key: generated per provision (rotating it only
+  # invalidates live sessions; the encrypted vault is unaffected).
+  printf 'SESSION_SIGNING_KEY=%s\n' "$(openssl rand -hex 32)" >> "$NODE_ENV"
   append_validator_identity_env
 }
 
@@ -203,7 +206,7 @@ manifest_roles() { if [ "$SURVIVAL_TIER" = "full" ]; then printf '%s' "$FULL_ROL
 
 fullstack_required() {
   [ "$SURVIVAL_TIER" != "full" ] && return 0
-  for f in node gateway-api.mjs fleet-api.mjs chain-rpc.mjs validator-node gossip-node; do
+  for f in node gateway-api.mjs fleet-api.mjs chain-rpc.mjs account-api.mjs indexer.mjs nft-indexer.mjs validator-node gossip-node; do
     [ -e "$FULLSTACK_DIR/$f" ] || { echo "full Trust Center payload missing $FULLSTACK_DIR/$f" >&2; exit 1; }
   done
 }
@@ -252,6 +255,21 @@ write_manifest() {
       "enabled": $SURVIVAL_FULL,
       "bind": "0.0.0.0:8099",
       "healthz": "http://127.0.0.1:8099/v1/fleet"
+    },
+    "account": {
+      "enabled": $SURVIVAL_FULL,
+      "bind": "0.0.0.0:8091",
+      "healthz": "http://127.0.0.1:8091/healthz"
+    },
+    "indexer": {
+      "enabled": $SURVIVAL_FULL,
+      "bind": "0.0.0.0:8090",
+      "healthz": "http://127.0.0.1:8090/healthz"
+    },
+    "nft": {
+      "enabled": $SURVIVAL_FULL,
+      "bind": "0.0.0.0:8092",
+      "healthz": "http://127.0.0.1:8092/healthz"
     }
   },
   "peer": {
@@ -348,11 +366,11 @@ install_full_services() {
   [ "$SURVIVAL_TIER" != "full" ] && return 0
   fullstack_required
   [ -f "$FULLSTACK_DIR/deployments.json" ] && cp "$FULLSTACK_DIR/deployments.json" "$ROOT/deployments.json"
-  [ -f "$FULLSTACK_DIR/protocol-params.json" ] && {
-    mkdir -p "$ROOT/current"
-    cp "$FULLSTACK_DIR/protocol-params.json" "$ROOT/current/protocol-params.json"
-    cp "$FULLSTACK_DIR/protocol-params.json" "$ROOT/shared-params.json"
-  }
+  # NOTE: never create "$ROOT/current" here — the agent owns it as its
+  # active-release symlink; a real directory there breaks release activation.
+  [ -f "$FULLSTACK_DIR/protocol-params.json" ] && cp "$FULLSTACK_DIR/protocol-params.json" "$ROOT/shared-params.json"
+  # Canonical node config measured by the agent's integrity check.
+  printf '{"mesh_spec_version":"step-mesh-v1","platform":"%s","schema":"step.node.config.v1"}' "$PLATFORM" > "$ROOT/shared-config.json"
   [ -f "$ROOT/nodes.json" ] || { [ -f "$FULLSTACK_DIR/nodes.json" ] && cp "$FULLSTACK_DIR/nodes.json" "$ROOT/nodes.json"; }
   cat > "$ROOT/run-chain-rpc.sh" <<RUN
 #!/bin/sh
@@ -365,7 +383,7 @@ set -a; . "$NODE_ENV"; set +a
 export STEP_RPC_URL="\${STEP_RPC_URL:-http://127.0.0.1:8645}"
 export STEP_CHAIN_ID="\${STEP_CHAIN_ID:-$CHAIN_ID}"
 export STEP_DEPLOYMENTS_FILE="\${STEP_DEPLOYMENTS_FILE:-$ROOT/deployments.json}"
-export STEP_PROTOCOL_PARAMS="\${STEP_PROTOCOL_PARAMS:-$ROOT/current/protocol-params.json}"
+export STEP_PROTOCOL_PARAMS="\${STEP_PROTOCOL_PARAMS:-$ROOT/shared-params.json}"
 export NODE_DIRECTORY_FILE="\${NODE_DIRECTORY_FILE:-$ROOT/nodes.json}"
 export MESH_API_URL="\${MESH_API_URL:-http://127.0.0.1:$VALIDATOR_PORT}"
 export VALIDATOR_URLS="\${VALIDATOR_URLS:-http://127.0.0.1:$VALIDATOR_PORT}"
@@ -400,15 +418,43 @@ export VALIDATOR_PORT="\${VALIDATOR_PORT:-$VALIDATOR_PORT}"
 export STEP_RPC_URL="\${STEP_RPC_URL:-http://127.0.0.1:8645}"
 export STEP_CHAIN_ID="\${STEP_CHAIN_ID:-$CHAIN_ID}"
 export STEP_DEPLOYMENTS_FILE="\${STEP_DEPLOYMENTS_FILE:-$ROOT/deployments.json}"
-export STEP_PROTOCOL_PARAMS="\${STEP_PROTOCOL_PARAMS:-$ROOT/current/protocol-params.json}"
+export STEP_PROTOCOL_PARAMS="\${STEP_PROTOCOL_PARAMS:-$ROOT/shared-params.json}"
 exec "$FULLSTACK_DIR/validator-node"
 RUN
-  chmod +x "$ROOT"/run-chain-rpc.sh "$ROOT"/run-gateway.sh "$ROOT"/run-fleet.sh "$ROOT"/run-gossip.sh "$ROOT"/run-validator.sh
+  cat > "$ROOT/run-account.sh" <<RUN
+#!/bin/sh
+set -a; . "$NODE_ENV"; set +a
+export ACCOUNT_PORT="\${ACCOUNT_PORT:-8091}"
+export ACCOUNT_DB_FILE="\${ACCOUNT_DB_FILE:-$ROOT/accounts.sqlite}"
+exec "$FULLSTACK_DIR/node" "$FULLSTACK_DIR/account-api.mjs"
+RUN
+  cat > "$ROOT/run-indexer.sh" <<RUN
+#!/bin/sh
+set -a; . "$NODE_ENV"; set +a
+export STEP_RPC_URL="\${STEP_RPC_URL:-http://127.0.0.1:8645}"
+export STEP_CHAIN_ID="\${STEP_CHAIN_ID:-$CHAIN_ID}"
+export STEP_DEPLOYMENTS_FILE="\${STEP_DEPLOYMENTS_FILE:-$ROOT/deployments.json}"
+export INDEXER_PORT="\${INDEXER_PORT:-8090}"
+exec "$FULLSTACK_DIR/node" "$FULLSTACK_DIR/indexer.mjs"
+RUN
+  cat > "$ROOT/run-nft-indexer.sh" <<RUN
+#!/bin/sh
+set -a; . "$NODE_ENV"; set +a
+export STEP_RPC_URL="\${STEP_RPC_URL:-http://127.0.0.1:8645}"
+export STEP_CHAIN_ID="\${STEP_CHAIN_ID:-$CHAIN_ID}"
+export STEP_DEPLOYMENTS_FILE="\${STEP_DEPLOYMENTS_FILE:-$ROOT/deployments.json}"
+export NFT_INDEXER_PORT="\${NFT_INDEXER_PORT:-8092}"
+exec "$FULLSTACK_DIR/node" "$FULLSTACK_DIR/nft-indexer.mjs"
+RUN
+  chmod +x "$ROOT"/run-chain-rpc.sh "$ROOT"/run-gateway.sh "$ROOT"/run-fleet.sh "$ROOT"/run-gossip.sh "$ROOT"/run-validator.sh "$ROOT"/run-account.sh "$ROOT"/run-indexer.sh "$ROOT"/run-nft-indexer.sh
   write_full_service_plist app.step.chain "$ROOT/run-chain-rpc.sh" "$LOG_DIR/chain.out.log" "$LOG_DIR/chain.err.log"
   write_full_service_plist app.step.gateway "$ROOT/run-gateway.sh" "$LOG_DIR/gateway.out.log" "$LOG_DIR/gateway.err.log"
   write_full_service_plist app.step.fleet "$ROOT/run-fleet.sh" "$LOG_DIR/fleet.out.log" "$LOG_DIR/fleet.err.log"
   write_full_service_plist app.step.gossip "$ROOT/run-gossip.sh" "$LOG_DIR/gossip.out.log" "$LOG_DIR/gossip.err.log"
   write_full_service_plist app.step.validator "$ROOT/run-validator.sh" "$LOG_DIR/validator.out.log" "$LOG_DIR/validator.err.log"
+  write_full_service_plist app.step.account-api "$ROOT/run-account.sh" "$LOG_DIR/account.out.log" "$LOG_DIR/account.err.log"
+  write_full_service_plist app.step.indexer "$ROOT/run-indexer.sh" "$LOG_DIR/indexer.out.log" "$LOG_DIR/indexer.err.log"
+  write_full_service_plist app.step.nft-indexer "$ROOT/run-nft-indexer.sh" "$LOG_DIR/nft-indexer.out.log" "$LOG_DIR/nft-indexer.err.log"
 }
 
 write_plist() {

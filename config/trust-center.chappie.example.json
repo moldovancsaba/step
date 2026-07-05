@@ -14,7 +14,10 @@
     "gossip",
     "chain",
     "gateway",
-    "fleet"
+    "fleet",
+    "account",
+    "indexer",
+    "nft"
   ],
   "services": {
     "agent": {
@@ -45,6 +48,21 @@
       "enabled": true,
       "bind": "0.0.0.0:8099",
       "healthz": "http://127.0.0.1:8099/healthz"
+    },
+    "account": {
+      "enabled": true,
+      "bind": "0.0.0.0:8091",
+      "healthz": "http://127.0.0.1:8091/healthz"
+    },
+    "indexer": {
+      "enabled": true,
+      "bind": "0.0.0.0:8090",
+      "healthz": "http://127.0.0.1:8090/healthz"
+    },
+    "nft": {
+      "enabled": true,
+      "bind": "0.0.0.0:8092",
+      "healthz": "http://127.0.0.1:8092/healthz"
     }
   },
   "peer": {

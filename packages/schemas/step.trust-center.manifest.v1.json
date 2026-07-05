@@ -73,7 +73,9 @@
           "gateway",
           "indexer",
           "fleet",
-          "artifact"
+          "artifact",
+          "account",
+          "nft"
         ]
       }
     },
@@ -88,7 +90,9 @@
         "gateway": { "$ref": "#/$defs/service" },
         "indexer": { "$ref": "#/$defs/service" },
         "fleet": { "$ref": "#/$defs/service" },
-        "artifact": { "$ref": "#/$defs/service" }
+        "artifact": { "$ref": "#/$defs/service" },
+        "account": { "$ref": "#/$defs/service" },
+        "nft": { "$ref": "#/$defs/service" }
       }
     },
     "peer": {

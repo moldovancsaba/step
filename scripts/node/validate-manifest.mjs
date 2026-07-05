@@ -60,7 +60,9 @@ const allowedRoles = new Set([
   "gateway",
   "indexer",
   "fleet",
-  "artifact"
+  "artifact",
+  "account",
+  "nft"
 ]);
 for (const role of manifest.roles) {
   if (!allowedRoles.has(role)) fail(`unknown role ${role}`);
@@ -128,7 +130,9 @@ const serviceRoleMap = {
   gateway: "gateway",
   indexer: "indexer",
   fleet: "fleet",
-  artifact: "artifact"
+  artifact: "artifact",
+  account: "account",
+  nft: "nft"
 };
 
 for (const [service, role] of Object.entries(serviceRoleMap)) {

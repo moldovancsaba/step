@@ -16,8 +16,8 @@ import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 
 const root = new URL("../..", import.meta.url).pathname;
-const requiredFullRoles = ["agent", "validator", "gossip", "chain", "gateway", "fleet"];
-const requiredFullServices = ["agent", "validator", "gossip", "chain_rpc", "gateway", "fleet"];
+const requiredFullRoles = ["agent", "validator", "gossip", "chain", "gateway", "fleet", "account", "indexer", "nft"];
+const requiredFullServices = ["agent", "validator", "gossip", "chain_rpc", "gateway", "fleet", "account", "indexer", "nft"];
 const expectedQuorum = BigInt(process.env.STEP_EXPECTED_QUORUM ?? "101");
 const fleetUrls = (process.env.STEP_PROOF_FLEET_URLS ?? "http://127.0.0.1:8099/v1/fleet,http://chappie.local:8099/v1/fleet")
   .split(",")
@@ -68,6 +68,9 @@ function verifyInstallerContracts() {
     "gateway-api.mjs",
     "fleet-api.mjs",
     "chain-rpc.mjs",
+    "account-api.mjs",
+    "indexer.mjs",
+    "nft-indexer.mjs",
     "validator-node",
     "gossip-node",
     "install_full_services",
@@ -76,10 +79,16 @@ function verifyInstallerContracts() {
     "app.step.fleet",
     "app.step.gossip",
     "app.step.validator",
+    "app.step.account-api",
+    "app.step.indexer",
+    "app.step.nft-indexer",
     "\"roles\": $roles",
     "\"chain_rpc\"",
     "\"gateway\"",
-    "\"fleet\""
+    "\"fleet\"",
+    "\"account\"",
+    "\"indexer\"",
+    "\"nft\""
   ]);
   requireText("scripts/node/install.sh", [
     "--fullstack-artifact",
@@ -91,9 +100,15 @@ function verifyInstallerContracts() {
     "app.step.fleet",
     "app.step.gossip",
     "app.step.validator",
+    "app.step.account-api",
+    "app.step.indexer",
+    "app.step.nft-indexer",
     "\"chain_rpc\"",
     "\"gateway\"",
-    "\"fleet\""
+    "\"fleet\"",
+    "\"account\"",
+    "\"indexer\"",
+    "\"nft\""
   ]);
   ok("installer contracts are fail-closed for full Trust Center payloads");
 }
@@ -153,9 +168,11 @@ function verifyIosContract() {
     "NFCReaderUsageDescription",
     "NSCameraUsageDescription"
   ]);
+  // Version fields must be pinned in project.yml, but the numbers themselves
+  // move with every TestFlight build — do not pin exact values here.
   requireText("apps/ios/App/project.yml", [
-    "MARKETING_VERSION: \"0.1.0\"",
-    "CURRENT_PROJECT_VERSION: \"3\"",
+    "MARKETING_VERSION:",
+    "CURRENT_PROJECT_VERSION:",
     "STEP_GATEWAY_URL",
     "STEP_MESH_URL"
   ]);
