@@ -38,6 +38,7 @@ enum AppComposition {
             account: AccountClient(baseURL: cfg.account),
             nft: NftClient(baseURL: cfg.nftIndexer),
             cover: MeshCoverClient(meshURL: cfg.mesh, indexerURL: cfg.indexer),
+            webAppURL: cfg.webApp,
             market: MarketplaceClient(baseURL: cfg.nftIndexer),
             rpcURL: cfg.rpc,
             marketAddresses: cfg.marketAddresses,
@@ -55,13 +56,15 @@ struct AppConfig {
     let indexer: URL
     let account: URL
     let nftIndexer: URL
+    let webApp: URL
     let rpc: URL?
     let marketAddresses: MarketplaceAddresses?
 
     static var current: AppConfig {
         let dict = Bundle.main.object(forInfoDictionaryKey: "StepConfig") as? [String: Any] ?? [:]
         func url(_ key: String, default def: String) -> URL {
-            URL(string: (dict[key] as? String) ?? def)!
+            let raw = (dict[key] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            return URL(string: raw?.isEmpty == false ? raw! : def)!
         }
         let rpc = (dict["RpcURL"] as? String).flatMap(URL.init(string:))
         let market = dict["Marketplace"] as? String
@@ -76,6 +79,7 @@ struct AppConfig {
             indexer: url("IndexerURL", default: "https://idx.step.regiominer.com"),
             account: url("AccountURL", default: "https://acc.step.regiominer.com"),
             nftIndexer: url("NftIndexerURL", default: "https://nft.step.regiominer.com"),
+            webApp: url("WebAppURL", default: "https://step.moldovancsaba.workers.dev/?surface=ios-map"),
             rpc: rpc,
             marketAddresses: addresses
         )

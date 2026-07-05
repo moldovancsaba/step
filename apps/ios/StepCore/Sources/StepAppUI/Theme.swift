@@ -1,6 +1,6 @@
 // GDS design-language tokens for the native iOS client (M7 #25).
 //
-// The web client uses @doneisbetter/gds (React/Mantine). That component library
+// The web client uses @sovereignsquad/gds (React/Mantine). That component library
 // cannot run in SwiftUI, so the iOS app achieves *visual + UX parity* by
 // encoding the SAME design tokens — semantic colour roles, typography scale,
 // spacing, corner radii — here, and using them everywhere instead of ad-hoc

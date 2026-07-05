@@ -30,6 +30,7 @@ struct KeyManagementSection: View {
     @State private var exportDoc: KeyBackupDocument?
     @State private var exportName = "step-key.json"
     @State private var trustError: String?
+    @State private var trustSuccess: String?
 
     var body: some View {
         Section("Your key") {
@@ -60,21 +61,36 @@ struct KeyManagementSection: View {
     @ViewBuilder
     private var trustedDeviceControls: some View {
         if model.biometricsAvailable, let identity = model.signedInIdentity {
-            if model.isDeviceTrusted(identity) {
+            let trusted = model.isDeviceTrusted(identity)
+            if trusted {
                 Button(role: .destructive) {
                     model.forgetTrustedDevice()
+                    trustError = nil
+                    trustSuccess = nil
                 } label: {
                     Label("Forget this device", systemImage: "lock.slash")
                 }
             } else {
                 Button {
-                    if !model.trustThisDevice() { trustError = model.authError }
+                    trustError = nil
+                    trustSuccess = nil
+                    if model.trustThisDevice() {
+                        trustSuccess = "Device trusted. You can unlock this account with Face ID on next launch."
+                    } else {
+                        trustError = model.authError
+                    }
                 } label: {
                     Label("Trust this device (Face ID / Touch ID)", systemImage: "faceid")
                 }
             }
             if let trustError {
                 Text(trustError).font(.caption).foregroundStyle(StepColor.danger)
+            }
+            if let trustSuccess {
+                Text(trustSuccess).font(.caption).foregroundStyle(StepColor.success)
+            }
+            if trusted && trustError == nil {
+                Text("Trusted for this account.").font(.caption).foregroundStyle(StepColor.success)
             }
         }
     }

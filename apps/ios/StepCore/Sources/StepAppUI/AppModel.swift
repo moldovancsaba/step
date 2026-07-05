@@ -59,6 +59,9 @@ public final class AppModel: ObservableObject {
     let marketAddresses: MarketplaceAddresses?
     /// Viewport cover + depletion client for the oasis/desert map (#28).
     public let cover: MeshCoverClient?
+    /// Canonical web globe surface. iOS embeds this for the production mesh map
+    /// because MapLibre GL JS v5 owns the proven globe projection path.
+    public let webAppURL: URL?
     /// Device attestation provider (#31). Defaults to the honest unattested
     /// fallback; the app wires `AppAttestAttester()` on a real iOS device.
     let attester: Attesting
@@ -82,6 +85,7 @@ public final class AppModel: ObservableObject {
         account: AccountClient? = nil,
         nft: NftClient? = nil,
         cover: MeshCoverClient? = nil,
+        webAppURL: URL? = nil,
         market: MarketplaceClient? = nil,
         rpcURL: URL? = nil,
         marketAddresses: MarketplaceAddresses? = nil,
@@ -93,6 +97,7 @@ public final class AppModel: ObservableObject {
         self.account = account
         self.nft = nft
         self.cover = cover
+        self.webAppURL = webAppURL
         self.market = market
         self.rpcURL = rpcURL
         self.marketAddresses = marketAddresses
@@ -252,16 +257,21 @@ public final class AppModel: ObservableObject {
         }
     }
 
-    /// Login wall (#27) — sign in: derive authKey from the cached KDF salt,
-    /// fetch the ciphertext, decrypt the wallet into the KeyStore.
+    /// Login wall (#27) — sign in: derive authKey from the KDF salt, fetch the
+    /// ciphertext, decrypt the wallet into the KeyStore. A fresh device first
+    /// asks account-api for the non-secret KDF params, so normal password login
+    /// works without a pre-existing local cache or key-file import.
     public func signIn(identity: String, password: String) async {
         guard let account else { return }
         authError = nil
-        guard let kdf = Self.cachedKdf(for: identity) else {
-            authError = "No saved key parameters on this device. Create an account here, or import your key."
-            return
-        }
         do {
+            let kdf: KdfParams
+            if let cached = Self.cachedKdf(for: identity) {
+                kdf = cached
+            } else {
+                kdf = try await account.kdfParams(identity: identity)
+                Self.cacheKdf(kdf, for: identity)
+            }
             let authKey = try await Self.offMain { try AccountVault.deriveAuthKey(password: password, kdf: kdf) }
             let res = try await account.login(identity: identity, authKey: authKey)
             let key = try await Self.offMain {
@@ -339,9 +349,25 @@ public final class AppModel: ObservableObject {
     /// Face ID/Touch ID. Returns false (and sets authError) on failure.
     @discardableResult
     public func trustThisDevice() -> Bool {
-        guard let key = walletKeyData, let id = currentIdentity else { return false }
+        authError = nil
+        let key: Data
+        if let inMemoryKey = walletKeyData {
+            key = inMemoryKey
+        } else if let keyFromStore = (try? keyStore.load()) {
+            key = keyFromStore
+            walletKeyData = keyFromStore
+        } else {
+            authError = "Sign in first, then trust this device."
+            return false
+        }
+
+        guard let id = currentIdentity else {
+            authError = "Sign in first, then trust this device."
+            return false
+        }
         do {
             try TrustedDeviceStore.trust(identity: id, walletKey: key)
+            authError = nil
             return true
         } catch {
             authError = Self.authMessage(error)
@@ -350,7 +376,10 @@ public final class AppModel: ObservableObject {
     }
 
     public func forgetTrustedDevice() {
-        if let id = currentIdentity { TrustedDeviceStore.forget(identity: id) }
+        if let id = currentIdentity {
+            TrustedDeviceStore.forget(identity: id)
+            authError = nil
+        }
     }
 
     /// Load the wallet from this trusted device (prompts Face ID/Touch ID).
@@ -388,6 +417,11 @@ public final class AppModel: ObservableObject {
         case AccountError.identityTaken: return "That email/username is already taken."
         case AccountError.invalidCredentials: return "Invalid credentials."
         case VaultError.decrypt: return "Wrong password or corrupted vault."
+        case TrustedDeviceError.biometricsUnavailable: return "Biometrics are unavailable. Enable Face ID/Touch ID in Settings and allow it for STEP."
+        case TrustedDeviceError.notTrusted: return "This account has not been trusted on this device yet."
+        case TrustedDeviceError.cancelled: return "Biometric unlock was cancelled."
+        case TrustedDeviceError.keychain(let status):
+            return "Secure key storage is unavailable (code: \(status)). Open Settings and retry with Face ID enabled."
         default: return "Sign-in failed. Check your connection and try again."
         }
     }

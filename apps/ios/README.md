@@ -29,7 +29,7 @@ So the system has three roles:
 
 **Status: protocol core + full product surface (auth, mining, oasis/desert map, wallet/NFTs, device attestation, trusted-anchor capture, marketplace) implemented and test-verified as a Swift package; a reproducible XcodeGen app target ([`App/`](App/)) packages it for the simulator/device/TestFlight. Device-only APIs (App Attest, NFC, camera) and the on-chain marketplace round-trip are field/deploy-verified — documented honestly below, no hidden gaps.**
 
-All UI is built natively with SwiftUI against a GDS-parity design system (`StepAppUI/Theme.swift` mirrors the @doneisbetter/gds tokens used by the web apps, because GDS is React/Mantine and cannot run on iOS). Accessibility (Dynamic Type, VoiceOver labels, colour-independent state, Reduce Motion) is treated as mandatory, not optional.
+All UI is built natively with SwiftUI against a GDS-parity design system (`StepAppUI/Theme.swift` mirrors the `@sovereignsquad/gds` tokens used by the web apps, because GDS is React/Mantine and cannot run on iOS). Accessibility (Dynamic Type, VoiceOver labels, colour-independent state, Reduce Motion) is treated as mandatory, not optional.
 
 ## What exists and is verified
 
@@ -64,7 +64,7 @@ All UI is built natively with SwiftUI against a GDS-parity design system (`StepA
 | `LoginWall` (#27) | GDS-parity sign-in / sign-up, secure fields, accessible validation |
 | `AppModel` | `@MainActor` state machine: onboarding/login gate, register/sign-in (Argon2 off-main), mining (via `MineableResolver` + `attester`), owned NFTs, sign-out |
 | `Views` | Themed 4-tab shell (Mine / Map / Wallet / Market), testnet banner, account menu, claim history, privacy settings |
-| `MapView` (#28) | MapLibre oasis/desert overlay — per-triangle depletion fill, debounced viewport fetch, legend, truncation/zoom hint |
+| `MapView` (#28) | Canonical mesh globe embedded from the production MapLibre GL JS v5 surface through `WKWebView`; no MapLibre Native binary dependency; blank `StepConfig.WebAppURL` values are treated as unset so App Store builds fall back safely instead of crashing |
 | `AnchorCapture` / `AnchorReaders` (#32) | Accessible capture state machine + transport readers — `QRAnchorReader` (AVFoundation, iOS), `NFCAnchorReader` (CoreNFC, iOS), `BLEAnchorReader` (CoreBluetooth) — each behind `#if canImport(...)`; offers only the transports the device has |
 | `MarketplaceView` (#30) | Browse active listings + my-listings filter, buy/cancel/gift/list with explicit price-showing confirmation, decoded-revert + paused + not-deployed states; GDS-parity, fully accessible |
 
@@ -116,8 +116,8 @@ and the App Store / TestFlight review notes.
 ## What is NOT done yet (requires a physical device, Apple Developer Program, or the #5 deploy — the build machine has Command Line Tools only)
 
 1. **Server-side App Attest verification.** Gateway/validator must verify Apple attestation objects + assertions before accepting `attested` claims (paired backend issue).
-2. **MapLibre Native basemap.** The map renders the mesh overlay on MapLibre Native iOS via SPM; vector basemap and overlays now render on-device in the map tab.
-3. **TestFlight distribution.** Apple Developer Program membership, signing (`DEVELOPMENT_TEAM`), App Attest `production` entitlement, `xcodebuild archive` + upload; app-store crypto-rules review (LEG-003/IOS-008) before distribution.
+2. **Canonical mesh globe.** The Map tab loads `StepConfig.WebAppURL` in a WebKit surface so iOS uses the same MapLibre GL JS v5 globe as the web app. App Store builds must set `STEP_WEB_APP_URL` explicitly per environment; the runtime still falls back safely if the value is absent or blank.
+3. **TestFlight distribution.** STEP `0.1.0 (5)` is uploaded, processed `VALID`, attached to `Friendly Pilot`, Beta Review `APPROVED`, and external state `IN_BETA_TESTING`. Current physical-device validation target: install build `5` from TestFlight and verify launch, sign-in, wallet import/create, and mesh globe load.
 4. **Device/field verification.** App Attest, NFC, and camera are device-only (Simulator degrades to unattested); the marketplace on-chain round-trip needs the #5 deploy. Field tests F1–F9 (`tests/field-tests/`) need physical iPhones in the pilot area.
 5. **Accessibility ship gate.** Full-app VoiceOver + Dynamic Type + contrast pass before submission (XCUITests cover the automatable slice).
 

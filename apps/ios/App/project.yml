@@ -19,7 +19,7 @@ packages:
 settings:
   base:
     MARKETING_VERSION: "0.1.0"
-    CURRENT_PROJECT_VERSION: "3"   # 0.1.0(3) contains the Mobile Trust Center launcher
+    CURRENT_PROJECT_VERSION: "6"   # 0.1.0(6) fixes trusted-device Face ID setup/feedback
     SWIFT_VERSION: "6.0"
     ALWAYS_SEARCH_USER_PATHS: NO   # silence the legacy-headermap build warning
     DEVELOPMENT_TEAM: "" # set locally / in CI signing; empty for unsigned simulator builds
@@ -32,6 +32,7 @@ settings:
     STEP_INDEXER_URL: "https://idx.step.regiominer.com"
     STEP_ACCOUNT_URL: "https://acc.step.regiominer.com"
     STEP_NFT_INDEXER_URL: "https://nft.step.regiominer.com"
+    STEP_WEB_APP_URL: "https://step.moldovancsaba.workers.dev/?surface=ios-map"
     STEP_RPC_URL: ""
     STEP_MARKETPLACE_ADDRESS: ""
     STEP_NFT_ADDRESS: ""

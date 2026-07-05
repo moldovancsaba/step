@@ -265,7 +265,7 @@ struct MapTabView: View {
     @ObservedObject var model: AppModel
     var body: some View {
         if let cover = model.cover {
-            MapView(client: cover)
+            MapView(client: cover, canonicalGlobeURL: model.webAppURL)
         } else {
             ContentUnavailableView(
                 "Oasis / desert map",

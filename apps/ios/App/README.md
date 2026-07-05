@@ -65,11 +65,20 @@ the app + UI-test bundle for a generic iOS Simulator destination on every push
 No URLs or secrets are hard-coded in source. `AppConfig` reads the `StepConfig`
 dictionary from `Info.plist`, whose values come from build settings
 (`STEP_GATEWAY_URL`, `STEP_MESH_URL`, `STEP_INDEXER_URL`, `STEP_ACCOUNT_URL`,
-`STEP_NFT_INDEXER_URL`, and for marketplace trading `STEP_RPC_URL`,
+`STEP_NFT_INDEXER_URL`, `STEP_WEB_APP_URL`, and for marketplace trading `STEP_RPC_URL`,
 `STEP_MARKETPLACE_ADDRESS`, `STEP_NFT_ADDRESS`, `STEP_TRINITY_ADDRESS`). Provide
 an `.xcconfig` per environment (Debug/pilot/Release). Marketplace trading is
 enabled only when the RPC URL and all three addresses are set; otherwise the
 Marketplace tab browses and states that trading isn't available yet.
+
+`STEP_WEB_APP_URL` should point at the canonical map-only globe surface:
+
+```text
+https://step.moldovancsaba.workers.dev/?surface=ios-map
+```
+
+That surface renders the same MapLibre GL JS v5 globe and `step-globe-mesh-custom`
+layer used by the public web app.
 
 ## Store assets & legal (ready in-repo)
 

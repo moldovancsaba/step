@@ -53,6 +53,8 @@
 	<string>STEP uses your location only to find the MESH triangle you’re standing in. Your exact coordinates never leave the device — only the triangle’s id and a proof hash are submitted.</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>STEP uses Bluetooth to read nearby trusted anchors (beacons) that strengthen your proof of presence. It never scans for or tracks other devices.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>STEP uses Face ID / Touch ID to unlock your trusted wallet key without typing your password again.</string>
 	<key>NFCReaderUsageDescription</key>
 	<string>STEP reads NFC tags from trusted anchors to confirm you’re physically present at a location.</string>
 	<key>NSCameraUsageDescription</key>
@@ -73,6 +75,8 @@
 		<string>$(STEP_ACCOUNT_URL)</string>
 		<key>NftIndexerURL</key>
 		<string>$(STEP_NFT_INDEXER_URL)</string>
+		<key>WebAppURL</key>
+		<string>$(STEP_WEB_APP_URL)</string>
 		<key>RpcURL</key>
 		<string>$(STEP_RPC_URL)</string>
 		<key>Marketplace</key>

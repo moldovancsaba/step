@@ -56,13 +56,18 @@ public enum TrustedDeviceStore {
                 &cfError
             )
         else { throw TrustedDeviceError.biometricsUnavailable }
-        let query: [String: Any] = [
+
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account(identity),
             kSecValueData as String: walletKey,
             kSecAttrAccessControl as String: access,
         ]
+        #if canImport(LocalAuthentication)
+        let context = try authenticationContext(reason: "Trust this device for STEP wallet unlock")
+        query[kSecUseAuthenticationContext as String] = context
+        #endif
         let status = SecItemAdd(query as CFDictionary, nil)
         guard status == errSecSuccess else { throw TrustedDeviceError.keychain(status) }
         UserDefaults.standard.set(true, forKey: marker(identity))
@@ -78,18 +83,33 @@ public enum TrustedDeviceStore {
             kSecReturnData as String: true,
         ]
         #if canImport(LocalAuthentication)
-        let ctx = LAContext()
-        ctx.localizedReason = reason
-        query[kSecUseAuthenticationContext as String] = ctx
+        let context = try authenticationContext(reason: reason)
+        query[kSecUseAuthenticationContext as String] = context
         #endif
         var out: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &out)
         if status == errSecUserCanceled { throw TrustedDeviceError.cancelled }
+        if status == errSecItemNotFound {
+            UserDefaults.standard.removeObject(forKey: marker(identity))
+            throw TrustedDeviceError.notTrusted
+        }
         guard status == errSecSuccess, let data = out as? Data else {
             throw TrustedDeviceError.keychain(status)
         }
         return data
     }
+
+    #if canImport(LocalAuthentication)
+    private static func authenticationContext(reason: String) throws -> LAContext {
+        let context = LAContext()
+        context.localizedReason = reason
+        var error: NSError?
+        guard context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) else {
+            throw TrustedDeviceError.biometricsUnavailable
+        }
+        return context
+    }
+    #endif
 
     /// Remove the trusted key for this identity from the device.
     public static func forget(identity: String) {

@@ -37,6 +37,33 @@ public struct AccountClient: Sendable {
         public let address: String
     }
 
+    private struct KdfLookupResult: Decodable {
+        let kdf: KdfParams
+
+        enum CodingKeys: String, CodingKey {
+            case kdf = "kdf_params"
+        }
+    }
+
+    /// Fetch the non-secret KDF parameters for an identity before login. The
+    /// account-api returns real params for existing identities and stable decoy
+    /// params for unknown identities, so this does not expose account existence.
+    public func kdfParams(identity: String) async throws -> KdfParams {
+        var components = URLComponents(url: baseURL.appendingPathComponent("v1/kdf"), resolvingAgainstBaseURL: false)
+        components?.queryItems = [URLQueryItem(name: "identity", value: identity)]
+        guard let url = components?.url else { throw AccountError.validation }
+
+        var req = URLRequest(url: url)
+        req.httpMethod = "GET"
+        let (data, response) = try await session.data(for: req)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        switch status {
+        case 200: return try JSONDecoder().decode(KdfLookupResult.self, from: data).kdf
+        case 400: throw AccountError.validation
+        default: throw AccountError.http(status, "kdf")
+        }
+    }
+
     /// Register a new account from a fully-formed vault blob (#27 derives it).
     public func register(identity: String, blob: VaultBlob) async throws {
         let body: [String: Any] = [
