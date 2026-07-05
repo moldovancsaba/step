@@ -44,6 +44,19 @@ function shorten(str: string, maxLen = 180) {
   return str.slice(0, maxLen);
 }
 
+/** The mesh API answers bad requests as plain text; relay its status and body
+ *  instead of letting a failed JSON parse turn a 4xx into a 500. */
+async function relayMesh(resp: Response): Promise<Response> {
+  const body = await resp.text();
+  let payload: unknown;
+  try {
+    payload = JSON.parse(body);
+  } catch {
+    payload = { error: shorten(body.trim()) };
+  }
+  return Response.json(payload, { status: resp.status });
+}
+
 function extractRevertReason(error: unknown): string {
   const raw =
     error instanceof Error ? error.message : typeof error === "string" ? error : JSON.stringify(error ?? "");
@@ -259,8 +272,7 @@ export function createApp(deps: GatewayDeps) {
       const value = c.req.query(key);
       if (value !== undefined) url.searchParams.set(key, value);
     }
-    const resp = await fetch(url);
-    return c.json(await resp.json(), resp.status as never);
+    return relayMesh(await fetch(url));
   });
 
   app.get("/v1/mesh/cover", async (c) => {
@@ -270,14 +282,12 @@ export function createApp(deps: GatewayDeps) {
       const value = c.req.query(key);
       if (value !== undefined) url.searchParams.set(key, value);
     }
-    const resp = await fetch(url);
-    return c.json(await resp.json(), resp.status as never);
+    return relayMesh(await fetch(url));
   });
 
   app.get("/v1/mesh/triangle/:id", async (c) => {
     if (!meshUrl) return c.json({ error: "mesh API unavailable" }, 503);
-    const resp = await fetch(`${meshUrl}/v1/mesh/triangle/${c.req.param("id")}`);
-    return c.json(await resp.json(), resp.status as never);
+    return relayMesh(await fetch(`${meshUrl}/v1/mesh/triangle/${c.req.param("id")}`));
   });
 
   // Mining frontier (Mesh ID v2): a location resolves to a level-21 triangle, but

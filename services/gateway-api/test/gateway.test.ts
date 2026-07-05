@@ -121,15 +121,12 @@ describe("mesh proxy", () => {
       expect(String(input)).toBe(
         "http://mesh/v1/mesh/cover?minLat=-90&minLon=-180&maxLat=90&maxLon=180&level=1&max=64",
       );
-      return {
-        status: 200,
-        json: async () => ({
-          triangles: Array.from({ length: 20 }, (_, index) => ({ triangle_id: `STEP-1-F${index}` })),
-          truncated: false,
-          suggested_level: 1,
-          level: 1,
-        }),
-      } as unknown as Response;
+      return Response.json({
+        triangles: Array.from({ length: 20 }, (_, index) => ({ triangle_id: `STEP-1-F${index}` })),
+        truncated: false,
+        suggested_level: 1,
+        level: 1,
+      });
     });
     vi.stubGlobal("fetch", fetchMock);
 
