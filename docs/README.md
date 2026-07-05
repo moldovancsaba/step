@@ -41,6 +41,7 @@ STEP is a proof-of-location / proof-of-presence blockchain system on a determini
 ### Engineering & operations
 - [Development plan](engineering/STEP_development_plan.md)
 - [Repository structure](engineering/STEP_repository_structure.md)
+- [Mesh globe visual SSOT](engineering/STEP_mesh_globe_visual_ssot.md)
 - [API contracts](engineering/STEP_api_contracts.md)
 - [Data models](engineering/STEP_data_models.md)
 - [Trust Center macOS package install](install-macos-pkg.md)

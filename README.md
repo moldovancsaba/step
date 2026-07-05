@@ -164,6 +164,13 @@ is exhausted, so first-time mining at a fresh location is at **level 1**. **Leve
 21 is terminal** — a fully-mined level-21 triangle is a permanent desert until a
 merchant re-seeds it.
 
+Canonical mesh visualization: the production web app uses a MapLibre GL JS v5
+globe with the custom layer `step-globe-mesh-custom`. Earth, the 20 level-1
+spherical icosahedron faces, the GPS-locked mining triangle, and inspected
+triangles are rendered on one globe object. The iOS Map tab embeds the same
+map-only surface through `STEP_WEB_APP_URL`; see
+[`docs/engineering/STEP_mesh_globe_visual_ssot.md`](docs/engineering/STEP_mesh_globe_visual_ssot.md).
+
 ## Status
 
 Pre-alpha. Testnet only. No exchange, no fiat, no public mining. See [alpha scope](docs/operations/STEP_alpha_scope.md) for the binding IN/OUT list.

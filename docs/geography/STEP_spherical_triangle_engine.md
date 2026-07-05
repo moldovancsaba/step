@@ -21,6 +21,14 @@ The canonical engine is a single dependency-free Rust crate (auditable, offline-
 
 Conformance contract: `golden/golden_vectors.tsv` (341 rows — 23 named locations × 6 levels + 200 area-uniform random points at levels 10/21). Any binding must replay it bit-exactly.
 
+## 3.1 Canonical visualisation
+
+The user-facing mesh visualisation is the MapLibre GL JS v5 globe described in
+[`../engineering/STEP_mesh_globe_visual_ssot.md`](../engineering/STEP_mesh_globe_visual_ssot.md).
+It is a visual consumer of this engine, not a second geometry authority. The
+mesh API remains the source for triangle vertices, containment, state, and ids;
+the renderer only projects already-canonical spherical edges onto the globe.
+
 ## 4. Verification status
 
 18 Rust tests: golden replay; determinism + resolve→contains; ancestor-walk == direct-resolve hierarchy; children partition parents; pole determinism (all longitudes at ±90° → one lowest-ID triangle, multiple levels); ±180° equality; exact-edge-midpoint stability; neighbour distinctness/symmetry; 20-face area sum = sphere within 1e-9; child areas tile parent within 1e-6; side-halving law within spherical distortion; level-21 ≈ 6.7 m confirmed; 1000 level-21 resolutions ≈ 0.05 s debug (<2 s CI bound); input validation. fmt + clippy(-D warnings) clean.

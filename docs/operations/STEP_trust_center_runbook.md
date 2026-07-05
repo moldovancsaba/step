@@ -268,9 +268,10 @@ from chain** (M8) — you never re-package or re-deliver.
 - **Identical full-role installation is also a release gate.** The macOS package
   and shell installer refuse `--survival-tier full` unless a verified fullstack
   payload is supplied. That payload must contain the local Node runtime plus
-  gateway, fleet, chain RPC, validator, and gossip executables/bundles. The
-  installer then writes a full-role manifest and installs launchd services for
-  chain, gateway, fleet, gossip, validator, and agent. Verify the invariant with:
+  gateway, fleet, chain RPC, account, indexer, NFT indexer, validator, and
+  gossip executables/bundles. The installer then writes a full-role manifest and
+  installs launchd services for chain, gateway, fleet, gossip, validator,
+  account, indexer, NFT indexer, and agent. Verify the invariant with:
   ```bash
   pnpm release:system-identity:verify
   ```

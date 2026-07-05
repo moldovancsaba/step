@@ -33,7 +33,7 @@ The single protocol question: *Was this miner physically present inside this sph
 
 Onboarding explains location use plainly → self-custodial wallet creation/import (browser wallet file + private-key restore, iOS keychain path in mobile app) → location permission → map/triangle view → one-tap Mine → live status (validating → finalised/rejected with reasons) → balance and history → privacy controls. Testnet banner everywhere: pilot Trinity has no monetary value.
 
-Map visibility: users should use `/explorer/mesh` for the visual triangle map and claim context; `/explorer` for claims/table telemetry.
+Map visibility: users see one canonical mesh globe. The production web app renders Earth and the full level-1 spherical icosahedron mesh on a MapLibre GL JS v5 globe using the custom layer `step-globe-mesh-custom`; the iOS Map tab embeds that same public globe surface. Flat maps may provide fallback or operational context, but they are not the primary mining map.
 
 ## 5. Merchant experience (alpha dashboard)
 

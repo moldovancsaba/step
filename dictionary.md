@@ -32,6 +32,10 @@
 
 `Mesh` - The global spherical triangle system covering Earth.
 
+`Mesh globe` - The canonical MapLibre GL JS v5 globe showing Earth, the full icosahedron mesh, the GPS-locked mining triangle, and inspected triangles on one visual object.
+
+`Visual SSOT` - The single visual source of truth for mesh exploration and mining context; for STEP this is the Mesh globe, not a flat map.
+
 `Mesh state` - The current live record of which triangles are open, mined, exhausted, or split.
 
 `Proof of location` - Evidence that a wallet/device was physically inside a specific triangle.

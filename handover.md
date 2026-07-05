@@ -4,14 +4,15 @@
 
 - `origin/main` was updated to commit `f79fdc8`.
 - GitHub CI for the latest checked PR branch passed across Rust, contracts, web, e2e, Swift, iOS app, schemas, and secrets.
-- TestFlight/App Store Connect has STEP `0.1.0 (2)` uploaded and processed as `VALID`.
+- TestFlight/App Store Connect has STEP `0.1.0 (5)` uploaded, processed as `VALID`, attached to `Friendly Pilot`, approved for external beta, and live in TestFlight.
+- Build `5` supersedes crashy build `4`: build `4` bundled an empty `StepConfig.WebAppURL` and the app force-unwrapped it on startup. The runtime now treats blank URL config values as unset and App Store builds explicitly set `STEP_WEB_APP_URL=https://step.moldovancsaba.workers.dev/?surface=ios-map`.
 - `dictionary.md` was added to establish shared STEP terminology.
 - M12 GitHub milestone and production-grade issue decomposition were created for symmetric Trust Centers and independent P2P operation.
 - M13 GitHub milestone and project-board sequence now cover P2P auto-update and swarm distribution issues `#102` through `#113`.
 - M13 implementation hardening added contract-bound release manifests, signed release manifest output, node-agent manifest/chunk/package verification, peer artifact seeding endpoints, peer announcement directory behavior, macOS package self-update documentation, and Mobile Trust Center launcher documentation.
 - Node-agent update fetch is now peer-first and fail-closed: each source must serve a canonical manifest matching `ReleaseRegistry.manifestHash`, chunks matching `ReleaseRegistry.chunkRoot`, and an assembled package matching package/binary hashes before staging.
 - Focused verification passed for `cargo test -p step-node-agent`, `node --test scripts/release/lib.test.mjs`, `forge test --root contracts --match-contract ReleaseRegistryTest`, and `pnpm --filter @step/fleet-api test`.
-- Local `swift build` for `apps/ios/StepCore` was started after the MapLibre update and stopped because SwiftPM blocked on downloading the external MapLibre binary artifact without progress; the authoritative iOS build remains the GitHub `ios-app` workflow on `macos-15`, which runs XcodeGen and `xcodebuild` after the push.
+- The iOS package no longer depends on MapLibre Native; the production map path is the canonical MapLibre GL JS globe embedded through `WKWebView`, which avoids SwiftPM binary-artifact stalls and keeps iOS aligned with the visual SSOT.
 - M12 execution has started with the identity blocker: `scripts/node/join.mjs` now stores node validator keys in the OS secret backend and writes public runtime node metadata only.
 - Legacy keyed remote bundles are disabled by default; `scripts/node/bundle.mjs` and `scripts/node/bundle-agent.mjs` now require explicit `STEP_ALLOW_KEYED_BUNDLE=1` for local-dev migration.
 - The local `.runtime/nodes/chappie.json` record was migrated so it no longer contains `privateKey`; the Chappie validator identity exists in macOS Keychain service `app.step.node`.
@@ -455,6 +456,18 @@ Canonical role names:
 - Tester `moldovancsaba@gmail.com` remains attached to `Friendly Pilot`.
 - External TestFlight review submission for build `3` is blocked by Apple with `ENTITY_UNPROCESSABLE.ANOTHER_BUILD_IN_REVIEW` because another build in the same train is already in Beta App Review. Submit build `3` again after the existing review completes.
 
+## 2026-06-27 TestFlight account-login recovery update
+
+- Root cause: external build `0.1.0 (1)` was approved but old; it could not create/login reliably against the current account flow. Build `0.1.0 (3)` fixed backend URLs but fresh-device sign-in still depended on local cached KDF params or key-file import.
+- Fix: iOS `AccountClient` now calls account-api `GET /v1/kdf?identity=...` to fetch non-secret KDF params before login, and `AppModel.signIn` falls back to that server lookup when the device cache is empty. Passwords still never leave the device.
+- Packaging fix: removed MapLibre Native from the Swift package; the iOS production map uses the canonical `WKWebView` MapLibre GL JS globe, avoiding the binary artifact that stalled SwiftPM/Xcode package resolution.
+- Build `0.1.0 (4)` archive path: `apps/ios/App/build/StepApp-0.1.0-4.xcarchive`.
+- Build `0.1.0 (4)` export path: `apps/ios/App/build/export-0.1.0-4/StepApp.ipa`.
+- App Store Connect upload succeeded with delivery/build id `d18168de-8032-4010-8e5b-7c8eac770e59`.
+- App Store Connect processing state for build `4` is `VALID`.
+- Build `4` is attached to TestFlight group `Friendly Pilot` (`7f2f4147-1cd1-404b-8d3c-5af2bab17e80`).
+- Build `4` external beta state is `IN_BETA_TESTING`; Beta App Review state is `APPROVED`.
+
 ## M13 — P2P Auto-Update & Swarm Distribution delivery update
 
 Repository artifacts were created for M13 on GitHub:
@@ -538,8 +551,8 @@ Operational note:
 
 Status snapshot:
 
-- `MapView.swift` is compiled as `MapLibre` on iOS and no longer advertises a placeholder map implementation in the normal app path.
-- The only fallback is a non-interactive `ContentUnavailableView` for non-MapLibre/iOS build contexts, which is expected for macOS/CI toolchain paths.
+- `MapView.swift` embeds the canonical production MapLibre GL JS globe on iOS through `WKWebView`; `MapLibre Native` was removed from the Swift package because the native fallback was no longer the production visual SSOT and blocked package resolution.
+- The only fallback is a non-interactive `ContentUnavailableView` for unavailable WebKit/non-iOS build contexts, which is expected for macOS/CI toolchain paths.
 - Remaining blockers are not map rendering itself; they are operational parity and shipping hardening.
 
 Next implementation sequence (from highest risk to lowest risk):
@@ -642,3 +655,26 @@ The gateway now exposes `/v1/mesh/cover` and forwards bounding-box cover request
 ## 2026-06-27 - Mining map fit-to-triangle behavior
 
 The mesh explorer now has two coordinated views. The spherical globe remains the canonical icosahedron overview. A new MapLibre mining map sits below it and is used for practical mining context: resolving a point from device location, globe click, or map click now selects the canonical triangle, samples its spherical edges, overlays it as a polygon on a basemap, and automatically fits the map viewport to the selected triangle bounds. The miner position is shown as a red dot inside the selected triangle when available.
+
+## 2026-06-27 - Canonical MapLibre globe visual SSOT
+
+The production web app now uses MapLibre GL JS `5.24.0` and a custom globe WebGL layer named `step-globe-mesh-custom`. The STEP mesh lines are uploaded as geometry and projected through MapLibre's `projectTile(a_pos)` globe shader path, so Earth, the level-1 icosahedron mesh, the GPS-locked mining triangle, and inspected triangles live on one globe object. This is the canonical mining-map visualization; flat MapLibre views are fallback/context only.
+
+Live verification target:
+
+```text
+https://step.moldovancsaba.workers.dev/?v=93cd4047
+```
+
+Mobile integration update:
+
+- `apps/ios/StepCore/Sources/StepAppUI/MapView.swift` embeds the canonical globe through `WKWebView` when `StepConfig.WebAppURL` is configured.
+- `apps/ios/App/Info.plist` adds `StepConfig.WebAppURL` through `STEP_WEB_APP_URL`.
+- The default iOS map URL is `https://step.moldovancsaba.workers.dev/?surface=ios-map`.
+- The web app exposes `?surface=ios-map` as a public, map-only surface so the iOS Map tab does not hit the account login wall.
+
+Canonical documentation:
+
+```text
+docs/engineering/STEP_mesh_globe_visual_ssot.md
+```

@@ -13,7 +13,8 @@ the GDS web app, then to App Store readiness.
   (resolve/nonce/submit/status).
 - `StepAppUI`: `AppModel` state machine (create/import wallet, `updateLocation`
   defaults to **genesis level 1**, `mine`), `LocationService` (CoreLocation),
-  onboarding/mining `Views`.
+  onboarding/mining `Views`, and a Map tab that embeds the canonical web mesh
+  globe through `StepConfig.WebAppURL`.
 - Conformance tests replay the shared golden/claim vectors. Library builds clean.
 
 ## Target architecture
@@ -41,7 +42,7 @@ Issues #25–#33 on board #40 are done. The app target lives in [`../../apps/ios
 | 1 — v2 mining | #26 | `MineableResolver`, `IndexerClient` | ✅ |
 | 1 — design system | #25 | `Theme`, `SessionContext`, `AsyncSurface`, shell | ✅ |
 | 2 — account/login | #27 | `AccountVault` (parity vector), `AccountClient`, `LoginWall` | ✅ |
-| 3 — oasis/desert map | #28 | `MeshCoverClient`, `MapView` | ✅ |
+| 3 — mesh globe + oasis/desert map | #28 | `MeshCoverClient`, `MapView` | ✅ |
 | 4 — NFT wallet | #29 | `NftClient`, wallet tab | ✅ |
 | 4 — marketplace | #30 | `MarketplaceClient`, `Web3` (RLP/ABI/EIP-1559/JSON-RPC), `MarketplaceWriter`, `MarketplaceView` | ✅ (trading gated on #5 deploy) |
 | 5 — attestation | #31 | `Attestation` (`Attesting`/`UnattestedAttester`/`AppAttestAttester`) | ✅ (App Attest device-only) |
@@ -49,7 +50,7 @@ Issues #25–#33 on board #40 are done. The app target lives in [`../../apps/ios
 | 6 — app target | #33 | `App/` XcodeGen project, Info.plist, entitlements, privacy manifest, XCUITests, CI `ios-app` job | ✅ |
 
 Remaining (external gates, not code): server-side App Attest verification,
-MapLibre Native basemap, TestFlight signing/distribution, on-device + field
+TestFlight signing/distribution, on-device + field
 verification of device-only APIs, the marketplace on-chain round-trip after the
 #5 deploy, and the full-app accessibility ship-gate pass. See
 [`../../apps/ios/README.md`](../../apps/ios/README.md) for the honest gap list.
@@ -80,11 +81,12 @@ verification of device-only APIs, the marketplace on-chain round-trip after the
 - Tests: client KDF + AES-GCM round-trip decrypts to the same address as the
   account-api crypto round-trip (cross-impl parity vector).
 
-### Phase 3 — Oasis/desert map (#15/#16/#17 parity)
+### Phase 3 — Mesh globe + oasis/desert map (#15/#16/#17 parity)
 - **MeshCoverClient**: call validator `/v1/mesh/cover` + indexer
   `/v1/mesh-states` for the viewport.
-- **MapView** on **MapKit** (native, no extra dep) with a triangle overlay
-  coloured green→red by depletion (~30% opacity); "zoom in" on truncation.
+- **MapView** embeds the canonical MapLibre GL JS v5 globe from
+  `StepConfig.WebAppURL`; the native MapLibre overlay remains as fallback with a
+  triangle overlay coloured green→red by depletion (~30% opacity).
 - Tests: cover→states stitching, colour mapping.
 
 ### Phase 4 — NFT wallet + marketplace (#6/#7/#10/#11 parity)

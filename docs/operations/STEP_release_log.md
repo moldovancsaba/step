@@ -1,5 +1,15 @@
 # STEP Release Log
 
+## alpha-0.6 — 2026-06-27 (canonical mesh globe)
+
+- **Canonical mining map:** the production web app now renders Earth, the full level-1 spherical icosahedron mesh, the GPS-locked mining triangle, and inspected triangles on one MapLibre GL JS v5 globe.
+- **Globe mesh layer:** added `step-globe-mesh-custom`, a custom WebGL layer that sends STEP mesh geometry through MapLibre's `projectTile(a_pos)` globe shader path instead of drawing flat overlay lines.
+- **Mobile parity:** the iOS Map tab now embeds the same map-only production globe through `WKWebView` using `StepConfig.WebAppURL` / `STEP_WEB_APP_URL`; MapLibre Native was removed from the Swift package so iOS uses the same visual SSOT and avoids binary-artifact package stalls.
+- **TestFlight account fix:** iOS build `0.1.0 (4)` fetched account-api KDF params on fresh-device sign-in before deriving the verifier locally, so existing accounts can sign in without pre-existing local cache.
+- **TestFlight launch-crash fix:** iOS build `0.1.0 (5)` fixes the build `4` startup crash caused by an empty bundled `StepConfig.WebAppURL` being force-unwrapped. The app now treats blank URL config values as unset and falls back safely, and the App Store build explicitly sets `STEP_WEB_APP_URL=https://step.moldovancsaba.workers.dev/?surface=ios-map`. Build `5` is uploaded, processed `VALID`, attached to `Friendly Pilot`, approved for external beta, and `IN_BETA_TESTING`.
+- **Public map-only surface:** `https://step.moldovancsaba.workers.dev/?surface=ios-map` opens the mesh globe directly without the account login wall.
+- **Documentation:** canonical behavior is specified in [`../engineering/STEP_mesh_globe_visual_ssot.md`](../engineering/STEP_mesh_globe_visual_ssot.md).
+
 ## alpha-0.5 — 2026-06-21 (self-sovereign trust centers — M8 + M9)
 
 Hardened, self-maintaining trust centers (M8, #34–#47) and reliable, **third-party-free** operation that moves materially toward the P2P/DAO end-state (M9, #48–#57). All landed CI-green on `feat/v2-mining-nfts`. Decisions recorded as ADR-018…ADR-022; architecture in [STEP_local_node_and_trust_federation.md](../architecture/STEP_local_node_and_trust_federation.md) §7; operations in [STEP_trust_center_runbook.md](STEP_trust_center_runbook.md).
