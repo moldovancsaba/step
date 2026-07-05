@@ -10,6 +10,9 @@
 node_modules/
 .pnpm-store/
 
+# Wrangler local-dev state (miniflare KV/cache)
+.wrangler/
+
 # Rust
 target/
 
