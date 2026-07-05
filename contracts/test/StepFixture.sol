@@ -115,12 +115,25 @@ abstract contract StepFixture is Test {
         }
     }
 
+    /// @dev Natural-path vote (campaignId 0). See `_voteCampaign` for sponsored.
     function _vote(uint256 pk, bytes32 claimHash, string memory tri, address miner_, bool approve)
         internal
         view
         returns (MiningClaimVerifier.ValidatorSig memory)
     {
-        bytes32 digest = verifier.voteDigest(claimHash, keccak256(bytes(tri)), miner_, approve);
+        return _voteCampaign(pk, claimHash, tri, miner_, approve, bytes32(0));
+    }
+
+    /// @dev Vote bound to a specific campaign (bytes32(0) for the natural path, #115).
+    function _voteCampaign(
+        uint256 pk,
+        bytes32 claimHash,
+        string memory tri,
+        address miner_,
+        bool approve,
+        bytes32 campaignId
+    ) internal view returns (MiningClaimVerifier.ValidatorSig memory) {
+        bytes32 digest = verifier.voteDigest(claimHash, keccak256(bytes(tri)), miner_, approve, campaignId);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(pk, digest);
         return MiningClaimVerifier.ValidatorSig({
             validator: vm.addr(pk),
@@ -128,15 +141,26 @@ abstract contract StepFixture is Test {
         });
     }
 
-    /// @dev Approval votes from validators [0..n), already address-sorted.
+    /// @dev Approval votes from validators [0..n), already address-sorted (natural path).
     function _quorumSigs(bytes32 claimHash, string memory tri, address miner_, uint256 n)
         internal
         view
         returns (MiningClaimVerifier.ValidatorSig[] memory sigs)
     {
+        return _quorumSigsCampaign(claimHash, tri, miner_, bytes32(0), n);
+    }
+
+    /// @dev Approval votes bound to `campaignId` (sponsored path, #115).
+    function _quorumSigsCampaign(
+        bytes32 claimHash,
+        string memory tri,
+        address miner_,
+        bytes32 campaignId,
+        uint256 n
+    ) internal view returns (MiningClaimVerifier.ValidatorSig[] memory sigs) {
         sigs = new MiningClaimVerifier.ValidatorSig[](n);
         for (uint256 i = 0; i < n; i++) {
-            sigs[i] = _vote(valKeys[i], claimHash, tri, miner_, true);
+            sigs[i] = _voteCampaign(valKeys[i], claimHash, tri, miner_, true, campaignId);
         }
     }
 

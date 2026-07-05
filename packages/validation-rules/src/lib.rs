@@ -23,7 +23,7 @@ pub mod validate;
 pub use claim::{Claim, IntegrityMode, MerchantProof};
 pub use fraud::{FraudScore, FraudSignal, PreviousClaim};
 pub use sign::{
-    claim_hash, eip712_vote_digest, keccak256, personal_digest, recover_address, triangle_id_hash,
-    Address,
+    campaign_id_word, claim_hash, eip712_vote_digest, keccak256, personal_digest, recover_address,
+    triangle_id_hash, Address,
 };
 pub use validate::{validate_claim, RejectReason, ValidationContext, ValidationParams, Verdict};

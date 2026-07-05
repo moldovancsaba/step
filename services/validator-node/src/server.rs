@@ -10,7 +10,8 @@ use serde::{Deserialize, Serialize};
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use step_validation_rules::sign::{
-    claim_hash, eip712_vote_digest, format_address, parse_address, sign_digest, triangle_id_hash,
+    campaign_id_word, claim_hash, eip712_vote_digest, format_address, parse_address, sign_digest,
+    triangle_id_hash,
 };
 use step_validation_rules::{validate_claim, Claim, PreviousClaim, ValidationContext, Verdict};
 use time::format_description::well_known::Rfc3339;
@@ -32,6 +33,10 @@ pub struct SignedVote {
     pub triangle_id_hash: String,
     pub miner: String,
     pub approve: bool,
+    /// bytes32 campaign id bound into the vote digest (#115): 0x0…0 for a natural
+    /// claim, the campaign id for a sponsored claim. Lets a gossip peer verify the
+    /// vote without the original claim in hand.
+    pub campaign_id_hash: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -258,6 +263,9 @@ async fn validate(
     let msg = claim.canonical_message();
     let ch = claim_hash(&msg);
     let th = triangle_id_hash(&claim.triangle_id);
+    // #115: bind the vote to the claim's campaign (0 for a natural claim) so a
+    // quorum can't be replayed across finalisation paths / campaigns.
+    let campaign = campaign_id_word(claim.campaign_id.as_deref());
     let digest = eip712_vote_digest(
         state.config.chain_id,
         &state.verifier_contract,
@@ -265,12 +273,20 @@ async fn validate(
         &th,
         &wallet,
         approve,
+        &campaign,
     );
     let sig = sign_digest(&digest, &state.signing_key);
 
     if approve {
         state.metrics.approved_total.fetch_add(1, Ordering::Relaxed);
         let mut last = state.last_approved.lock().expect("history lock");
+        // Bound growth over the node's lifetime. A dropped history entry only skips
+        // one wallet's speed/teleport check on its NEXT claim (geometry, nonce, and
+        // rate limit still gate it), and reaching this cap needs 100k distinct
+        // fully-validated wallets, so clearing here fails safe and can't be abused.
+        if last.len() >= 100_000 {
+            last.clear();
+        }
         last.insert(
             wallet,
             PreviousClaim {
@@ -298,6 +314,7 @@ async fn validate(
             triangle_id_hash: format!("0x{}", hex::encode(th)),
             miner: claim.wallet_address.to_lowercase(),
             approve,
+            campaign_id_hash: format!("0x{}", hex::encode(campaign)),
         },
         validated_at: now_utc,
     }))
@@ -426,6 +443,7 @@ mod tests {
         .try_into()
         .unwrap();
         let miner = parse_address(json["vote"]["miner"].as_str().unwrap()).unwrap();
+        let campaign = campaign_id_word(json["vote"]["campaign_id_hash"].as_str());
         let digest = eip712_vote_digest(
             31337,
             &parse_address("0x610178dA211FEF7D417bC0e6FeD39F05609AD788").unwrap(),
@@ -433,6 +451,7 @@ mod tests {
             &th,
             &miner,
             true,
+            &campaign,
         );
         let recovered = step_validation_rules::sign::recover_address(&digest, &sig).unwrap();
         assert_eq!(recovered, state.validator_address);

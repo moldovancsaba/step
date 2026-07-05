@@ -67,26 +67,31 @@ export class EvidenceVault {
   async store(bundleJson: unknown): Promise<string> {
     const plaintext = new TextEncoder().encode(JSON.stringify(bundleJson));
     const bundleKey = randomBytes(32);
-    const nonce = randomBytes(24);
-    const ciphertext = xchacha20poly1305(bundleKey, nonce).encrypt(plaintext);
+    try {
+      const nonce = randomBytes(24);
+      const ciphertext = xchacha20poly1305(bundleKey, nonce).encrypt(plaintext);
 
-    const wrapNonce = randomBytes(24);
-    const wrapped = xchacha20poly1305(this.masterKey, wrapNonce).encrypt(bundleKey);
-    bundleKey.fill(0);
+      const wrapNonce = randomBytes(24);
+      const wrapped = xchacha20poly1305(this.masterKey, wrapNonce).encrypt(bundleKey);
 
-    const wrappedKey = new Uint8Array(24 + wrapped.length);
-    wrappedKey.set(wrapNonce);
-    wrappedKey.set(wrapped, 24);
+      const wrappedKey = new Uint8Array(24 + wrapped.length);
+      wrappedKey.set(wrapNonce);
+      wrappedKey.set(wrapped, 24);
 
-    const cid = computeCid(ciphertext);
-    await this.backend.put({
-      cid,
-      ciphertext,
-      wrappedKey,
-      nonce,
-      storedAt: new Date().toISOString(),
-    });
-    return cid;
+      const cid = computeCid(ciphertext);
+      await this.backend.put({
+        cid,
+        ciphertext,
+        wrappedKey,
+        nonce,
+        storedAt: new Date().toISOString(),
+      });
+      return cid;
+    } finally {
+      // Zeroize the per-bundle key on every path — a cipher or backend throw
+      // must not leave key material lingering in memory.
+      bundleKey.fill(0);
+    }
   }
 
   /** Foundation-only retrieval (claim review / disputes, HARD §13.3). */
@@ -95,10 +100,18 @@ export class EvidenceVault {
     if (!b || b.wrappedKey === null) return null;
     const wrapNonce = b.wrappedKey.slice(0, 24);
     const wrapped = b.wrappedKey.slice(24);
-    const bundleKey = xchacha20poly1305(this.masterKey, wrapNonce).decrypt(wrapped);
-    const plaintext = xchacha20poly1305(bundleKey, b.nonce).decrypt(b.ciphertext);
-    bundleKey.fill(0);
-    return JSON.parse(new TextDecoder().decode(plaintext));
+    let bundleKey: Uint8Array | undefined;
+    try {
+      bundleKey = xchacha20poly1305(this.masterKey, wrapNonce).decrypt(wrapped);
+      const plaintext = xchacha20poly1305(bundleKey, b.nonce).decrypt(b.ciphertext);
+      return JSON.parse(new TextDecoder().decode(plaintext));
+    } catch {
+      // Auth-tag failure / corrupt or tampered ciphertext / bad JSON ⇒ the bundle
+      // is unrecoverable. Return null (treated as gone) rather than throwing a 500.
+      return null;
+    } finally {
+      bundleKey?.fill(0);
+    }
   }
 
   /** GDPR deletion: destroy the key, log the event (privacy dashboard). */

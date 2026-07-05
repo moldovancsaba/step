@@ -14,7 +14,7 @@
  *
  * Guards: refuses a dirty git tree and a non-monotonic version (provenance).
  */
-import { execSync } from "node:child_process";
+import { execSync, execFileSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync, mkdirSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -31,6 +31,12 @@ const die = (m) => {
 const log = (m) => process.stdout.write(`[publish] ${m}\n`);
 const sh = (cmd, env = {}) =>
   execSync(cmd, { cwd: ROOT, stdio: "pipe", env: { ...process.env, PATH: PATH_EXT, ...env } })
+    .toString()
+    .trim();
+// Array-form runner (no shell): use for any command that takes a secret or an
+// externally-derived value as an argument, so it can never be shell-injected.
+const run = (bin, argv, env = {}) =>
+  execFileSync(bin, argv, { cwd: ROOT, stdio: "pipe", env: { ...process.env, PATH: PATH_EXT, ...env } })
     .toString()
     .trim();
 
@@ -134,8 +140,12 @@ const manifestHash = sha256Bytes(canonicalJson(manifestDraft));
 function releaseSignature(hash) {
   if (!signerKey) return null;
   try {
-    const signer = sh(`cast wallet address --private-key ${signerKey}`);
-    const signature = sh(`cast wallet sign --private-key ${signerKey} ${hash}`);
+    // Array-form exec (no shell): the signing key and hash are passed as argv
+    // elements, so a stray shell metacharacter can never inject a command
+    // (CWE-78). (cast still requires the key as a flag value; a keystore-based
+    // signer would also keep it out of argv — tracked separately.)
+    const signer = run("cast", ["wallet", "address", "--private-key", signerKey]);
+    const signature = run("cast", ["wallet", "sign", "--private-key", signerKey, hash]);
     return {
       scheme: "eip191",
       signer: signer.toLowerCase(),

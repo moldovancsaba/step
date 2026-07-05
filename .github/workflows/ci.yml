@@ -47,6 +47,9 @@ jobs:
       # Unit/integration tests only; the full-stack E2E runs in its own job
       # (it needs foundry + cargo + a spawned chain).
       - run: pnpm -r --filter='!@step/e2e' test
+      # Release-script unit tests (not a pnpm workspace package): production
+      # safety scanner + macOS pkg lib. Previously ungated.
+      - run: pnpm test:scripts
       - run: pnpm -r build
 
   e2e:
@@ -121,6 +124,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       # Filesystem scan (no-git) avoids history/submodule scan errors and needs
       # no license; scans the working tree for committed secrets.
       - name: gitleaks (filesystem scan)
@@ -128,3 +134,8 @@ jobs:
           VERSION=8.21.2
           curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_linux_x64.tar.gz" | tar -xz gitleaks
           ./gitleaks dir . --no-banner --redact --exit-code 1
+      # Fail-closed production-safety gate (#100): no localhost/private/plaintext
+      # backend URLs in deployment config, no keys committed on secret fields.
+      # Complements gitleaks; covers the deployed root worker.js + wrangler edge.
+      - name: production-safety scan
+        run: node scripts/release/scan-production-safety.mjs

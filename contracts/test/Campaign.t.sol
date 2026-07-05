@@ -41,7 +41,7 @@ contract CampaignTest is StepFixture {
     function _sponsoredClaim(bytes32 id, bytes32 claimHash, address miner_) internal {
         verifier.finaliseSponsoredClaim(
             claimHash, TRI_A, id, miner_, keccak256("cid"),
-            _quorumSigs(claimHash, TRI_A_STRING, miner_, 3)
+            _quorumSigsCampaign(claimHash, TRI_A_STRING, miner_, id, 3)
         );
     }
 
@@ -76,7 +76,7 @@ contract CampaignTest is StepFixture {
         bytes32 id = _createApprovedFundedActive(CampaignRegistry.RefundPolicy.ReturnToMerchant);
         _sponsoredClaim(id, keccak256("wl-1"), miner);
         bytes32 ch = keccak256("wl-2");
-        MiningClaimVerifier.ValidatorSig[] memory sigs = _quorumSigs(ch, TRI_A_STRING, miner, 3);
+        MiningClaimVerifier.ValidatorSig[] memory sigs = _quorumSigsCampaign(ch, TRI_A_STRING, miner, id, 3);
         vm.expectRevert(
             abi.encodeWithSelector(CampaignRegistry.WalletLimitReached.selector, id, miner)
         );
@@ -86,7 +86,7 @@ contract CampaignTest is StepFixture {
     function test_claim_outside_campaign_triangle_rejected() public {
         bytes32 id = _createApprovedFundedActive(CampaignRegistry.RefundPolicy.ReturnToMerchant);
         bytes32 ch = keccak256("wrong-tri");
-        MiningClaimVerifier.ValidatorSig[] memory sigs = _quorumSigs(ch, TRI_B_STRING, miner, 3);
+        MiningClaimVerifier.ValidatorSig[] memory sigs = _quorumSigsCampaign(ch, TRI_B_STRING, miner, id, 3);
         vm.expectRevert(
             abi.encodeWithSelector(CampaignRegistry.TriangleNotInCampaign.selector, id, TRI_B)
         );
@@ -111,7 +111,7 @@ contract CampaignTest is StepFixture {
         campaigns.expireCampaign(id);
 
         bytes32 ch = keccak256("late");
-        MiningClaimVerifier.ValidatorSig[] memory sigs = _quorumSigs(ch, TRI_A_STRING, miner, 3);
+        MiningClaimVerifier.ValidatorSig[] memory sigs = _quorumSigsCampaign(ch, TRI_A_STRING, miner, id, 3);
         vm.expectRevert(); // BadStatus(Expired)
         verifier.finaliseSponsoredClaim(ch, TRI_A, id, miner, keccak256("cid"), sigs);
     }
@@ -178,7 +178,7 @@ contract CampaignTest is StepFixture {
         vm.prank(admin);
         campaigns.pauseCampaign(id, true);
         bytes32 ch = keccak256("paused-claim");
-        MiningClaimVerifier.ValidatorSig[] memory sigs = _quorumSigs(ch, TRI_A_STRING, miner, 3);
+        MiningClaimVerifier.ValidatorSig[] memory sigs = _quorumSigsCampaign(ch, TRI_A_STRING, miner, id, 3);
         vm.expectRevert();
         verifier.finaliseSponsoredClaim(ch, TRI_A, id, miner, keccak256("cid"), sigs);
 
@@ -186,5 +186,30 @@ contract CampaignTest is StepFixture {
         campaigns.cancelCampaign(id);
         pool.refund(id);
         assertEq(token.balanceOf(merchant), BUDGET, "full refund after cancel");
+    }
+
+    // #115: a validator quorum is bound to its finalisation path/campaign, so a
+    // signature set collected for one path/campaign cannot be replayed onto
+    // another (the front-run that drained a chosen merchant's oasis budget).
+    function test_natural_quorum_cannot_be_replayed_onto_sponsored_path() public {
+        bytes32 id = _createApprovedFundedActive(CampaignRegistry.RefundPolicy.ReturnToMerchant);
+        bytes32 ch = keccak256("replay-115-a");
+        // Validators sign a NATURAL vote (campaignId 0) for this claim.
+        MiningClaimVerifier.ValidatorSig[] memory naturalSigs = _quorumSigs(ch, TRI_A_STRING, miner, 3);
+        // Attacker front-runs the sponsored path with the same signatures.
+        vm.expectRevert(); // digest is campaign-bound → recovers to non-validators
+        verifier.finaliseSponsoredClaim(ch, TRI_A, id, miner, keccak256("cid"), naturalSigs);
+        assertEq(token.balanceOf(address(pool)), BUDGET, "campaign budget not drained");
+    }
+
+    function test_sponsored_quorum_cannot_be_replayed_onto_natural_path() public {
+        bytes32 id = _createApprovedFundedActive(CampaignRegistry.RefundPolicy.ReturnToMerchant);
+        bytes32 ch = keccak256("replay-115-b");
+        // Validators sign a SPONSORED vote bound to campaign `id`.
+        MiningClaimVerifier.ValidatorSig[] memory sponsoredSigs =
+            _quorumSigsCampaign(ch, TRI_A_STRING, miner, id, 3);
+        // Reusing them to mint a natural claim (campaignId 0) must fail.
+        vm.expectRevert();
+        verifier.finaliseNaturalClaim(ch, TRI_A_STRING, LEVEL, miner, keccak256("cid"), sponsoredSigs);
     }
 }

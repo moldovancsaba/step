@@ -167,6 +167,10 @@ impl AppState {
     /// Sliding-hour rate limit per wallet. Returns false when exhausted.
     pub fn check_rate(&self, wallet: &Address, now_unix: i64) -> bool {
         let mut rate = self.rate.lock().expect("rate lock");
+        // `wallet` is unauthenticated here (rate is checked before nonce/signature),
+        // so an attacker could spray distinct addresses. Evict fully-elapsed windows
+        // first so the map is bounded by wallets active within the last hour.
+        evict_stale_rate(&mut rate, now_unix);
         let entry = rate.entry(*wallet).or_insert((now_unix, 0));
         if now_unix - entry.0 >= 3600 {
             *entry = (now_unix, 0);
@@ -176,5 +180,26 @@ impl AppState {
         }
         entry.1 += 1;
         true
+    }
+}
+
+/// Drop rate entries whose sliding hour has fully elapsed. Generic over the key
+/// so it is unit-testable without constructing an `Address`.
+fn evict_stale_rate<K>(map: &mut HashMap<K, (i64, u32)>, now_unix: i64) {
+    map.retain(|_, (start, _)| now_unix - *start < 3600);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn evict_stale_rate_drops_only_fully_elapsed_windows() {
+        let mut m: HashMap<u8, (i64, u32)> = HashMap::new();
+        m.insert(1, (1000, 5)); // window opened at t=1000
+        m.insert(2, (4600, 1)); // window opened at t=4600
+        evict_stale_rate(&mut m, 5000); // 1000 is 4000s old (>=3600) → drop; 4600 → keep
+        assert!(!m.contains_key(&1));
+        assert!(m.contains_key(&2));
     }
 }

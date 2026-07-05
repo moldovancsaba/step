@@ -64,7 +64,13 @@ export interface SignedVote {
   triangle_id_hash: Hex;
   miner: Address;
   approve: boolean;
+  /** bytes32 campaign id bound into the vote digest (#115); 0x0…0 for a natural
+   *  claim. Optional so an older gossip peer's vote still deserialises. */
+  campaign_id_hash?: Hex;
 }
+
+/** bytes32(0) — the campaign-id word for a natural (non-sponsored) claim. */
+export const ZERO_BYTES32: Hex = `0x${"0".repeat(64)}`;
 
 export interface ValidatorVerdict {
   approve: boolean;
@@ -161,7 +167,7 @@ const DOMAIN_TYPEHASH = keccak256(
 );
 const VOTE_TYPEHASH = keccak256(
   stringToBytes(
-    "StepValidatorVote(bytes32 claimHash,bytes32 triangleId,address miner,bool approve)",
+    "StepValidatorVote(bytes32 claimHash,bytes32 triangleId,address miner,bool approve,bytes32 campaignId)",
   ),
 );
 
@@ -172,6 +178,9 @@ export function voteDigest(
   triangleIdHash_: Hex,
   miner: Address,
   approve: boolean,
+  // #115: bind the vote to its campaign (0x0…0 natural, campaign id sponsored) so
+  // a quorum can't be replayed across finalisation paths / campaigns.
+  campaignId: Hex,
 ): Hex {
   const domainSeparator = keccak256(
     encodeAbiParameters(
@@ -181,8 +190,8 @@ export function voteDigest(
   );
   const structHash = keccak256(
     encodeAbiParameters(
-      [{ type: "bytes32" }, { type: "bytes32" }, { type: "bytes32" }, { type: "address" }, { type: "bool" }],
-      [VOTE_TYPEHASH, claimHash_, triangleIdHash_, miner, approve],
+      [{ type: "bytes32" }, { type: "bytes32" }, { type: "bytes32" }, { type: "address" }, { type: "bool" }, { type: "bytes32" }],
+      [VOTE_TYPEHASH, claimHash_, triangleIdHash_, miner, approve, campaignId],
     ),
   );
   const joined = new Uint8Array(2 + 32 + 32);

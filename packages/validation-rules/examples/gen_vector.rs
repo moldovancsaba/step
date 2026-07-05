@@ -44,7 +44,9 @@ fn main() {
     let ch = sign::claim_hash(&msg);
     let th = sign::triangle_id_hash(&triangle);
     let contract = sign::parse_address("0x610178dA211FEF7D417bC0e6FeD39F05609AD788").unwrap();
-    let vote_digest = sign::eip712_vote_digest(31337, &contract, &ch, &th, &wallet_addr, true);
+    let campaign = sign::campaign_id_word(claim.campaign_id.as_deref());
+    let vote_digest =
+        sign::eip712_vote_digest(31337, &contract, &ch, &th, &wallet_addr, true, &campaign);
 
     println!(
         "{}",

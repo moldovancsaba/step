@@ -3,7 +3,7 @@
 //! The EIP-712 encoding here must match `MiningClaimVerifier.sol` bit-for-bit:
 //! domain `EIP712Domain(name,version,chainId,verifyingContract)` with
 //! name="StepMiningClaim", version="1", and vote struct
-//! `StepValidatorVote(bytes32 claimHash,bytes32 triangleId,address miner,bool approve)`.
+//! `StepValidatorVote(bytes32 claimHash,bytes32 triangleId,address miner,bool approve,bytes32 campaignId)`.
 //! Conformance is proven end-to-end by the e2e test (tests/e2e), where votes
 //! signed by the Rust node finalise claims on the deployed contracts.
 
@@ -117,7 +117,7 @@ pub fn generate_key_bytes() -> std::io::Result<[u8; 32]> {
 const EIP712_DOMAIN_TYPEHASH: &str =
     "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)";
 const VOTE_TYPEHASH: &str =
-    "StepValidatorVote(bytes32 claimHash,bytes32 triangleId,address miner,bool approve)";
+    "StepValidatorVote(bytes32 claimHash,bytes32 triangleId,address miner,bool approve,bytes32 campaignId)";
 
 fn abi_word_u256(v: u64) -> [u8; 32] {
     let mut w = [0u8; 32];
@@ -150,13 +150,17 @@ pub fn eip712_vote_digest(
     triangle_id_hash_: &[u8; 32],
     miner: &Address,
     approve: bool,
+    campaign_id_: &[u8; 32],
 ) -> [u8; 32] {
-    let mut struct_enc = Vec::with_capacity(160);
+    let mut struct_enc = Vec::with_capacity(192);
     struct_enc.extend_from_slice(&keccak256(VOTE_TYPEHASH.as_bytes()));
     struct_enc.extend_from_slice(claim_hash_);
     struct_enc.extend_from_slice(triangle_id_hash_);
     struct_enc.extend_from_slice(&abi_word_address(miner));
     struct_enc.extend_from_slice(&abi_word_u256(if approve { 1 } else { 0 }));
+    // #115: bind the vote to its campaign (bytes32(0) natural, campaign id sponsored)
+    // so a quorum can't be replayed across finalisation paths / campaigns.
+    struct_enc.extend_from_slice(campaign_id_);
     let struct_hash = keccak256(&struct_enc);
 
     let mut final_enc = Vec::with_capacity(66);
@@ -164,6 +168,22 @@ pub fn eip712_vote_digest(
     final_enc.extend_from_slice(&domain_separator(chain_id, verifying_contract));
     final_enc.extend_from_slice(&struct_hash);
     keccak256(&final_enc)
+}
+
+/// The bytes32 `campaignId` word for the vote digest (#115): the raw 32 bytes of a
+/// `0x`-prefixed campaign id, or all-zero for a natural claim (or an unparseable
+/// value, which then fails closed — the digest won't match the sponsored path).
+pub fn campaign_id_word(campaign_id: Option<&str>) -> [u8; 32] {
+    let mut w = [0u8; 32];
+    if let Some(bytes) = campaign_id
+        .and_then(|s| s.strip_prefix("0x"))
+        .and_then(|h| hex::decode(h).ok())
+    {
+        if bytes.len() == 32 {
+            w.copy_from_slice(&bytes);
+        }
+    }
+    w
 }
 
 pub fn parse_address(s: &str) -> Option<Address> {
@@ -228,18 +248,38 @@ mod tests {
         let miner = parse_address("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266").unwrap();
         let ch = keccak256(b"claim");
         let th = keccak256(b"triangle");
-        let base = eip712_vote_digest(31337, &contract, &ch, &th, &miner, true);
+        let zero = [0u8; 32];
+        let base = eip712_vote_digest(31337, &contract, &ch, &th, &miner, true, &zero);
         assert_ne!(
             base,
-            eip712_vote_digest(31337, &contract, &ch, &th, &miner, false)
+            eip712_vote_digest(31337, &contract, &ch, &th, &miner, false, &zero)
         );
         assert_ne!(
             base,
-            eip712_vote_digest(1, &contract, &ch, &th, &miner, true)
+            eip712_vote_digest(1, &contract, &ch, &th, &miner, true, &zero)
         );
         assert_ne!(
             base,
-            eip712_vote_digest(31337, &contract, &keccak256(b"x"), &th, &miner, true)
+            eip712_vote_digest(31337, &contract, &keccak256(b"x"), &th, &miner, true, &zero)
+        );
+        // #115: the campaign id is part of the digest, so a natural (0) vote and a
+        // sponsored (non-zero) vote for the same claim never share a signature.
+        assert_ne!(
+            base,
+            eip712_vote_digest(31337, &contract, &ch, &th, &miner, true, &[1u8; 32])
+        );
+    }
+
+    #[test]
+    fn campaign_id_word_parses_hex_or_defaults_zero() {
+        assert_eq!(campaign_id_word(None), [0u8; 32]);
+        assert_eq!(campaign_id_word(Some("not-hex")), [0u8; 32]);
+        assert_eq!(campaign_id_word(Some("0x1234")), [0u8; 32]); // wrong length → zero
+        let mut expected = [0u8; 32];
+        expected[31] = 0xab;
+        assert_eq!(
+            campaign_id_word(Some(&format!("0x{}", hex::encode(expected)))),
+            expected
         );
     }
 }
