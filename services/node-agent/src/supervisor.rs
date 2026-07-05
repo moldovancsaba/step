@@ -161,7 +161,14 @@ impl HttpFetcher {
     }
 
     fn fetch_source(&self, base: &str, target: &ReleaseRef) -> Result<PathBuf, String> {
-        if target.package_size == 0 || target.package_size > self.max_bytes {
+        // Pre-#102 registry releases carry no package/manifest/chunk commitments
+        // (package_size 0). Fetch the bare executable and verify it against the
+        // on-chain binary hash — still fail-closed, just without chunking.
+        // ponytail: drop this branch once the manifest-era registry is deployed.
+        if target.package_size == 0 {
+            return self.fetch_source_legacy(base, target);
+        }
+        if target.package_size > self.max_bytes {
             return Err("on-chain package size is invalid for this agent".into());
         }
 
@@ -219,6 +226,46 @@ impl HttpFetcher {
         // before activation.
         if package_hash != target.binary {
             return Err("assembled executable hash mismatch".into());
+        }
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&package_path, std::fs::Permissions::from_mode(0o755))
+                .map_err(|e| e.to_string())?;
+        }
+
+        for (src, name, expected) in [
+            (&self.params_path, "protocol-params.json", target.params),
+            (&self.config_path, "config.json", target.config),
+        ] {
+            if src.exists() {
+                std::fs::copy(src, tmp.join(name)).map_err(|e| e.to_string())?;
+                if sha256_file(&tmp.join(name)).map_err(|e| e.to_string())? != expected {
+                    return Err(format!("{name} hash mismatch vs on-chain release"));
+                }
+            }
+        }
+
+        let _ = std::fs::remove_dir_all(&final_dir);
+        std::fs::rename(&tmp, &final_dir).map_err(|e| e.to_string())?;
+        Ok(final_dir)
+    }
+
+    /// Legacy (pre-#102) fetch: `GET {base}/artifacts/{platform}/{semver}` is the
+    /// executable itself; verify its sha256 against the on-chain binary hash.
+    fn fetch_source_legacy(&self, base: &str, target: &ReleaseRef) -> Result<PathBuf, String> {
+        let semver = crate::format_semver(target.version);
+        let tmp = self.releases_dir.join(format!("{}.tmp", target.version));
+        let final_dir = self.releases_dir.join(target.version.to_string());
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).map_err(|e| e.to_string())?;
+
+        let package_path = tmp.join("step-validator-node");
+        let url = format!("{}/artifacts/{}/{}", base, self.platform, semver);
+        self.download_to(&url, &package_path, self.max_bytes)?;
+        if sha256_file(&package_path).map_err(|e| e.to_string())? != target.binary {
+            return Err("downloaded executable hash mismatch vs on-chain release".into());
         }
 
         #[cfg(unix)]

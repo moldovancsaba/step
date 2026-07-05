@@ -118,10 +118,16 @@ fn parse_b32(s: &str) -> Option<[u8; 32]> {
     })
 }
 
-/// Decode the ABI-encoded `Release` struct (12 static 32-byte words). Returns
-/// `None` for an empty/zero release (version 0) or a too-short blob.
+/// Decode the ABI-encoded `Release` struct. The manifest-era registry (#102)
+/// returns 12 static 32-byte words; the currently-deployed pre-manifest
+/// registry returns 8 (version, binary, params, config, package, publisher,
+/// createdAt, revoked). Accept both — the manifest fields simply decode to
+/// zero on the legacy layout. Returns `None` for an empty/zero release
+/// (version 0), a revoked release, or a too-short blob.
+// ponytail: drop the 8-word branch once the #102 registry is deployed on-chain.
 fn decode_release(out: &[u8]) -> Option<ReleaseRef> {
-    if out.len() < 32 * 12 {
+    let legacy = out.len() == 32 * 8;
+    if !legacy && out.len() < 32 * 12 {
         return None;
     }
     let word = |i: usize| -> &[u8] { &out[i * 32..(i + 1) * 32] };
@@ -131,8 +137,8 @@ fn decode_release(out: &[u8]) -> Option<ReleaseRef> {
     if version == 0 {
         return None;
     }
-    let revoked = word(11).iter().any(|&b| b != 0);
-    if revoked {
+    let revoked_word = if legacy { 7 } else { 11 };
+    if word(revoked_word).iter().any(|&b| b != 0) {
         return None;
     }
     let mut binary = [0u8; 32];
@@ -141,14 +147,18 @@ fn decode_release(out: &[u8]) -> Option<ReleaseRef> {
     let mut package = [0u8; 32];
     let mut manifest = [0u8; 32];
     let mut chunk_root = [0u8; 32];
+    let mut package_size = 0u64;
     binary.copy_from_slice(word(1));
     params.copy_from_slice(word(2));
     config.copy_from_slice(word(3));
     package.copy_from_slice(word(4));
-    manifest.copy_from_slice(word(5));
-    chunk_root.copy_from_slice(word(6));
-    let mut size8 = [0u8; 8];
-    size8.copy_from_slice(&word(7)[24..32]);
+    if !legacy {
+        manifest.copy_from_slice(word(5));
+        chunk_root.copy_from_slice(word(6));
+        let mut size8 = [0u8; 8];
+        size8.copy_from_slice(&word(7)[24..32]);
+        package_size = u64::from_be_bytes(size8);
+    }
     Some(ReleaseRef {
         version,
         binary,
@@ -157,7 +167,7 @@ fn decode_release(out: &[u8]) -> Option<ReleaseRef> {
         package,
         manifest,
         chunk_root,
-        package_size: u64::from_be_bytes(size8),
+        package_size,
     })
 }
 
@@ -206,5 +216,36 @@ mod tests {
     #[test]
     fn short_blob_is_none() {
         assert!(decode_release(&[0u8; 10]).is_none());
+    }
+
+    #[test]
+    fn decodes_a_legacy_pre_manifest_release_tuple() {
+        // The deployed pre-#102 registry returns 8 words:
+        // version, binary, params, config, package, publisher, createdAt, revoked.
+        let version: u64 = 1u64 << 32; // 1.0.0
+        let mut out = vec![0u8; 32 * 8];
+        out[24..32].copy_from_slice(&version.to_be_bytes());
+        out[32..64].copy_from_slice(&[0x11u8; 32]);
+        out[64..96].copy_from_slice(&[0x22u8; 32]);
+        out[96..128].copy_from_slice(&[0x33u8; 32]);
+        // word4 package = 0, word5 publisher (non-zero, must not read as revoked),
+        // word6 createdAt, word7 revoked = 0.
+        out[172..192].copy_from_slice(&[0xaa; 20]);
+        out[216..224].copy_from_slice(&1_750_000_000u64.to_be_bytes());
+        let r = decode_release(&out).expect("decoded legacy");
+        assert_eq!(r.version, version);
+        assert_eq!(r.binary, [0x11; 32]);
+        assert_eq!(r.params, [0x22; 32]);
+        assert_eq!(r.config, [0x33; 32]);
+        assert_eq!(r.manifest, [0; 32]);
+        assert_eq!(r.package_size, 0);
+    }
+
+    #[test]
+    fn legacy_revoked_is_none() {
+        let mut out = vec![0u8; 32 * 8];
+        out[31] = 1; // version word
+        out[32 * 8 - 1] = 1; // legacy revoked word 7
+        assert!(decode_release(&out).is_none());
     }
 }
