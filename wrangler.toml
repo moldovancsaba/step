@@ -1,6 +1,7 @@
 name = "step"
 account_id = "66ce3adbb96f6715f8cc2b04991c30e4"
 compatibility_date = "2026-06-15"
+main = "./worker.js"
 
 # The STEP mobile web app (GDS, Vite SPA) is the primary site at the short URL
 # https://step.<subdomain>.workers.dev — served as static assets with SPA
@@ -8,7 +9,17 @@ compatibility_date = "2026-06-15"
 # Workers Builds (git-connected) produces apps/web-app/dist before deploy.
 [assets]
 directory = "./apps/web-app/dist"
+binding = "ASSETS"
 not_found_handling = "single-page-application"
+# Without this, asset serving (SPA fallback) answers /api/* with index.html and
+# the Worker proxy in worker.js never runs.
+run_worker_first = ["/api/*", "/healthz"]
+
+[vars]
+STEP_BACKEND_ACCOUNT_URL = "https://acc.step.regiominer.com"
+STEP_BACKEND_GATEWAY_URL = "https://gw.step.regiominer.com"
+STEP_BACKEND_INDEXER_URL = "https://idx.step.regiominer.com"
+STEP_BACKEND_NFT_URL = "https://nft.step.regiominer.com"
 
 [build]
 command = "pnpm install --frozen-lockfile && pnpm --filter @step/web-app build"

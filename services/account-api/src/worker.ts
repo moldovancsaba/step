@@ -17,6 +17,15 @@ interface Env {
   SESSION_TTL_SECONDS?: string;
 }
 
+function corsOrigins(value?: string): string | string[] | undefined {
+  const origins = value
+    ?.split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+  if (!origins?.length) return undefined;
+  return origins.length === 1 ? origins[0] : origins;
+}
+
 export default {
   // The Workers runtime also passes an ExecutionContext as the 3rd arg; we don't
   // use it (no waitUntil), and Hono's fetch ctx is optional, so we omit it.
@@ -27,7 +36,7 @@ export default {
       sessionTtlSeconds: Number(env.SESSION_TTL_SECONDS ?? 86_400),
       secureCookies: true,
       cookieSameSite: "None", // web app is on a different site (cross-site cookies)
-      corsOrigin: env.CORS_ORIGIN ?? "https://step.regiominer.com",
+      corsOrigin: corsOrigins(env.CORS_ORIGIN) ?? "https://step.regiominer.com",
       nowUnix: () => Math.floor(Date.now() / 1000),
     });
     return app.fetch(request, env);
