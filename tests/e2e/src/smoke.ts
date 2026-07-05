@@ -16,10 +16,10 @@ import {
   keccak256,
   stringToBytes,
   type Address,
-  type Hex,
 } from "viem";
-import { privateKeyToAccount } from "viem/accounts";
+import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { TrinityTokenAbi, FoundationTreasuryAbi } from "@step/shared-types/abis";
+import { parseProtocolParams } from "@step/shared-types";
 import { buildUnsignedClaim, signClaim } from "@step/proof-protocol";
 import { gatewayClient, indexerClient, meshClient, merchantClient } from "@step/api-client";
 
@@ -82,7 +82,9 @@ async function health() {
 
 async function naturalMine() {
   console.log("natural mining flow:");
-  const miner = privateKeyToAccount(("0x" + "5a".repeat(32)) as Hex);
+  // fresh wallet per run: minedByWallet is per-(triangle, wallet) on a
+  // persistent chain, so a fixed key can only ever pass once
+  const miner = privateKeyToAccount(generatePrivateKey());
   const lat = 47.4979, lon = 19.0402;
   const tri = await mesh.resolve(lat, lon, 21);
   check("mesh resolves a level-21 triangle", tri.triangle_id.split(".").length === 21);
@@ -187,7 +189,12 @@ async function exchangeFlow() {
     body: JSON.stringify({ merchant_id: "smoke_mer", amount_credits: 2.5 }),
   });
   const convBody = (await conv.json()) as { trinity_budget?: string };
-  check("credits convert to whole Trinity", convBody.trinity_budget === "250000000", `got ${convBody.trinity_budget}`);
+  // expected budget derives from the params registry (never hardcode: CLAUDE.md)
+  const params = parseProtocolParams(
+    JSON.parse(readFileSync(env.STEP_PROTOCOL_PARAMS ?? join(ROOT, "config/protocol-params.alpha.json"), "utf8")),
+  );
+  const expected = BigInt(Math.floor((2.5 / params.referencePriceEurPerStep) * params.trinityPerStep)).toString();
+  check("credits convert to whole Trinity", convBody.trinity_budget === expected, `got ${convBody.trinity_budget}, want ${expected}`);
 }
 
 async function main() {
