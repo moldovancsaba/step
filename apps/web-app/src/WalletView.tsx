@@ -4,7 +4,7 @@
  * listing/trading lands with the marketplace UI (#11).
  */
 import { useEffect, useState } from "react";
-import { EmptyState, MetricCard } from "@doneisbetter/gds";
+import { EmptyState, MetricCard } from "@sovereignsquad/gds";
 import { Badge, Card, Group, Stack, Text } from "@mantine/core";
 import { nft, type NftToken } from "./api.js";
 import { useSession } from "./session.js";

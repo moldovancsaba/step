@@ -11,7 +11,7 @@
  * downloadable backup, and unlocks the wallet once (the user just created it).
  */
 import { useState } from "react";
-import { AuthShell, FormField } from "@doneisbetter/gds";
+import { AuthShell, FormField } from "@sovereignsquad/gds";
 import { Button, PasswordInput, Stack, Text, TextInput, Anchor, Textarea } from "@mantine/core";
 import type { Hex } from "viem";
 import { account } from "./api.js";

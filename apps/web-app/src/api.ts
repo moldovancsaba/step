@@ -1,7 +1,8 @@
 /**
  * Typed clients for the STEP backends the web app talks to:
  *  - account-api (#12): register/login/logout/session/vault (cookie session)
- *  - validator mesh API (#15): /v1/mesh/cover viewport coverage
+ *  - validator/gateway mesh API (#15): /v1/mesh/cover viewport coverage,
+ *    /v1/mesh/resolve, /v1/mesh/triangle/:id, /v1/mesh/mineable
  *  - indexer (#16): /v1/mesh-states oasis/desert batch
  *  - nft-indexer (#7/#10): tokens, listings
  *
@@ -95,6 +96,23 @@ export interface CoverTriangle {
   triangle_id_hash: `0x${string}`;
   vertices: { lat: number; lon: number }[];
 }
+export interface TriangleInfo extends CoverTriangle {
+  level: number;
+  centroid: { lat: number; lon: number };
+  area_m2: number;
+  min_side_m: number;
+  parent: string | null;
+  neighbours?: string[];
+  mesh_spec_version?: string;
+}
+export interface MineableResult {
+  triangle_id: string;
+  level: number;
+  status: string;
+  mineable: boolean;
+  location_triangle_id?: string;
+  fully_mined?: boolean;
+}
 export interface CoverResult {
   triangles: CoverTriangle[];
   truncated: boolean;
@@ -110,6 +128,21 @@ export interface MeshState {
 }
 
 export const mesh = {
+  async resolve(lat: number, lon: number, level: number): Promise<TriangleInfo> {
+    return (await jsonOrThrow(
+      await fetch(`${MESH_URL}/v1/mesh/resolve?lat=${lat}&lon=${lon}&level=${level}`),
+    )) as TriangleInfo;
+  },
+  async triangle(id: string): Promise<TriangleInfo> {
+    return (await jsonOrThrow(
+      await fetch(`${MESH_URL}/v1/mesh/triangle/${encodeURIComponent(id)}`),
+    )) as TriangleInfo;
+  },
+  async mineable(lat: number, lon: number): Promise<MineableResult> {
+    return (await jsonOrThrow(
+      await fetch(`${MESH_URL}/v1/mesh/mineable?lat=${lat}&lon=${lon}`),
+    )) as MineableResult;
+  },
   async cover(
     b: { minLat: number; minLon: number; maxLat: number; maxLon: number },
     level: number,

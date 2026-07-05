@@ -8,15 +8,8 @@
  * is complete.
  */
 import { useState, type ReactNode } from "react";
-import { AppShell, EmptyState } from "@doneisbetter/gds";
+import { AppShell, EmptyState, GdsIcons } from "@sovereignsquad/gds";
 import { Button, Center, Group, Loader, NavLink, Stack, Text } from "@mantine/core";
-import {
-  IconMap2,
-  IconWallet,
-  IconPick,
-  IconBuildingStore,
-  IconServer2,
-} from "@tabler/icons-react";
 import { useSession } from "./session.js";
 import { LoginWall } from "./LoginWall.js";
 import { MapView } from "./MapView.js";
@@ -30,16 +23,25 @@ import { isDeviceTrusted, untrustDevice } from "./trusteddevice.js";
 type Tab = "map" | "wallet" | "mine" | "market" | "fleet";
 
 const NAV: { key: Tab; label: string; icon: ReactNode }[] = [
-  { key: "map", label: "Map", icon: <IconMap2 size={18} /> },
-  { key: "wallet", label: "Wallet", icon: <IconWallet size={18} /> },
-  { key: "mine", label: "Mine", icon: <IconPick size={18} /> },
-  { key: "market", label: "Marketplace", icon: <IconBuildingStore size={18} /> },
-  { key: "fleet", label: "Fleet", icon: <IconServer2 size={18} /> },
+  { key: "map", label: "Map", icon: <GdsIcons.Home size="1.125rem" /> },
+  { key: "wallet", label: "Wallet", icon: <GdsIcons.Trophy size="1.125rem" /> },
+  { key: "mine", label: "Mine", icon: <GdsIcons.Goal size="1.125rem" /> },
+  { key: "market", label: "Marketplace", icon: <GdsIcons.Grid size="1.125rem" /> },
+  { key: "fleet", label: "Fleet", icon: <GdsIcons.Analytics size="1.125rem" /> },
 ];
 
 export function App() {
   const { restoring, session, walletUnlocked, lockWallet, logout } = useSession();
   const [tab, setTab] = useState<Tab>("map");
+  const surface = typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("surface");
+
+  if (surface === "ios-map") {
+    return (
+      <main style={{ minHeight: "100vh", padding: 0 }}>
+        <MapView />
+      </main>
+    );
+  }
 
   // Don't flash the login wall while the cookie session is being restored.
   if (restoring)

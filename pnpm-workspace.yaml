@@ -22,3 +22,8 @@ packages:
 allowBuilds:
   esbuild: true
   sharp: true
+minimumReleaseAgeExclude:
+  - '@sovereignsquad/gds-admin@3.9.0'
+  - '@sovereignsquad/gds-core@3.9.0'
+  - '@sovereignsquad/gds-theme@3.9.0'
+  - '@sovereignsquad/gds@3.9.0'

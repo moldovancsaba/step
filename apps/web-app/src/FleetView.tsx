@@ -1,20 +1,14 @@
 /**
  * Fleet & Release console (#46) — operator view of the trust-center federation:
  * per-node health, version, on-chain quorum weight, and active alerts. Built only
- * with @doneisbetter/gds primitives (MetricCard, EmptyState) + Mantine (the GDS
+ * with @sovereignsquad/gds primitives (MetricCard, EmptyState) + Mantine (the GDS
  * substrate); no parallel visual system. Fully accessible: semantic table,
  * keyboard-operable, status conveyed by text+icon (never colour alone), and a
  * live region announcing alerts.
  */
 import { useCallback, useEffect, useState } from "react";
-import { MetricCard, EmptyState } from "@doneisbetter/gds";
+import { MetricCard, EmptyState, GdsIcons } from "@sovereignsquad/gds";
 import { Badge, Button, Group, Loader, Stack, Table, Text, Title } from "@mantine/core";
-import {
-  IconCircleCheck,
-  IconAlertTriangle,
-  IconCircleX,
-  IconRefresh,
-} from "@tabler/icons-react";
 
 type Alert = {
   node: string;
@@ -49,7 +43,7 @@ function StatusChip({ node }: { node: FleetNode }) {
     return (
       <Badge
         color="red"
-        leftSection={<IconCircleX size={14} aria-hidden />}
+        leftSection={<GdsIcons.Danger size="0.875rem" aria-hidden />}
         aria-label={`${node.name} status: down`}
       >
         Down
@@ -60,7 +54,7 @@ function StatusChip({ node }: { node: FleetNode }) {
     return (
       <Badge
         color="orange"
-        leftSection={<IconAlertTriangle size={14} aria-hidden />}
+        leftSection={<GdsIcons.Info size="0.875rem" aria-hidden />}
         aria-label={`${node.name} status: suspended from quorum`}
       >
         Suspended
@@ -70,7 +64,7 @@ function StatusChip({ node }: { node: FleetNode }) {
   return (
     <Badge
       color="teal"
-      leftSection={<IconCircleCheck size={14} aria-hidden />}
+      leftSection={<GdsIcons.Success size="0.875rem" aria-hidden />}
       aria-label={`${node.name} status: healthy and in quorum`}
     >
       Healthy
@@ -120,7 +114,7 @@ export function FleetView() {
         title="Fleet status unavailable"
         description={error}
         action={
-          <Button leftSection={<IconRefresh size={16} aria-hidden />} onClick={() => void load()}>
+          <Button leftSection={<GdsIcons.Refresh size="1rem" aria-hidden />} onClick={() => void load()}>
             Retry
           </Button>
         }
@@ -171,9 +165,9 @@ export function FleetView() {
             {fleet.alerts.map((a, i) => (
               <Group key={i} gap="xs" wrap="nowrap">
                 {a.severity === "critical" ? (
-                  <IconCircleX size={16} aria-hidden color="var(--mantine-color-red-6)" />
+                  <GdsIcons.Danger size="1rem" aria-hidden color="var(--mantine-color-red-6)" />
                 ) : (
-                  <IconAlertTriangle size={16} aria-hidden color="var(--mantine-color-orange-6)" />
+                  <GdsIcons.Info size="1rem" aria-hidden color="var(--mantine-color-orange-6)" />
                 )}
                 <Text size="sm">
                   <Text span fw={600}>
@@ -226,7 +220,7 @@ export function FleetView() {
       <Group>
         <Button
           variant="subtle"
-          leftSection={<IconRefresh size={16} aria-hidden />}
+          leftSection={<GdsIcons.Refresh size="1rem" aria-hidden />}
           onClick={() => void load()}
         >
           Refresh

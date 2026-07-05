@@ -13,7 +13,7 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "@doneisbetter/gds": "^3.4.14",
+    "@sovereignsquad/gds": "3.9.0",
     "@mantine/core": "^8.3.0",
     "@mantine/hooks": "^8.3.0",
     "@mantine/modals": "^8.3.0",
@@ -21,7 +21,7 @@
     "@noble/ciphers": "^1.0.0",
     "@noble/hashes": "^1.5.0",
     "@step/shared-types": "workspace:*",
-    "@tabler/icons-react": "^3.5.0",
+    "maplibre-gl": "^5.24.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "viem": "^2.21.0"

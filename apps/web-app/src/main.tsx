@@ -7,7 +7,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "@mantine/core/styles.css";
 import "@mantine/notifications/styles.css";
-import { GdsProvider } from "@doneisbetter/gds";
+import { GdsProvider } from "@sovereignsquad/gds";
 import { App } from "./App.js";
 import { SessionProvider } from "./session.js";
 
