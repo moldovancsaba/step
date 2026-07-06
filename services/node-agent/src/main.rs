@@ -21,7 +21,7 @@ use step_node_agent::integrity::{evaluate, Verdict};
 use step_node_agent::layout::Layout;
 use step_node_agent::supervisor::{HealthCanary, HttpFetcher, ProcessSupervisor};
 use step_node_agent::update::{perform_update, Outcome, Supervisor};
-use step_node_agent::{backoff_ms, format_semver, parse_semver};
+use step_node_agent::{backoff_ms, format_semver, parse_semver, should_respawn};
 
 #[derive(Clone, Serialize, Default)]
 struct StatusReport {
@@ -352,6 +352,10 @@ fn control_loop(cfg: AgentConfig, status: Shared) {
     // Consecutive hub-unreachable failures → exponential backoff + degraded status
     // (#51). The node keeps running its current verified version throughout.
     let mut fail_streak: u32 = 0;
+    // Consecutive unhealthy-child polls → steady-state respawn (see
+    // should_respawn): updates only restart on a version change, so a child
+    // that dies between releases needs the loop to revive it.
+    let mut unhealthy_streak: u32 = 0;
 
     loop {
         // 1. resolve the authorized target from chain
@@ -395,11 +399,21 @@ fn control_loop(cfg: AgentConfig, status: Shared) {
             run_integrity(&layout, &chain, &supervisor, &status);
         }
 
-        // 3. reflect health
+        // 3. reflect health; revive a child that died between releases
+        let child_up = supervisor.healthy();
         set(&status, |s| {
             s.current_version = layout.current().map(format_semver);
-            s.child_health = if supervisor.healthy() { "up" } else { "down" }.into();
+            s.child_health = if child_up { "up" } else { "down" }.into();
         });
+        if should_respawn(child_up, layout.current().is_some(), &mut unhealthy_streak) {
+            tracing::warn!("validator child down two polls — respawning current release");
+            match supervisor.restart() {
+                Ok(()) => set(&status, |s| {
+                    s.last_action = "respawned validator child".into()
+                }),
+                Err(e) => tracing::warn!("validator child respawn failed: {e}"),
+            }
+        }
 
         // 3b. emit a signed heartbeat to the hub (#56) — hub-independent, anti-spoof
         //     supervision signal. Best-effort: a delivery failure is non-fatal.

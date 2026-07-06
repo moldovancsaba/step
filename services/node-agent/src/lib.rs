@@ -80,6 +80,25 @@ pub fn backoff_ms(attempt: u32, base_ms: u64, cap_ms: u64) -> u64 {
     base_ms.saturating_mul(factor).min(cap_ms)
 }
 
+/// Steady-state liveness policy: the update path only restarts the validator
+/// child on a version change, so a child that dies between releases stays dead
+/// without this. Two consecutive unhealthy polls (one poll of boot grace) ⇒
+/// respawn; health or an empty release slot resets the streak. The streak also
+/// resets after firing, so a crash-looping child is retried once per two polls
+/// rather than hammered every poll.
+pub fn should_respawn(child_up: bool, has_current: bool, streak: &mut u32) -> bool {
+    if child_up || !has_current {
+        *streak = 0;
+        return false;
+    }
+    *streak = streak.saturating_add(1);
+    if *streak >= 2 {
+        *streak = 0;
+        return true;
+    }
+    false
+}
+
 /// Parse `major.minor.patch` into packed semver.
 pub fn parse_semver(s: &str) -> Option<u64> {
     let mut it = s.split('.');
@@ -117,6 +136,26 @@ mod semver_tests {
         assert_eq!(backoff_ms(3, 1000, 60_000), 8000);
         assert_eq!(backoff_ms(20, 1000, 60_000), 60_000); // capped
         assert_eq!(backoff_ms(64, 1000, 60_000), 60_000); // no overflow panic
+    }
+
+    #[test]
+    fn respawns_after_two_consecutive_unhealthy_polls() {
+        let mut streak = 0;
+        assert!(!should_respawn(false, true, &mut streak)); // boot-grace poll
+        assert!(should_respawn(false, true, &mut streak)); // second miss fires
+        assert_eq!(streak, 0); // reset after firing → retried every 2 polls
+        assert!(!should_respawn(false, true, &mut streak));
+        assert!(should_respawn(false, true, &mut streak));
+    }
+
+    #[test]
+    fn health_or_missing_release_resets_the_streak() {
+        let mut streak = 0;
+        assert!(!should_respawn(false, true, &mut streak));
+        assert!(!should_respawn(true, true, &mut streak)); // recovered
+        assert_eq!(streak, 0);
+        assert!(!should_respawn(false, false, &mut streak)); // nothing staged
+        assert_eq!(streak, 0);
     }
 
     #[test]
