@@ -85,16 +85,34 @@ async function naturalMine() {
   // fresh wallet per run: minedByWallet is per-(triangle, wallet) on a
   // persistent chain, so a fixed key can only ever pass once
   const miner = privateKeyToAccount(generatePrivateKey());
-  const lat = 47.4979, lon = 19.0402;
+  // A fixed location's frontier goes into cooldown for an hour after each mine,
+  // so on a persistent chain scan a coarse grid for a currently-Open frontier
+  // (mesh v2: a triangle is only mineable once its parent is Exhausted, so the
+  // gateway resolves the deepest currently-mineable ancestor of the location).
+  type Frontier = { triangle_id: string; level: number; mineable: boolean; status?: string };
+  let lat = 47.4979, lon = 19.0402;
+  let frontier: Frontier | undefined;
+  scan: for (let la = -80; la <= 80; la += 15) {
+    for (let lo = -160; lo <= 160; lo += 30) {
+      try {
+        const r = (await (
+          await fetch(`${env.GATEWAY_URL}/v1/mesh/mineable?lat=${la}.3&lon=${lo}.3`)
+        ).json()) as Frontier;
+        if (r.status === "Open" && r.mineable) {
+          lat = la + 0.3;
+          lon = lo + 0.3;
+          frontier = r;
+          break scan;
+        }
+      } catch {
+        /* skip invalid coords */
+      }
+    }
+  }
+  check("gateway resolves a mineable frontier", frontier?.mineable === true, JSON.stringify(frontier));
+  if (!frontier) return;
   const tri = await mesh.resolve(lat, lon, 21);
   check("mesh resolves a level-21 triangle", tri.triangle_id.split(".").length === 21);
-
-  // Mesh v2: a triangle at level N>1 is only mineable once its parent is
-  // Exhausted, so the miner mines the deepest currently-mineable ANCESTOR of its
-  // location (the mining frontier), which the gateway resolves on-chain.
-  const frontierResp = await fetch(`${env.GATEWAY_URL}/v1/mesh/mineable?lat=${lat}&lon=${lon}`);
-  const frontier = (await frontierResp.json()) as { triangle_id: string; level: number; mineable: boolean };
-  check("gateway resolves a mineable frontier", frontier.mineable === true, JSON.stringify(frontier));
 
   const { nonce } = await gw.nonce(miner.address);
   const claim = await signClaim(
@@ -140,6 +158,25 @@ async function naturalMine() {
     if (!indexed) await new Promise((r) => setTimeout(r, 1000));
   }
   check("indexer reflects the finalised claim", indexed);
+
+  // #5: the mine issues a slot collectible to the miner (best-effort, minted by
+  // the gateway relayer after finalise). Poll the nft-indexer's owner projection.
+  if (deployments.TriangleSlotNFT) {
+    let ownedSlot = false;
+    for (let i = 0; i < 10 && !ownedSlot; i++) {
+      try {
+        const owned = (await (
+          await fetch(`${env.NFT_INDEXER_URL ?? "http://127.0.0.1:8092"}/v1/owners/${miner.address}`)
+        ).json()) as { tokens?: unknown[] } | unknown[];
+        const list = Array.isArray(owned) ? owned : (owned.tokens ?? []);
+        if (list.length >= 1) ownedSlot = true;
+      } catch {
+        /* retry */
+      }
+      if (!ownedSlot) await new Promise((r) => setTimeout(r, 1000));
+    }
+    check("miner receives a slot NFT", ownedSlot);
+  }
   return record.claim_hash;
 }
 

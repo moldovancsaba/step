@@ -16,6 +16,7 @@ import {
   defineChain,
   http,
   keccak256,
+  parseEventLogs,
   stringToHex,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
@@ -91,6 +92,73 @@ const chain = defineChain({
 const publicClient = createPublicClient({ chain, transport: http() });
 const relayer = privateKeyToAccount(env("RELAYER_PRIVATE_KEY") as Hex);
 const walletClient = createWalletClient({ chain, transport: http(), account: relayer });
+
+// #5: after a natural claim finalises, the relayer (holder of NFT_MINTER_ROLE)
+// mints the slot collectible. Kept off the verifier's money-path — a best-effort
+// second tx, so a mint failure never rolls back a settled mine. Absent deployment
+// (TriangleSlotNFT not in the address book) ⇒ minting is simply skipped.
+const slotNftAddress = deployments.TriangleSlotNFT as Address | undefined;
+const miningStateAddress = deployments.TriangleMiningState as Address;
+console.log(`slot-NFT minter: ${slotNftAddress ?? "DISABLED (TriangleSlotNFT not deployed)"}`);
+const SLOT_NFT_ABI = [
+  {
+    type: "function",
+    name: "mintSlot",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "to", type: "address" },
+      { name: "triangleIdHash", type: "bytes32" },
+      { name: "level", type: "uint8" },
+      { name: "slot", type: "uint32" },
+      { name: "minedAt", type: "uint64" },
+    ],
+    outputs: [{ name: "tokenId", type: "uint256" }],
+  },
+] as const;
+
+async function mintSlotNft(triangleId: string, miner: Address, level: number, finaliseTxHash: Hex) {
+  if (!slotNftAddress) return;
+  try {
+    const triangleIdHash = keccak256(stringToHex(triangleId));
+    const receipt = await publicClient.getTransactionReceipt({ hash: finaliseTxHash });
+    // slot number comes from the mining-state event emitted by the same finalise tx.
+    const consumed = parseEventLogs({
+      abi: TriangleMiningStateAbi,
+      logs: receipt.logs,
+      eventName: "TriangleSlotConsumed",
+    }).find(
+      (l) =>
+        (l.args as { triangleId: Hex }).triangleId?.toLowerCase() === triangleIdHash.toLowerCase(),
+    );
+    if (!consumed) return; // no slot consumed (e.g. already-mined retry) — nothing to mint
+    const slot = Number((consumed.args as { slot: bigint | number }).slot);
+    const block = await publicClient.getBlock({ blockNumber: receipt.blockNumber });
+    const mintArgs = {
+      address: slotNftAddress,
+      abi: SLOT_NFT_ABI,
+      functionName: "mintSlot",
+      args: [miner, triangleIdHash, level, slot, block.timestamp],
+      account: relayer,
+    } as const;
+    const { request } = await publicClient.simulateContract(mintArgs);
+    // Same evmd gas buffer as submitFinalise: eth_estimateGas undershoots
+    // state-mutating calls (mintSlot does a full _safeMint + ERC721 receiver
+    // check), so the bare estimate reverts on execution. Estimate × multiplier
+    // with a floor.
+    const estimate = await publicClient.estimateContractGas(mintArgs);
+    const mult = BigInt(Math.round(Number(process.env.GATEWAY_GAS_MULTIPLIER ?? "1.5") * 100));
+    const floor = BigInt(process.env.GATEWAY_MINT_GAS_FLOOR ?? "500000");
+    const buffered = (estimate * mult) / 100n;
+    const tx = await walletClient.writeContract({ ...request, gas: buffered > floor ? buffered : floor });
+    const mintReceipt = await publicClient.waitForTransactionReceipt({ hash: tx });
+    if (mintReceipt.status !== "success") {
+      console.warn(`slot-NFT mint tx ${tx} reverted for ${triangleId} slot ${slot}`);
+    }
+  } catch (err) {
+    // Non-fatal: the mine is already settled on-chain. Log and move on.
+    console.warn(`slot-NFT mint skipped for ${triangleId}: ${(err as Error).message}`);
+  }
+}
 
 async function submitFinalise(
   functionName: "finaliseNaturalClaim" | "finaliseSponsoredClaim",
@@ -190,7 +258,7 @@ const deps: GatewayDeps = {
     // finaliseNaturalClaim(claimHash, triangleId, meshLevel, miner, proofCidHash,
     // sigs) — the contract derives triangleIdHash from triangleId, so it is NOT
     // a parameter.
-    return submitFinalise("finaliseNaturalClaim", [
+    const txHash = await submitFinalise("finaliseNaturalClaim", [
       a.claimHash,
       a.triangleId,
       a.meshLevel,
@@ -198,6 +266,11 @@ const deps: GatewayDeps = {
       a.proofCidHash,
       a.sortedApprovals.map((v) => ({ validator: v.validator, signature: v.signature })),
     ]);
+    // #5: issue the slot collectible off the money-path (best-effort). Sponsored
+    // claims also consume a slot, but only carry the triangle-id hash here; their
+    // slot-NFT minting is a follow-up once the level is threaded through.
+    await mintSlotNft(a.triangleId, a.miner, a.meshLevel, txHash);
+    return txHash;
   },
 
   async submitSponsored(a) {
