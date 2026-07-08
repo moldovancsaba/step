@@ -19,7 +19,7 @@ packages:
 settings:
   base:
     MARKETING_VERSION: "0.1.0"
-    CURRENT_PROJECT_VERSION: "6"   # 0.1.0(6) fixes trusted-device Face ID setup/feedback
+    CURRENT_PROJECT_VERSION: "7"   # 0.1.0(7): Face ID fixes + live marketplace/NFT addresses
     SWIFT_VERSION: "6.0"
     ALWAYS_SEARCH_USER_PATHS: NO   # silence the legacy-headermap build warning
     DEVELOPMENT_TEAM: "" # set locally / in CI signing; empty for unsigned simulator builds
@@ -34,9 +34,9 @@ settings:
     STEP_NFT_INDEXER_URL: "https://nft.step.regiominer.com"
     STEP_WEB_APP_URL: "https://step.moldovancsaba.workers.dev/?surface=ios-map"
     STEP_RPC_URL: ""
-    STEP_MARKETPLACE_ADDRESS: ""
-    STEP_NFT_ADDRESS: ""
-    STEP_TRINITY_ADDRESS: ""
+    STEP_MARKETPLACE_ADDRESS: "0xe8b3451a2e3B8d80852a1788102277da7a813402"
+    STEP_NFT_ADDRESS: "0x42db8b03409822a47cb969aA324a192DCD81eEB9"
+    STEP_TRINITY_ADDRESS: "0x07Aa076883658B7ED99D25b1E6685808372C8fE2"
 
 targets:
   StepApp:
