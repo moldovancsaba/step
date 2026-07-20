@@ -79,6 +79,8 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.regiominer.miner.uitests
+        PRODUCT_NAME: StepAppUITests
+        GENERATE_INFOPLIST_FILE: YES
 
 schemes:
   StepApp:

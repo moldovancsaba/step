@@ -31,8 +31,17 @@ enum AppComposition {
         attester = UnattestedAttester()
         #endif
 
-        return AppModel(
-            keyStore: KeychainKeyStore(),
+        // Screenshot/UI-test seam (see below): an in-memory key store avoids the
+        // Keychain (which needs entitlements an unsigned test build lacks).
+        #if DEBUG
+        let seedForUITest = ProcessInfo.processInfo.arguments.contains("-uiTestSeedWallet")
+        #else
+        let seedForUITest = false
+        #endif
+        let keyStore: any KeyStore = seedForUITest ? InMemoryKeyStore() : KeychainKeyStore()
+
+        let model = AppModel(
+            keyStore: keyStore,
             client: GatewayClient(gatewayURL: cfg.gateway, meshURL: cfg.mesh),
             stateProvider: IndexerClient(indexerURL: cfg.indexer),
             account: AccountClient(baseURL: cfg.account),
@@ -44,6 +53,16 @@ enum AppComposition {
             marketAddresses: cfg.marketAddresses,
             attester: attester
         )
+        #if DEBUG
+        // Screenshot/UI-test seam (stripped from Release/App Store builds): seed a
+        // device-local wallet + miner mode so automation lands on the tab shell
+        // instead of the login wall. No effect without the launch argument.
+        if ProcessInfo.processInfo.arguments.contains("-uiTestSeedWallet") {
+            model.createWallet()
+            model.chooseLauncherMode(.miner)
+        }
+        #endif
+        return model
     }
 }
 
